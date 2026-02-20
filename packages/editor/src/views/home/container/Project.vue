@@ -7,9 +7,9 @@ import SharedProject from "@/views/home/project/SharedProject.vue";
 </script>
 
 <template>
-  <n-layout-header>
+  <!-- <n-layout-header>
     <HeaderCarousel/>
-  </n-layout-header>
+  </n-layout-header> -->
 
   <n-layout-content content-style="padding: 24px;">
     <n-tabs type="line" animated default-value="shared-project" class="h-full">
