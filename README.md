@@ -6,6 +6,13 @@
 
 > 基于 Vue3 + Three.js 的现代 Web 3D 编辑器
 
+## ⚠️ Fork 说明
+
+本仓库 Fork 自 [mlt131220/Astral3D](https://github.com/mlt131220/Astral3D)，当前仓库为社区维护/二次开发版本，非原作者官方仓库。
+
+- Upstream: https://github.com/mlt131220/Astral3D
+- 许可证：继承并遵循原项目许可证与相关声明
+
 <div align="center">
   <img src="http://editor-doc.astraljs.com/images/home/thumbnailDark.png?t=20250518" width="800" alt="Editor City Preview">
   <img src="http://editor-doc.astraljs.com/images/home/industryDark.png?t=20250318" width="800" alt="Editor Preview">
@@ -62,7 +69,7 @@
 
 ### 本地运行
 ```bash
-    git clone https://github.com/mlt131220/Astral3D.git
+    git clone git@gitlab.haolink.com:zhangzechao/astral3d.git
 
     cd Astral3D
     pnpm install

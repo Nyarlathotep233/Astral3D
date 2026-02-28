@@ -6,6 +6,13 @@
 
 > Modern Web 3D editor based on Vue3 + Three.js
 
+## ⚠️ Fork Notice
+
+This repository is forked from [mlt131220/Astral3D](https://github.com/mlt131220/Astral3D). This repo is a community-maintained/derivative version and is not the official repository of the original author.
+
+- Upstream: https://github.com/mlt131220/Astral3D
+- License: Inherits and follows the original project's license and related notices
+
 <div align="center">
   <img src="http://editor-doc.astraljs.com/images/home/thumbnailDark.png?t=20250518" width="800" alt="Editor City Preview">
   <img src="http://editor-doc.astraljs.com/images/home/industryDark.png?t=20250318" width="800" alt="Editor Preview">
@@ -61,7 +68,7 @@ Get the latest news and technical support in the following ways:
 
 ### Local run
 ```bash
-    git clone https://github.com/mlt131220/Astral3D.git
+    git clone git@gitlab.haolink.com:zhangzechao/astral3d.git
 
     cd Astral3D
     pnpm install
