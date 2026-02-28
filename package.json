@@ -12,6 +12,8 @@
         "editor:build": "pnpm run sdk:build && pnpm run -C packages/editor build",
         "editor:tsc": "pnpm run -C packages/editor tsc",
         "editor:preview": "pnpm run -C packages/editor preview",
+        "regression:baseline": "node tests/regression/run-baseline.mjs",
+        "regression:baseline:dry": "node tests/regression/run-baseline.mjs --dry-run",
         "sdk:dev": "pnpm run -C packages/sdk dev",
         "sdk:build": "pnpm run -C packages/sdk build",
         "examples:dev": "pnpm run -C packages/examples dev",
