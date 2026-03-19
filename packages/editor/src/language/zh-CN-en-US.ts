@@ -77,6 +77,7 @@ export default {
             Export: '导出',
             'Export Object': '导出物体',
             'Export Scene': '导出场景',
+            'Project Package': '项目包',
             'PLY (Binary)': 'PLY(二进制)',
             'STL (Binary)': 'STL(二进制)',
             /* File 下的选项 End */

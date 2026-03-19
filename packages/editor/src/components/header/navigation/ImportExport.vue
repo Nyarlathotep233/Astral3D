@@ -207,6 +207,59 @@ function isProjectBundlePayload(payload: unknown): payload is SceneProjectBundle
       && typeof data.packageFiles === "object";
 }
 
+function validateBundleFiles(bundleData: SceneProjectBundle, packageBlobMap: Map<string, Blob>) {
+  const expectedFileCount = bundleData.initRequirements?.resources?.packageFileCount;
+  if (typeof expectedFileCount === "number" && expectedFileCount > packageBlobMap.size) {
+    throw new Error("项目包文件不完整，请重新导出后再导入");
+  }
+
+  const expectedGroupPackages = Array.isArray(bundleData.initRequirements?.resources?.groupPackages)
+      ? bundleData.initRequirements.resources.groupPackages
+      : [];
+
+  const missingGroupPackages = expectedGroupPackages.filter((name) => !packageBlobMap.has(name));
+  if (missingGroupPackages.length > 0) {
+    throw new Error(`项目包缺少分包文件：${missingGroupPackages.join(", ")}`);
+  }
+}
+
+async function restoreSceneAfterImportFailure(sceneInfo: ISceneInfo) {
+  globalConfigStore.loadingText = "导入失败，正在恢复原场景...";
+
+  App.clear();
+  if (!sceneInfo.zip) {
+    window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";
+    window.viewer.loadEnv(true);
+    App.project.setKey("sceneInfo", sceneInfo);
+    return;
+  }
+
+  window.viewer.options.hdr = "";
+  let restorePackage: Package | null = new Package(window.viewer);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        reject(new Error("restore timeout"));
+      }, 180000);
+
+      restorePackage!.unpack({
+        url: sceneInfo.zip,
+        onComplete: () => {
+          window.clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+  } finally {
+    if (restorePackage) {
+      restorePackage.dispose();
+      restorePackage = null;
+    }
+  }
+
+  App.project.setKey("sceneInfo", sceneInfo);
+}
+
 async function exportProjectBundle() {
   const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
   if (!sceneInfo?.id) {
@@ -316,12 +369,15 @@ async function importProjectBundleFile(bundleData: SceneProjectBundle) {
   const previousBaseUrl = String(previousRequest.baseUrl || "");
   const previousPackageFetch = Package._fetch;
   const currentSceneInfo = JSON.parse(JSON.stringify((App.project.getKey("sceneInfo") || {}) as ISceneInfo));
+  let sceneCleared = false;
 
   try {
     const packageBlobMap = new Map<string, Blob>();
     for (const [name, dataUrl] of Object.entries(bundleData.packageFiles)) {
       packageBlobMap.set(name, await dataUrlToBlob(dataUrl));
     }
+
+    validateBundleFiles(bundleData, packageBlobMap);
 
     const firstBlob = packageBlobMap.get(bundleData.firstPackageName);
     if (!firstBlob) {
@@ -357,6 +413,7 @@ async function importProjectBundleFile(bundleData: SceneProjectBundle) {
     // 清空当前场景后导入
     App.clear();
     window.viewer.options.hdr = "";
+    sceneCleared = true;
 
     packageInstance = new Package(window.viewer);
     await new Promise<void>((resolve, reject) => {
@@ -376,26 +433,34 @@ async function importProjectBundleFile(bundleData: SceneProjectBundle) {
       });
     });
 
-    // 导入到“当前场景”：保持当前 sceneInfo 基础信息，覆盖场景内容与配置
-    const importedSceneInfo = App.project.getKey("sceneInfo") as ISceneInfo;
-    App.project.setKey("sceneInfo", {
-      ...importedSceneInfo,
-      id: currentSceneInfo.id,
-      sceneName: currentSceneInfo.sceneName,
-      sceneType: currentSceneInfo.sceneType,
-      sceneIntroduction: currentSceneInfo.sceneIntroduction,
-      sceneVersion: currentSceneInfo.sceneVersion,
-      projectType: currentSceneInfo.projectType,
-      coverPicture: currentSceneInfo.coverPicture,
-      zip: currentSceneInfo.zip,
-      zipSize: currentSceneInfo.zipSize,
-      cesiumConfig: currentSceneInfo.cesiumConfig
-    });
+    // 导入到“当前场景”：保持当前场景元数据，避免污染后续保存参数
+    App.project.setKey("sceneInfo", currentSceneInfo);
 
     window.$message?.success(t("plugin.gltfHandler['Import success!']"));
   } catch (err) {
     console.error(err);
-    window.$message?.error("项目包导入失败");
+
+    // 先恢复 fetch/baseUrl，再尝试回滚场景，避免 import 失败后影响保存链路
+    Package._fetch = previousPackageFetch;
+    if (!window.viewer.options.request) {
+      window.viewer.options.request = {baseUrl: previousBaseUrl};
+    } else {
+      window.viewer.options.request.baseUrl = previousBaseUrl;
+    }
+
+    if (sceneCleared) {
+      try {
+        await restoreSceneAfterImportFailure(currentSceneInfo);
+        window.$message?.error("项目包导入失败，已恢复到导入前场景");
+      } catch (restoreErr) {
+        console.error(restoreErr);
+        App.project.setKey("sceneInfo", currentSceneInfo);
+        window.$message?.error("项目包导入失败，且恢复原场景失败，请刷新页面后重试");
+      }
+    } else {
+      App.project.setKey("sceneInfo", currentSceneInfo);
+      window.$message?.error("项目包导入失败");
+    }
   } finally {
     if (packageInstance) {
       packageInstance.dispose();
