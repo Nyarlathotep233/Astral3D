@@ -25,10 +25,25 @@ import SharedProject from "@/views/home/project/SharedProject.vue";
 
 <style scoped lang="less">
 .n-layout-content{
-  height: calc(75vh - var(--header-height));
+  height: calc(100vh - var(--header-height));
+  display: flex;
+  flex-direction: column;
+
+  :deep(.n-tabs){
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :deep(.n-tabs-content){
+    flex: 1;
+    min-height: 0;
+  }
 
   :deep(.n-tabs-pane-wrapper){
     height: 100%;
+    min-height: 0;
 
     .n-tab-pane{
       padding-top: 0 !important;
