@@ -24,7 +24,7 @@ function handleClose(){
     <n-card class="es-tools-dialog fixed top-20vh w-90% max-w-800px" :bordered="false" role="dialog" aria-modal="true">
       <template #header>
         <n-input v-model:value="searchText" type="text" size="large" autofocus clearable class="font-500"
-          placeholder="Hi, Astral3D Editor">
+          placeholder="Hi, H3D Editor">
           <template #prefix>
             <Logo class="w-30px h-30px" />
           </template>

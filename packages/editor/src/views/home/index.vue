@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import {h, ref} from 'vue';
+import {ref} from 'vue';
 import type {MenuOption} from 'naive-ui'
-import {Cube, Sprout, Settings,Notebook,LogoGithub,DataCenter,StarReview} from '@vicons/carbon';
+import {Cube, Sprout, Settings, DataCenter} from '@vicons/carbon';
 import {t} from "@/language";
 import {renderIcon} from "@/utils/common/render";
 import Setting from "@/components/setting/Setting.vue";
 import SidebarTopInfo from "./components/SidebarTopInfo.vue";
-import SidebarBottomInfo from "./components/SidebarBottomInfo.vue";
 import Project from "./container/Project.vue";
 import DataCenterComponents from "./container/DataCenter.vue";
 import AssetsCenter from "./container/AssetsCenter.vue";
@@ -38,42 +37,6 @@ const menuOptions: MenuOption[] = [
     key: 'setting-center',
     icon: renderIcon(Settings),
     component:SettingCenter
-  },
-  {
-    key: 'divider-1',
-    type: 'divider',
-    props: {
-      style: {
-        margin: "20px 25px"
-      }
-    }
-  },
-  {
-    label: () => h('a', {
-      href: 'https://github.com/mlt131220/ES-3DEditor',
-      target: '_blank'
-    }, "GitHub"),
-    key: 'github-link',
-    icon: renderIcon(LogoGithub),
-    isLink:true
-  },
-  {
-    label: () => h('a', {
-      href: 'http://editor-doc.astraljs.com',
-      target: '_blank'
-    },  t("home.Usage Document")),
-    key: 'usage-document',
-    icon: renderIcon(Notebook),
-    isLink:true
-  },
-  {
-    label: () => h('a', {
-      href: 'https://editor-doc.astraljs.com/promotion/',
-      target: '_blank'
-    },  "推广中心"),
-    key: 'promotion-center',
-    icon: renderIcon(StarReview),
-    isLink:true
   }
 ]
 const containerComponent = ref(Project);
@@ -99,10 +62,6 @@ function handleSelectMenu(key: string, item: MenuOption){
             <n-menu :value="menuActiveKey" :options="menuOptions" :collapsed="collapsed" :collapsed-width="64"
                 :collapsed-icon-size="22" @update:value="handleSelectMenu" />
 
-            <transition enter-active-class="animate__animated animate__fadeInLeft"
-                leave-active-class="animate__animated animate__fadeOutLeft">
-                <SidebarBottomInfo class="absolute bottom-20px w-full" v-if="!collapsed" />
-            </transition>
         </n-layout-sider>
 
         <n-layout class="h-full">

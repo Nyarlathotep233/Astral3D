@@ -304,7 +304,7 @@ watch(searchText,Utils.debounce(() => {
         </div>
 
         <n-image preview-disabled object-fit="cover"
-                 :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/Astral3DEditor.jpg'"
+                 :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/H3DEditor.svg'"
                  class="w-full h-full cursor-pointer hover:transform-scale-140 transition-all-200" />
 
         <div class="asset-name absolute bottom-0 left-0 w-full h-36px flex items-center justify-center" style="background: rgba(0, 0, 0, .3)">

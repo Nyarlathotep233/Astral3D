@@ -29,7 +29,7 @@ const emits = defineEmits(['update:visible']);
   <n-modal :show="visible" @update:show="(v) => emits('update:visible',v)">
     <n-descriptions label-placement="left" bordered :column="1">
       <n-descriptions-item :label="t('scene.Cover Picture')">
-        <n-image width="200" :src="getServiceStaticFile(detail.coverPicture) || '/static/images/carousel/Astral3DEditor.jpg'" />
+        <n-image width="200" :src="getServiceStaticFile(detail.coverPicture) || '/static/images/carousel/H3DEditor.svg'" />
       </n-descriptions-item>
       <n-descriptions-item label="ID">
         {{ detail.id }}

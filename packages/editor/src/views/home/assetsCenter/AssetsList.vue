@@ -163,7 +163,7 @@ defineExpose({
         </div>
 
         <n-image preview-disabled object-fit="cover"
-                 :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/Astral3DEditor.jpg'"
+                 :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/H3DEditor.svg'"
                  class="w-full h-220px cursor-pointer hover:transform-scale-140 transition-all-200"
                  @click="handlePreview(asset)"/>
       </template>

@@ -4,7 +4,7 @@ import {ArrowLeft, ArrowRight} from '@vicons/carbon';
 
 <template>
   <n-carousel show-arrow mousewheel autoplay class="w-full h-25vh">
-    <img class="carousel-img" src="/static/images/carousel/Astral3DEditor.jpg" />
+    <img class="carousel-img" src="/static/images/carousel/H3DEditor.svg" />
 
     <template #arrow="{ prev, next }">
       <div class="custom-arrow">

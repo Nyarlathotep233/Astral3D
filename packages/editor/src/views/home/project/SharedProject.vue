@@ -106,7 +106,7 @@ onMounted(() => {
                 </div>
 
                 <n-image preview-disabled object-fit="cover"
-                    :src="getServiceStaticFile(project.coverPicture) || '/static/images/carousel/Astral3DEditor.jpg'"
+                    :src="getServiceStaticFile(project.coverPicture) || '/static/images/carousel/H3DEditor.svg'"
                     class="w-full h-220px cursor-pointer hover:transform-scale-140 transition-all-200" @click="editScene(project.id)"
                 />
               </template>
