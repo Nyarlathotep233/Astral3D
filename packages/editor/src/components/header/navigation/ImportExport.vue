@@ -23,6 +23,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
 import {DocumentImport, DocumentExport} from "@vicons/carbon";
+import JSZip from "jszip";
 import {t} from "@/language";
 import {App, Export, Loader, Package} from "@astral3d/engine";
 import {useGlobalConfigStore} from "@/store/modules/globalConfig";
@@ -32,11 +33,17 @@ const globalConfigStore = useGlobalConfigStore();
 const exportingProjectBundle = ref(false);
 const importingProjectBundle = ref(false);
 
-const BUNDLE_SIGNATURE = "astral3d-scene-project-package";
+const BUNDLE_SIGNATURE = "h3d-scene-project-package";
+const LEGACY_BUNDLE_SIGNATURE = "astral3d-scene-project-package";
 const BUNDLE_VERSION = 1;
+const ZIP_BUNDLE_SIGNATURE = "h3d-scene-project-package-zip";
+const LEGACY_ZIP_BUNDLE_SIGNATURE = "astral3d-scene-project-package-zip";
+const PROJECT_JSON_SUFFIX = ".h3d-project.json";
+const PROJECT_ZIP_SUFFIX = ".h3d-project.zip";
+const PROJECT_ZIP_SUFFIX_LIST = [".h3d-project.zip", ".haolink3d-project.zip", ".astral3d-project.zip"];
 
 interface SceneProjectBundle {
-  signature: typeof BUNDLE_SIGNATURE;
+  signature: string;
   version: number;
   exportedAt: string;
   sourceSceneId: string;
@@ -56,6 +63,24 @@ interface SceneProjectBundle {
       groupPackages: string[];
       packageFileCount: number;
       coverPicture: string;
+      packageContentHint: string[];
+    };
+  };
+}
+
+interface SceneProjectZipManifest {
+  signature: string;
+  version: number;
+  exportedAt: string;
+  sourceSceneId: string;
+  sourceSceneInfo: ISceneInfo;
+  firstPackageName: string;
+  packageFiles: string[];
+  initRequirements: {
+    resources: {
+      firstPackage: string;
+      groupPackages: string[];
+      packageFileCount: number;
       packageContentHint: string[];
     };
   };
@@ -147,6 +172,10 @@ const exportOptions = [
       {
         label: t("layout.header['Project Package']"),
         key: "exportSceneProjectPackage"
+      },
+      {
+        label: `${t("layout.header['Project Package']")} (.zip)`,
+        key: "exportSceneProjectPackageZip"
       }
     ]
   }
@@ -200,11 +229,25 @@ function safeFilename(input: string) {
 function isProjectBundlePayload(payload: unknown): payload is SceneProjectBundle {
   if (!payload || typeof payload !== "object") return false;
   const data = payload as SceneProjectBundle;
-  return data.signature === BUNDLE_SIGNATURE
+  return [BUNDLE_SIGNATURE, LEGACY_BUNDLE_SIGNATURE].includes(data.signature)
       && data.version === BUNDLE_VERSION
       && typeof data.firstPackageName === "string"
       && !!data.packageFiles
       && typeof data.packageFiles === "object";
+}
+
+function isProjectBundleZipManifest(payload: unknown): payload is SceneProjectZipManifest {
+  if (!payload || typeof payload !== "object") return false;
+  const data = payload as SceneProjectZipManifest;
+  return [ZIP_BUNDLE_SIGNATURE, LEGACY_ZIP_BUNDLE_SIGNATURE].includes(data.signature)
+      && data.version === BUNDLE_VERSION
+      && typeof data.firstPackageName === "string"
+      && Array.isArray(data.packageFiles);
+}
+
+function isProjectBundleZipFilename(filename: string) {
+  const lower = filename.toLowerCase();
+  return PROJECT_ZIP_SUFFIX_LIST.some((suffix) => lower.endsWith(suffix));
 }
 
 function validateBundleFiles(bundleData: SceneProjectBundle, packageBlobMap: Map<string, Blob>) {
@@ -341,7 +384,7 @@ async function exportProjectBundle() {
       }
     };
 
-    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}.astral3d-project.json`;
+    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}${PROJECT_JSON_SUFFIX}`;
     const jsonBlob = new Blob([JSON.stringify(bundlePayload, null, 2)], {type: "application/json;charset=utf-8"});
     downloadBlobFile(jsonBlob, fileName);
 
@@ -349,6 +392,82 @@ async function exportProjectBundle() {
   } catch (err) {
     console.error(err);
     window.$message?.error("项目包导出失败");
+  } finally {
+    packageInstance.dispose();
+    exportingProjectBundle.value = false;
+    globalConfigStore.loading = false;
+  }
+}
+
+async function exportProjectBundleZip() {
+  const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
+  if (!sceneInfo?.id) {
+    window.$message?.error(window.$t("scene['The project does not exist!']"));
+    return;
+  }
+
+  exportingProjectBundle.value = true;
+  globalConfigStore.loading = true;
+  globalConfigStore.loadingText = "正在生成项目包(.zip)...";
+
+  const packageInstance = new Package(window.viewer);
+  const packageFiles: File[] = [];
+
+  try {
+    const exported = await packageInstance.pack({
+      name: `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}`,
+      layer: 2,
+      zipUploadFun: async (zipFile: File) => {
+        const cloned = new File([await zipFile.arrayBuffer()], zipFile.name, {type: zipFile.type});
+        packageFiles.push(cloned);
+        return cloned.name;
+      },
+      onProgress: (progress) => {
+        globalConfigStore.loadingText = `${progress}%`;
+      }
+    });
+
+    const firstPackageName = String(exported.firstUploadResult || packageFiles[0]?.name || "");
+    if (!firstPackageName) {
+      throw new Error("Failed to find first package");
+    }
+
+    const archive = new JSZip();
+    const packageFolder = archive.folder("packages") as JSZip;
+
+    for (const pkg of packageFiles) {
+      packageFolder.file(pkg.name, await pkg.arrayBuffer());
+    }
+
+    const groupPackages = packageFiles.map(file => file.name).filter(name => name !== firstPackageName);
+    const manifest: SceneProjectZipManifest = {
+      signature: ZIP_BUNDLE_SIGNATURE,
+      version: BUNDLE_VERSION,
+      exportedAt: new Date().toISOString(),
+      sourceSceneId: sceneInfo.id,
+      sourceSceneInfo: JSON.parse(JSON.stringify(sceneInfo)),
+      firstPackageName,
+      packageFiles: packageFiles.map(file => file.name),
+      initRequirements: {
+        resources: {
+          firstPackage: firstPackageName,
+          groupPackages,
+          packageFileCount: packageFiles.length,
+          packageContentHint: ["scene.json", "config.json", "Textures/*", "Geometries/*", "Drawing/*"]
+        }
+      }
+    };
+
+    archive.file("project.json", JSON.stringify(manifest, null, 2));
+
+    const zipBlob = await archive.generateAsync({type: "blob"});
+    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}${PROJECT_ZIP_SUFFIX}`;
+    downloadBlobFile(zipBlob, fileName);
+
+    window.$message?.success("项目包(.zip)导出成功");
+  } catch (err) {
+    console.error(err);
+    window.$message?.error("项目包(.zip)导出失败");
   } finally {
     packageInstance.dispose();
     exportingProjectBundle.value = false;
@@ -477,6 +596,61 @@ async function importProjectBundleFile(bundleData: SceneProjectBundle) {
   }
 }
 
+async function importProjectBundleZipFile(zipFile: File) {
+  const zipContent = await new JSZip().loadAsync(zipFile);
+  const manifestFile = zipContent.file("project.json");
+  if (!manifestFile) {
+    throw new Error("项目包缺少 project.json");
+  }
+
+  const manifest = JSON.parse(await manifestFile.async("string"));
+  if (!isProjectBundleZipManifest(manifest)) {
+    throw new Error("不是有效的项目包(.zip)");
+  }
+
+  const packageFilesMap: Record<string, string> = {};
+  for (const fileName of manifest.packageFiles) {
+    const packageFile = zipContent.file(`packages/${fileName}`);
+    if (!packageFile) {
+      throw new Error(`项目包缺少分包文件：${fileName}`);
+    }
+
+    const blob = await packageFile.async("blob");
+    packageFilesMap[fileName] = await readAsDataUrl(blob);
+  }
+
+  const firstPackageName = manifest.firstPackageName;
+  const groupPackages = Array.isArray(manifest.initRequirements?.resources?.groupPackages)
+      ? manifest.initRequirements.resources.groupPackages
+      : manifest.packageFiles.filter((name: string) => name !== firstPackageName);
+  const packageFileCount = Number(manifest.initRequirements?.resources?.packageFileCount || manifest.packageFiles.length);
+  const sourceSceneInfo = (manifest.sourceSceneInfo || {}) as ISceneInfo;
+
+  const bundleData: SceneProjectBundle = {
+    signature: BUNDLE_SIGNATURE,
+    version: BUNDLE_VERSION,
+    exportedAt: manifest.exportedAt || new Date().toISOString(),
+    sourceSceneId: manifest.sourceSceneId || sourceSceneInfo.id || "",
+    sourceSceneInfo: sourceSceneInfo,
+    firstPackageName,
+    packageFiles: packageFilesMap,
+    initRequirements: {
+      apis: [],
+      resources: {
+        firstPackage: firstPackageName,
+        groupPackages,
+        packageFileCount,
+        coverPicture: sourceSceneInfo.coverPicture || "",
+        packageContentHint: Array.isArray(manifest.initRequirements?.resources?.packageContentHint)
+            ? manifest.initRequirements.resources.packageContentHint
+            : ["scene.json", "config.json", "Textures/*", "Geometries/*", "Drawing/*"]
+      }
+    }
+  };
+
+  await importProjectBundleFile(bundleData);
+}
+
 function handleImport() {
   const form = document.createElement('form');
   form.style.display = 'none';
@@ -511,6 +685,24 @@ function handleImport() {
         }
       }
 
+      // 单文件且为项目zip包后缀时，走项目包zip导入分支；其他zip仍走原有导入逻辑
+      if (files.length === 1 && target && /\.zip$/i.test(target.name) && isProjectBundleZipFilename(target.name)) {
+        window.$dialog.warning({
+          title: window.$t('other.warning'),
+          content: window.$t("core['Any unsaved data will be lost. Are you sure?']"),
+          positiveText: window.$t('other.Ok'),
+          negativeText: window.$t('other.Cancel'),
+          onPositiveClick: async () => {
+            try {
+              await importProjectBundleZipFile(target);
+            } catch (err: any) {
+              window.$message?.error(err?.message || String(err));
+            }
+          }
+        });
+        return;
+      }
+
       await Loader.loadFiles(fileInput.files, undefined);
     } catch (err: any) {
       window.$message?.error(err?.message || String(err));
@@ -524,6 +716,11 @@ function handleImport() {
 }
 
 async function handleExportSelect(key: string) {
+  if (key === "exportSceneProjectPackageZip") {
+    await exportProjectBundleZip();
+    return;
+  }
+
   if (key === "exportSceneProjectPackage" || key === "exportSceneProjectBundle") {
     await exportProjectBundle();
     return;

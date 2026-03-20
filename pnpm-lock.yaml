@@ -140,6 +140,9 @@ importers:
       disable-devtool:
         specifier: ^0.3.8
         version: 0.3.8
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       keyframe-resample:
         specifier: ^0.1.0
         version: 0.1.0
