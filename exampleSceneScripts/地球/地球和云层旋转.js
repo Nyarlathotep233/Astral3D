@@ -5,7 +5,7 @@ const CONFIG = {
 
   // 云层自转速度（度/秒）
   // 建议比 land 稍微快一点点，形成相对漂移
-  cloudsDegPerSec: 2.18,
+  cloudsDegPerSec: 2.2,
 
   // 大气层是否跟着地表一起转
   rotateAtmosphere: false,
@@ -46,6 +46,11 @@ let cachedCloudMap = null;
 const _lightPos = new THREE.Vector3();
 const _targetPos = new THREE.Vector3();
 const _sunDir = new THREE.Vector3();
+const _axisY = new THREE.Vector3(0, 1, 0);
+const _stepQuat = new THREE.Quaternion();
+const _landInvQuat = new THREE.Quaternion();
+const _relQuat = new THREE.Quaternion();
+const _relEuler = new THREE.Euler(0, 0, 0, "YXZ");
 
 // ===== Shader 源码 =====
 const CITY_LIGHTS_VERTEX_SHADER = `
@@ -134,6 +139,25 @@ void main() {
 // ===== 工具函数 =====
 function normalizeAngleRad(v) {
   return Math.atan2(Math.sin(v), Math.cos(v));
+}
+
+function rotateObjectLocalY(object, degPerSec, delta) {
+  if (!object) return;
+
+  const step = THREE.MathUtils.degToRad(degPerSec) * delta;
+  if (step === 0) return;
+
+  object.rotateY(step);
+}
+
+function getRelativeYawRad(objectA, objectB) {
+  if (!objectA || !objectB) return 0;
+
+  _landInvQuat.copy(objectB.quaternion).invert();
+  _relQuat.copy(_landInvQuat).multiply(objectA.quaternion);
+  _relEuler.setFromQuaternion(_relQuat, "YXZ");
+
+  return normalizeAngleRad(_relEuler.y);
 }
 
 function getSunDir(out) {
@@ -296,9 +320,9 @@ function beforeRender(delta) {
   getSunDir(_sunDir);
   cityShaderMaterial.uniforms.uSunDir.value.copy(_sunDir);
 
-  // 更新云层相对地表的经度偏移
-  let cloudOffset = earthClouds.rotation.y - earthLand.rotation.y;
-  cloudOffset = normalizeAngleRad(cloudOffset) * CONFIG.cloudOffsetSign;
+  // 更新云层相对地表的经度偏移（用 quaternion 求相对 yaw，避免 Euler 分支跳变）
+  let cloudOffset = getRelativeYawRad(earthClouds, earthLand);
+  cloudOffset *= CONFIG.cloudOffsetSign;
   cityShaderMaterial.uniforms.uCloudLonOffset.value = cloudOffset;
 
   // 如果你后面想热调参数，这里也可以每帧同步
@@ -315,23 +339,17 @@ function afterAnimation(delta, toBeRender) {
 
   // 1) 地表和城市灯一起转
   if (earthLand) {
-    const landStep =
-      THREE.MathUtils.degToRad(CONFIG.landDegPerSec) * delta;
-    earthLand.rotation.y += landStep;
+    rotateObjectLocalY(earthLand, CONFIG.landDegPerSec, delta);
   }
 
   // 2) 云层单独转，略快一点，形成相对漂移
   if (earthClouds) {
-    const cloudStep =
-      THREE.MathUtils.degToRad(CONFIG.cloudsDegPerSec) * delta;
-    earthClouds.rotation.y += cloudStep;
+    rotateObjectLocalY(earthClouds, CONFIG.cloudsDegPerSec, delta);
   }
 
   // 3) 大气层可选是否旋转
   if (CONFIG.rotateAtmosphere && earthAtmosphere) {
-    const atmosphereStep =
-      THREE.MathUtils.degToRad(CONFIG.atmosphereDegPerSec) * delta;
-    earthAtmosphere.rotation.y += atmosphereStep;
+    rotateObjectLocalY(earthAtmosphere, CONFIG.atmosphereDegPerSec, delta);
   }
 
   toBeRender(true);

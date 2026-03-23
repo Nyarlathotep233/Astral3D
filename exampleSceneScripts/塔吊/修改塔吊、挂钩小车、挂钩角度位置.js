@@ -1,9 +1,14 @@
 /**
  * 三合一：TopUnit001 旋转 / HookRig001 小车 X / Hook002 挂钩 Y + WireRope 缩放
- * - Y / Shift+Y：吊臂 rotation.y 步进（平滑）
+ * - Y / Shift+Y：吊臂绕本地 Y 轴步进（平滑）
  * - H / Shift+H：小车 position.x 步进（平滑 + clamp）
  * - G / Shift+G：挂钩 position.y 步进（平滑 + clamp）并同步钢丝绳 scale.y
  * - R：单次接口调用 -> uuid 派生 3 个 seed -> 同时生成角度/位置目标（平滑）
+ *
+ * 重点改动：
+ * - TopUnit001 的旋转不再依赖 topUnit.rotation.y
+ * - 使用“基准 quaternion + 当前逻辑角 currentRotY + 目标逻辑角 desiredRotY”
+ * - 避免导出/导入后 Euler 等价角分支（如 0,0,0 与 -180,-180,-180）导致旋转语义跳变
  *
  * @document http://editor-doc.astraljs.com/guide/component/h4v1bkyh/
  */
@@ -49,7 +54,7 @@ const TIMEOUT_MS = 5000;
 const ANGLE_MIN_DEG = -180;
 const ANGLE_MAX_DEG = 180;
 
-// ==================== Rope 标定（保持你原来的映射） ====================
+// ==================== Rope 标定（保持原映射） ====================
 // HookY=0 => RopeScaleY=1；HookY=-40 => RopeScaleY=11.5
 const HOOK_Y_AT_SCALE_1 = 0;
 const ROPE_SCALE_Y_AT_HOOK_0 = 1;
@@ -66,10 +71,18 @@ let rope = null;
 let ROPE_SCALE_Y_MIN = 1;
 let ROPE_SCALE_Y_MAX = 11.5;
 
-// 目标值（用于动画）
-let desiredRotY = null;   // rad
-let desiredX = null;      // number
-let desiredHookY = null;  // number
+// ==================== TopUnit 旋转状态（关键改动） ====================
+// 这里不再从 topUnit.rotation.y 回读逻辑角度
+// currentRotY / desiredRotY 表示“相对于 loaded() 时基准姿态”的本地 Y 旋转量
+let currentRotY = 0;       // 当前逻辑角（rad）
+let desiredRotY = 0;       // 目标逻辑角（rad）
+const _baseTopQuat = new THREE.Quaternion();  // loaded() 时的基准姿态
+const _axisY = new THREE.Vector3(0, 1, 0);
+const _yawQuat = new THREE.Quaternion();
+
+// 其它目标值（用于动画）
+let desiredX = null;       // number
+let desiredHookY = null;   // number
 
 // 动画开关
 let animRot = false;
@@ -90,13 +103,14 @@ function lerp(a, b, t) {
 
 function findByName(root, name) {
   if (!root) return null;
-  // threejs 原生（如果可用）更快
+
   if (typeof root.getObjectByName === "function") {
     const hit = root.getObjectByName(name);
     if (hit) return hit;
   }
-  // 兜底递归
+
   if (root.name === name) return root;
+
   const children = root.children || [];
   for (let i = 0; i < children.length; i++) {
     const hit = findByName(children[i], name);
@@ -112,6 +126,7 @@ function normalizeRad(a) {
   if (a > Math.PI) a -= twoPI;       // (-PI, PI]
   return a;
 }
+
 function shortestDiffRad(from, to) {
   return normalizeRad(to - from);
 }
@@ -125,6 +140,7 @@ function fnv1a32(str) {
   }
   return h >>> 0;
 }
+
 function seed01FromString(str) {
   return fnv1a32(str) / 4294967296;
 }
@@ -139,6 +155,7 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -153,13 +170,23 @@ function ropeScaleYFromHookY(hookY) {
   const slope =
     (ROPE_SCALE_Y_AT_HOOK_NEG40 - ROPE_SCALE_Y_AT_HOOK_0) /
     (HOOK_Y_AT_SCALE_11_5 - HOOK_Y_AT_SCALE_1);
+
   const b = ROPE_SCALE_Y_AT_HOOK_0;
   return slope * hookY + b;
 }
+
 function syncRopeByHookY(hookY) {
   if (!rope) return;
   const s = ropeScaleYFromHookY(hookY);
   rope.scale.y = clamp(s, ROPE_SCALE_Y_MIN, ROPE_SCALE_Y_MAX);
+}
+
+// ---- TopUnit：应用逻辑角到真实姿态 ----
+function applyTopUnitYaw(rad) {
+  if (!topUnit) return;
+
+  _yawQuat.setFromAxisAngle(_axisY, rad);
+  topUnit.quaternion.copy(_baseTopQuat).multiply(_yawQuat).normalize();
 }
 
 // ---- 设置目标值（并启动动画）----
@@ -168,11 +195,13 @@ function setDesiredRotY(rad) {
   desiredRotY = normalizeRad(rad);
   animRot = true;
 }
+
 function setDesiredX(x) {
   if (!hookRig) return;
   desiredX = clamp(x, X_MIN, X_MAX);
   animX = true;
 }
+
 function setDesiredHookY(y) {
   if (!hook) return;
   desiredHookY = clamp(y, HOOK_Y_MIN, HOOK_Y_MAX);
@@ -181,7 +210,7 @@ function setDesiredHookY(y) {
 
 // ==================== 生命周期 ====================
 function loaded() {
-  // this 建议是 glb 根
+  // this 通常是 glb 根节点
   topUnit = findByName(this, TOP_UNIT_NAME);
   hookRig = findByName(this, HOOK_RIG_NAME);
   hook = findByName(this, HOOK_NAME);
@@ -200,7 +229,14 @@ function loaded() {
   if (hookRig) hookRig.position.x = clamp(hookRig.position.x, X_MIN, X_MAX);
   if (hook) hook.position.y = clamp(hook.position.y, HOOK_Y_MIN, HOOK_Y_MAX);
 
-  if (topUnit) desiredRotY = normalizeRad(topUnit.rotation.y);
+  // ===== 关键：记录 TopUnit 初始姿态作为“基准姿态” =====
+  if (topUnit) {
+    _baseTopQuat.copy(topUnit.quaternion);
+    currentRotY = 0;
+    desiredRotY = 0;
+    applyTopUnitYaw(currentRotY);
+  }
+
   if (hookRig) desiredX = hookRig.position.x;
   if (hook) desiredHookY = hook.position.y;
 
@@ -223,20 +259,24 @@ function afterAnimation(delta, toBeRender) {
   let anyAnimating = false;
   let anyChanged = false;
 
-  // ---- 1) 吊臂旋转 ----
+  // ---- 1) 吊臂旋转（改成脚本内部逻辑角 + quaternion 应用）----
   if (topUnit && animRot && desiredRotY != null) {
-    const cur = normalizeRad(topUnit.rotation.y);
+    const cur = currentRotY;
     const diff = shortestDiffRad(cur, desiredRotY);
 
     const epsRad = THREE.MathUtils.degToRad(EPS_DEG);
     if (Math.abs(diff) <= epsRad) {
-      topUnit.rotation.y = desiredRotY;
+      currentRotY = desiredRotY;
+      applyTopUnitYaw(currentRotY);
       animRot = false;
       anyChanged = true;
     } else {
       const speedRad = THREE.MathUtils.degToRad(SPEED_DEG_PER_SEC);
       const step = Math.sign(diff) * Math.min(Math.abs(diff), speedRad * delta);
-      topUnit.rotation.y = normalizeRad(cur + step);
+
+      currentRotY = normalizeRad(cur + step);
+      applyTopUnitYaw(currentRotY);
+
       anyAnimating = true;
       anyChanged = true;
     }
@@ -259,118 +299,109 @@ function afterAnimation(delta, toBeRender) {
     }
   }
 
-  // ---- 3) HookY + RopeScale ----
-  if (hook && rope && animHook && desiredHookY != null) {
+  // ---- 3) 挂钩 Y（并同步钢丝绳）----
+  if (hook && animHook && desiredHookY != null) {
     const cur = hook.position.y;
     const diff = desiredHookY - cur;
 
     if (Math.abs(diff) <= EPS_HOOK_Y) {
       hook.position.y = desiredHookY;
+      syncRopeByHookY(hook.position.y);
       animHook = false;
       anyChanged = true;
     } else {
       const step = Math.sign(diff) * Math.min(Math.abs(diff), SPEED_HOOK_Y_PER_SEC * delta);
       hook.position.y = clamp(cur + step, HOOK_Y_MIN, HOOK_Y_MAX);
+      syncRopeByHookY(hook.position.y);
       anyAnimating = true;
       anyChanged = true;
     }
-
-    // Rope 永远以“当前 hookY”推导，避免漂移
-    syncRopeByHookY(hook.position.y);
   }
 
-  if (anyChanged) {
-    // 只更新一次矩阵
-    this.updateMatrixWorld(true);
-  }
-
-  // 只要还有任何动画没结束，就要求下一帧继续渲染
   if (anyAnimating) {
     toBeRender(true);
   }
+
+  if (anyChanged) {
+    this.updateMatrixWorld(true);
+  }
 }
 
-// ==================== 统一键盘处理 ====================
-function handleKeyDown(event) {
-  const key = (event.key || "").toLowerCase();
+// ==================== 键盘控制 ====================
+async function onKeyDown(event) {
+  const key = String(event.key || "").toLowerCase();
+  const shift = !!event.shiftKey;
 
-  // ---- Y：步进旋转 ----
-  if (key === KEY_ROT_STEP || event.code === "KeyY") {
-    if (!topUnit) return;
-    const dir = event.shiftKey ? -1 : 1;
+  // ---- Y：吊臂步进 ----
+  if (key === KEY_ROT_STEP) {
+    const dir = shift ? -1 : 1;
     const stepRad = THREE.MathUtils.degToRad(ROTATE_STEP_DEG);
-    setDesiredRotY(topUnit.rotation.y + dir * stepRad);
-    render();
+    setDesiredRotY(currentRotY + dir * stepRad);
     return;
   }
 
-  // ---- H：步进小车 X ----
-  if (key === KEY_X_STEP || event.code === "KeyH") {
+  // ---- H：小车 X 步进 ----
+  if (key === KEY_X_STEP) {
     if (!hookRig) return;
-    const dir = event.shiftKey ? -1 : 1;
+    const dir = shift ? -1 : 1;
     setDesiredX(hookRig.position.x + dir * STEP_X);
-    render();
     return;
   }
 
-  // ---- G：步进 HookY（下放/回收）----
-  if (key === KEY_HOOK_STEP || event.code === "KeyG") {
+  // ---- G：挂钩 Y 步进 ----
+  if (key === KEY_HOOK_STEP) {
     if (!hook) return;
-    const dir = event.shiftKey ? +1 : -1; // G 下放（更负）；Shift+G 回收（更正）
+    // 这里约定：按 G 下放（更小），Shift+G 回收（更大）
+    const dir = shift ? 1 : -1;
     setDesiredHookY(hook.position.y + dir * STEP_HOOK_Y);
-    render();
     return;
   }
 
-  // ---- R：单次接口请求 -> 同时驱动三个目标 ----
-  if (key === KEY_API || event.code === "KeyR") {
+  // ---- R：接口触发随机目标 ----
+  if (key === KEY_API) {
     if (fetching) {
-      console.log("[api] fetching... ignore duplicate R");
+      console.warn("[api] request already in progress");
       return;
     }
 
     fetching = true;
-    console.log("[api] fetching:", API_URL);
+    try {
+      const json = await fetchJsonWithTimeout(API_URL, TIMEOUT_MS);
+      const uuid =
+        (json && (json.uuid || (json.data && json.data.uuid))) ||
+        (crypto && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(Date.now()));
 
-    fetchJsonWithTimeout(API_URL, TIMEOUT_MS)
-      .then((data) => {
-        const uuid = String(data.uuid || "");
-        // 用同一个 uuid 派生 3 个 seed，避免三者完全同步
-        const seedRot = seed01FromString(uuid + "::rot");
-        const seedX = seed01FromString(uuid + "::x");
-        const seedHook = seed01FromString(uuid + "::hook");
+      const seedRot = seed01FromString(uuid + "::rot");
+      const seedX = seed01FromString(uuid + "::x");
+      const seedHook = seed01FromString(uuid + "::hook");
 
-        // 角度（度）/ X / HookY
-        const angleDeg = lerp(ANGLE_MIN_DEG, ANGLE_MAX_DEG, seedRot);
-        const nextX = lerp(X_MIN, X_MAX, seedX);
-        const nextHookY = lerp(HOOK_Y_MIN, HOOK_Y_MAX, seedHook);
+      const angleDeg = lerp(ANGLE_MIN_DEG, ANGLE_MAX_DEG, seedRot);
+      const targetX = lerp(X_MIN, X_MAX, seedX);
+      const targetHookY = lerp(HOOK_Y_MIN, HOOK_Y_MAX, seedHook);
 
-        if (topUnit) setDesiredRotY(THREE.MathUtils.degToRad(angleDeg));
-        if (hookRig) setDesiredX(nextX);
-        if (hook) setDesiredHookY(nextHookY);
+      if (topUnit) setDesiredRotY(THREE.MathUtils.degToRad(angleDeg));
+      if (hookRig) setDesiredX(targetX);
+      if (hook) setDesiredHookY(targetHookY);
 
-        console.log("[api] ok:", data);
-        console.log("[api] uuid =", uuid);
-        console.log("[api] seeds =", { seedRot, seedX, seedHook });
-        console.log("[api] desired =", { angleDeg: angleDeg.toFixed(1), x: nextX, hookY: nextHookY });
-
-        render();
-      })
-      .catch((err) => {
-        // 不回退：只记录错误
-        console.error("[api] fetch failed:", err);
-      })
-      .finally(() => {
-        fetching = false;
+      console.log("[api] ok", {
+        uuid,
+        angleDeg,
+        targetX,
+        targetHookY,
       });
+    } catch (err) {
+      console.error("[api] failed", err);
+    } finally {
+      fetching = false;
+    }
 
     return;
   }
 }
 
-function onKeyDown(event) {
-  return handleKeyDown.call(this, event);
-}
-function onKeydown(event) {
-  return handleKeyDown.call(this, event);
+/**
+ * 可选：场景销毁前调用
+ */
+function beforeDestroy() {
+  fetching = false;
 }
