@@ -73,8 +73,16 @@ THREE.Object3D.prototype.toJSON = function(meta:any) {
     if (this.renderOrder !== 0) object.renderOrder = this.renderOrder;
     if (Object.keys(this.userData).length > 0) object.userData = this.userData;
 
+    if (this.matrixAutoUpdate === true) {
+        this.updateMatrix();
+    }
+
     object.layers = this.layers.mask;
     object.matrix = this.matrix.toArray();
+    object.position = this.position.toArray();
+    object.rotation = this.rotation.toArray();
+    object.quaternion = this.quaternion.toArray();
+    object.scale = this.scale.toArray();
     object.up = this.up.toArray();
 
     if (this.matrixAutoUpdate === false) object.matrixAutoUpdate = false;

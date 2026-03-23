@@ -46,10 +46,7 @@ importers:
         version: 3.7.4
 
   common/build:
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.3
-        version: 11.0.4
+    dependencies:
       dotenv:
         specifier: 16.3.1
         version: 16.3.1
@@ -59,15 +56,9 @@ importers:
       rollup-plugin-visualizer:
         specifier: 'catalog:'
         version: 6.0.1(rollup@4.44.2)
-      typescript:
-        specifier: 'catalog:'
-        version: 5.8.3
       unplugin-config:
         specifier: ^0.1.5
         version: 0.1.5(esbuild@0.25.10)(vite@6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0))
-      vite:
-        specifier: 'catalog:'
-        version: 6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0)
       vite-plugin-compression:
         specifier: ^0.5.1
         version: 0.5.1(vite@6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0))
@@ -77,6 +68,16 @@ importers:
       vite-plugin-top-level-await:
         specifier: ^1.3.1
         version: 1.5.0(vite@6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0))
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.3
+        version: 11.0.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      vite:
+        specifier: 'catalog:'
+        version: 6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0)
 
   packages/docs:
     devDependencies:

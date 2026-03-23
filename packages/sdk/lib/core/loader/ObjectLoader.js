@@ -983,6 +983,13 @@ class ObjectLoader extends THREE.Loader {
             if (data.matrixAutoUpdate !== undefined) object.matrixAutoUpdate = data.matrixAutoUpdate;
             if (object.matrixAutoUpdate) object.matrix.decompose(object.position, object.quaternion, object.scale);
 
+            // 优先使用显式TRS，避免矩阵分解造成Euler等价值跳变（如 0,0,0 <-> -180,-180,-180）
+            if (data.position !== undefined) object.position.fromArray(data.position);
+            if (data.quaternion !== undefined) object.quaternion.fromArray(data.quaternion);
+            if (data.rotation !== undefined) object.rotation.fromArray(data.rotation);
+            if (data.scale !== undefined) object.scale.fromArray(data.scale);
+            if (object.matrixAutoUpdate) object.updateMatrix();
+
         } else {
 
             if (data.position !== undefined) object.position.fromArray(data.position);
