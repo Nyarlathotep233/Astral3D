@@ -40,7 +40,7 @@
     <!-- 网格 -->
     <n-form-item :label="t('layout.sider.sceneConfig.Grid')">
       <n-switch size="small" v-model:value="grid"
-                @update:value="Hooks.useDispatchSignal('showGridChanged', grid)"/>
+                @update:value="handleShowGrid"/>
     </n-form-item>
     <!-- 辅助 -->
     <n-form-item :label="t('layout.sider.sceneConfig.Helpers')">
@@ -57,6 +57,9 @@ import {App,Hooks} from "@astral3d/engine";
 import {t} from "@/language";
 import EsInputNumber from "@/components/es/EsInputNumber.vue";
 import EsTexture from "@/components/es/EsTexture.vue";
+
+const GRID_STORAGE_KEY = "editor:scene-setting:grid-visible";
+const HELPERS_STORAGE_KEY = "editor:scene-setting:helpers-visible";
 
 //背景
 const backgroundType = ref("Equirectangular");
@@ -76,15 +79,21 @@ const helpers = ref(true);
 
 onMounted(async () => {
   await nextTick();
+  restorePersistedToggles();
   refreshUI();
+  applySceneVisibility();
 
   Hooks.useAddSignal("sceneCleared", refreshUI);
   Hooks.useAddSignal("sceneGraphChanged", refreshUI);
+  Hooks.useAddSignal("sceneCleared", applySceneVisibility);
+  Hooks.useAddSignal("sceneLoadComplete", applySceneVisibility);
 })
 
 onBeforeUnmount(()=>{
   Hooks.useRemoveSignal("sceneCleared", refreshUI);
   Hooks.useRemoveSignal("sceneGraphChanged", refreshUI);
+  Hooks.useRemoveSignal("sceneCleared", applySceneVisibility);
+  Hooks.useRemoveSignal("sceneLoadComplete", applySceneVisibility);
 })
 
 // 更新树及背景/环境
@@ -145,7 +154,46 @@ function onEnvironmentChanged() {
   Hooks.useDispatchSignal("sceneEnvironmentChanged", toRaw(environmentSelect.value), toRaw(environmentTexture.value));
 }
 
-function handleShowHelpers(){
+function readPersistedBoolean(key:string, fallback:boolean) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+  } catch (error) {
+    console.warn("[SceneSetting] read localStorage failed:", error);
+  }
+
+  return fallback;
+}
+
+function persistBoolean(key:string, value:boolean) {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch (error) {
+    console.warn("[SceneSetting] write localStorage failed:", error);
+  }
+}
+
+function restorePersistedToggles() {
+  grid.value = readPersistedBoolean(GRID_STORAGE_KEY, true);
+  helpers.value = readPersistedBoolean(HELPERS_STORAGE_KEY, true);
+}
+
+function applySceneVisibility() {
+  Hooks.useDispatchSignal("showGridChanged", grid.value);
+  applyHelpersVisibility();
+}
+
+function handleShowGrid(value:boolean){
+  grid.value = value;
+  persistBoolean(GRID_STORAGE_KEY, value);
+
+  Hooks.useDispatchSignal("showGridChanged", value);
+}
+
+function applyHelpersVisibility() {
+  if (!window.viewer) return;
+
   window.viewer.edit = {
     enabled: helpers.value,
     helpers: true,
@@ -153,5 +201,12 @@ function handleShowHelpers(){
   }
 
   window.viewer.render();
+}
+
+function handleShowHelpers(value:boolean){
+  helpers.value = value;
+  persistBoolean(HELPERS_STORAGE_KEY, value);
+
+  applyHelpersVisibility();
 }
 </script>
