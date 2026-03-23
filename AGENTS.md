@@ -1,22 +1,187 @@
-# H3D Agent Guidelines
+# AGENTS.md
 
-This repository has been renamed to **H3D (Haolink 3D)**.
+> This repository has been renamed to **H3D (Haolink 3D)**.  
+> For all new user-facing names, labels, prompts, and package suffixes, prefer **H3D / Haolink 3D / Haolink 3D Editor**.  
+> Avoid introducing new `astral3d` naming in new logic. Legacy identifiers may remain only when compatibility requires it.  
+> Current phase is **rapid iteration**: prefer simple implementation, avoid over-engineering, and remove unnecessary legacy/scaffolding code.  
+> However, do **not** introduce silent data corruption or irreversible loss in core project data.  
+> For destructive or high-risk changes affecting core flows, testing is mandatory before merge, including agent-driven checks and developer manual verification.
 
-## Naming Principle
-- For all new user-facing names, labels, file suffixes, and prompts, prefer:
-  - `H3D`
-  - `Haolink 3D`
-  - `Haolink 3D Editor`
-- Avoid introducing new `astral3d` naming in newly added logic.
-- Legacy `astral3d` identifiers may remain when changing them could break compatibility.
+# H3D Agent 指南
 
-## Project Package Principle
-- New project package file suffixes should use `h3d` or `haolink3d`.
-- Current preferred suffixes:
-  - `.h3d-project.json`
-  - `.h3d-project.zip`
-- Keep compatibility with legacy package formats when practical.
+本仓库已正式更名为 **H3D（Haolink 3D）**。
 
-## Change Safety Principle
-- Do not break existing save/upload/import chains.
-- Prefer additive branches and compatibility checks over destructive replacement.
+---
+
+## 1. 命名规范
+
+对于所有**新增的面向用户内容**，包括但不限于：
+
+- 名称
+- 标签
+- 文件后缀
+- 提示语
+- 文案展示
+
+优先使用以下命名：
+
+- `H3D`
+- `Haolink 3D`
+- `Haolink 3D Editor`
+
+### 规则
+- 新增逻辑中，避免继续引入新的 `astral3d` 命名。
+- 历史遗留的 `astral3d` 标识，若修改后可能破坏兼容性，则可以保留。
+- 做命名调整时，优先保证用户可见层面的统一性，其次再逐步清理内部遗留命名。
+
+---
+
+## 2. 项目包规范
+
+新的项目包文件后缀应优先使用 `h3d` 或 `haolink3d`。
+
+当前推荐格式：
+
+- `.h3d-project.json`
+- `.h3d-project.zip`
+
+### 规则
+- 新增保存、导出、上传、导入相关逻辑时，优先围绕上述后缀设计。
+- 在成本可控时，尽量保留对旧版项目包格式的兼容能力。
+- 任何格式演进都应优先考虑现有数据链路是否安全。
+
+---
+
+## 3. 变更安全原则
+
+不要破坏现有核心数据链路，尤其是：
+
+- 保存
+- 上传
+- 导入
+
+### 规则
+- 优先采用**增量式修改**、兼容判断和显式分支，而不是直接替换旧链路。
+- 涉及字段结构、包格式、读写流程变化时，优先考虑是否会影响已有项目数据。
+- 禁止引入静默失败、静默写坏、静默丢字段等隐性问题。
+
+---
+
+## 4. 当前阶段：快速迭代原则
+
+当前项目处于**快速迭代阶段**，暂无外部用户。  
+在这个阶段，为了简化系统，可以接受一定程度的功能性破坏。
+
+### 原则
+- 避免过度设计，不要为了假想中的未来需求提前增加抽象层、扩展点或额外架构。
+- 避免不必要的兼容代码，除非它确实保护了关键数据链路。
+- 避免过度防御式编程，只在真实调用路径确有需要时保留校验和兜底逻辑。
+- 优先选择简单、清晰、易理解的实现，而不是临时性的复杂稳定性补丁。
+- 只保留必要代码，及时删除：
+  - 冗余逻辑
+  - 无效分支
+  - 死代码
+  - 预设性脚手架
+  - 没有实际价值的未来扩展点
+
+---
+
+## 5. 优先级规则
+
+在当前阶段：
+
+> **快速迭代原则优先于一般兼容性偏好。**
+
+### 但有一个不可妥协的例外
+不得引入以下问题：
+
+- 静默数据损坏
+- 核心项目数据不可逆丢失
+
+也就是说：
+- 可以接受为了重构而同步调整旧功能；
+- 但不能接受项目数据被悄悄写坏，或用户数据无法恢复。
+
+---
+
+## 6. 高风险变更测试门禁
+
+对于可能影响核心流程的**破坏性变更**或**高风险改动**，合并前必须完成测试验证。
+
+### 必须覆盖
+- **Agent 驱动验证**
+  - 自动化检查
+  - 脚本化 UI 验证
+  - 脚本化 API 验证
+- **开发者手动验证**
+
+### 变更负责人必须提供
+一份明确的手动测试指南，至少包含：
+
+- 入口 URL / 页面路径
+- 测试前置条件
+- 关键操作步骤
+- 预期结果
+
+### 合并要求
+- 如果高风险改动未被充分验证，则**不能作为最终状态直接合并**。
+- 此类改动必须明确标记风险，并保持在受控、临时或 gated 状态。
+
+---
+
+## 7. 核心代码与广泛影响代码原则
+
+对于以下类型的改动，应采用更保守的策略：
+
+- 核心代码
+- 影响面广的代码
+- 难以快速发现问题的代码
+- 难以快速验证正确性的代码
+
+### 在这些区域中，应优先考虑
+- 稳健性
+- 兼容性
+- 可读性
+- 可调试性
+
+而不是激进地做简化。
+
+### 编码要求
+- 在关键决策点添加清晰的行内注释。
+- 对高风险分支和 fallback 路径添加明显标记。
+- 优先使用显式控制流，避免隐式“魔法行为”。
+- 保持实现便于快速定位问题和排查问题。
+
+---
+
+## 8. 建议的判断顺序
+
+在本仓库中进行开发时，默认按照以下顺序决策：
+
+1. 先判断改动是否涉及核心数据链路。
+2. 若涉及核心数据链路，优先保证数据安全、兼容性和可恢复性。
+3. 若不涉及核心数据链路，优先采用简单直接的实现。
+4. 不为假设需求保留复杂结构。
+5. 对高风险改动，先补验证路径，再推进合并。
+
+---
+
+## 9. 对 Agent 的直接要求
+
+当 Agent 在本仓库内生成、修改或重构代码时，应默认遵循以下约束：
+
+- 新增用户可见命名时，优先使用 `H3D` 相关命名。
+- 不要在新增逻辑中继续扩散 `astral3d` 命名。
+- 修改保存、上传、导入相关逻辑时，优先检查是否会破坏现有数据链路。
+- 当前阶段优先追求实现简单、逻辑清晰、便于快速迭代。
+- 不要为了“以后可能会用到”而提前加入复杂抽象。
+- 对高风险改动，必须补充明确测试路径。
+- 对核心或广泛影响代码，优先保持实现可读、可调试、可验证。
+
+---
+
+## 10. 一句话总结
+
+当前阶段的总体策略是：
+
+> **快速迭代、保持简单、允许必要破坏，但绝不接受核心数据静默损坏或不可逆丢失。**

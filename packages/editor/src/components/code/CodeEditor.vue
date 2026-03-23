@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
@@ -14,12 +14,18 @@ import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 const props = withDefaults(defineProps<{
   source: string,
   mode: string,
+  diff?: boolean,
+  originalSource?: string,
+  modifiedSource?: string,
   config?: {
     [key: string]: any
   }
 }>(), {
   source: "",
   mode: "javascript",
+  diff: false,
+  originalSource: "",
+  modifiedSource: "",
   config: () => ({})
 })
 const emits = defineEmits(["update:source"]);
@@ -27,12 +33,15 @@ const emits = defineEmits(["update:source"]);
 const monacoEditorRef = ref();
 // 编辑器实列
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+let diffEditor: monaco.editor.IStandaloneDiffEditor | null = null;
+let model: monaco.editor.ITextModel | null = null;
+let originalModel: monaco.editor.ITextModel | null = null;
+let modifiedModel: monaco.editor.ITextModel | null = null;
 // 导入的sqlLanguage
 let sqlLanguage:any = null;
 // sql语法提示示例
 let sqlProvider:monaco.IDisposable | null = null;
-// 语法错误信息
-let errorMarkers: monaco.editor.IMarker[] = [];
+let contentChangeDisposable: monaco.IDisposable | null = null;
 
 onMounted(async () => {
   await nextTick();
@@ -59,19 +68,8 @@ onMounted(async () => {
   await initMonaco();
 })
 onBeforeUnmount(() => {
-  if(sqlLanguage){
-    sqlLanguage = null;
-  }
-
-  if(sqlProvider){
-    sqlProvider.dispose();
-    sqlProvider = null;
-  }
-
-  if (editor) {
-    editor.dispose();
-    editor = null;
-  }
+  disposeEditor();
+  disposeSql();
 });
 
 async function initMonaco() {
@@ -97,49 +95,69 @@ async function initMonaco() {
   //     'three.d.ts'
   // );
 
-  if (props.mode === "sql") {
-    if(!sqlLanguage){
-      const { language } = await import("monaco-editor/esm/vs/basic-languages/sql/sql.js");
-      sqlLanguage = language;
-    }
+  await ensureSqlProvider();
+  createEditor();
+}
 
-    sqlProvider = monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (model, position) => {
-        let suggestions:any = []
-        const { lineNumber, column } = position
-        const textBeforePointer = model.getValueInRange({
-          startLineNumber: lineNumber,
-          startColumn: 0,
-          endLineNumber: lineNumber,
-          endColumn: column,
-        })
-        const contents = textBeforePointer.trim().split(/\s+/)
-        const lastContents = contents[contents?.length - 1];
-        if (lastContents) {
-          const sqlConfigKey = ['builtinFunctions', 'keywords', 'operators'];
-          sqlConfigKey.forEach(key => {
-            sqlLanguage[key].forEach(sql => {
-              suggestions.push(
-                {
-                  label: sql, // 显示的提示内容;
-                  insertText: sql, // 应插入到文档中的内容
-                  kind: monaco.languages.CompletionItemKind.Keyword
-                }
-              )
-            })
+async function ensureSqlProvider() {
+  if (props.mode !== "sql" || sqlProvider) return;
 
-          })
-        }
-        return {
-          suggestions,
-        }
-      }
-    })
+  if(!sqlLanguage){
+    const { language } = await import("monaco-editor/esm/vs/basic-languages/sql/sql.js");
+    sqlLanguage = language;
   }
 
+  sqlProvider = monaco.languages.registerCompletionItemProvider('sql', {
+    provideCompletionItems: (model, position) => {
+      let suggestions:any = []
+      const { lineNumber, column } = position
+      const textBeforePointer = model.getValueInRange({
+        startLineNumber: lineNumber,
+        startColumn: 0,
+        endLineNumber: lineNumber,
+        endColumn: column,
+      })
+      const contents = textBeforePointer.trim().split(/\s+/)
+      const lastContents = contents[contents?.length - 1];
+      if (lastContents) {
+        const sqlConfigKey = ['builtinFunctions', 'keywords', 'operators'];
+        sqlConfigKey.forEach(key => {
+          sqlLanguage[key].forEach(sql => {
+            suggestions.push(
+              {
+                label: sql, // 显示的提示内容;
+                insertText: sql, // 应插入到文档中的内容
+                kind: monaco.languages.CompletionItemKind.Keyword
+              }
+            )
+          })
+
+        })
+      }
+      return {
+        suggestions,
+      }
+    }
+  })
+}
+
+function createEditor() {
+  disposeEditor();
+
+  if (!monacoEditorRef.value) return;
+
+  if (props.diff) {
+    createDiffEditor();
+    return;
+  }
+
+  createSingleEditor();
+}
+
+function createSingleEditor() {
+  model = monaco.editor.createModel(props.source || "", props.mode);
   editor = monaco.editor.create(monacoEditorRef.value, {
-    value: props.source,
-    language: props.mode,
+    model,
     ...Object.assign({
       theme: 'vs-dark', //官方自带三种主题vs, hc-black, or vs-dark
       readOnly: false, // 是否只读内容不可编辑
@@ -198,21 +216,139 @@ async function initMonaco() {
       // formatOnType: true,
       // formatOnPaste: true
     }, props.config)
-  })
+  });
 
-  editor.onDidChangeModelContent(() => {
-    editor && emits('update:source', editor.getValue())
-  })
+  contentChangeDisposable = editor.onDidChangeModelContent(() => {
+    if (!editor) return;
+    emits('update:source', editor.getValue());
+  });
+}
 
-  monaco.editor.onDidChangeMarkers(([uri]) => {
-    errorMarkers = monaco.editor.getModelMarkers({ resource: uri });
-  })
+function createDiffEditor() {
+  originalModel = monaco.editor.createModel(props.originalSource || "", props.mode);
+  const nextModified = props.modifiedSource || props.source || "";
+  modifiedModel = monaco.editor.createModel(nextModified, props.mode);
+
+  diffEditor = monaco.editor.createDiffEditor(monacoEditorRef.value, {
+    theme: "vs-dark",
+    renderSideBySide: true,
+    readOnly: true,
+    originalEditable: false,
+    minimap: {
+      enabled: false,
+    },
+    automaticLayout: true,
+    ...props.config
+  });
+
+  diffEditor.setModel({
+    original: originalModel,
+    modified: modifiedModel
+  });
+}
+
+function disposeEditor() {
+  if (contentChangeDisposable) {
+    contentChangeDisposable.dispose();
+    contentChangeDisposable = null;
+  }
+
+  if (editor) {
+    editor.dispose();
+    editor = null;
+  }
+
+  if (diffEditor) {
+    diffEditor.dispose();
+    diffEditor = null;
+  }
+
+  if (model) {
+    model.dispose();
+    model = null;
+  }
+
+  if (originalModel) {
+    originalModel.dispose();
+    originalModel = null;
+  }
+
+  if (modifiedModel) {
+    modifiedModel.dispose();
+    modifiedModel = null;
+  }
+}
+
+function disposeSql() {
+  if(sqlProvider){
+    sqlProvider.dispose();
+    sqlProvider = null;
+  }
+
+  if(sqlLanguage){
+    sqlLanguage = null;
+  }
+}
+
+function syncModelValue(targetModel: monaco.editor.ITextModel | null, value: string) {
+  if (!targetModel) return;
+  const nextValue = value || "";
+
+  if (targetModel.getValue() === nextValue) {
+    return;
+  }
+
+  targetModel.setValue(nextValue);
+}
+
+watch(() => props.diff, () => {
+  createEditor();
+});
+
+watch(() => props.mode, async () => {
+  await ensureSqlProvider();
+  createEditor();
+});
+
+watch(() => props.source, (value) => {
+  if (props.diff) {
+    if (props.modifiedSource) return;
+    syncModelValue(modifiedModel, value || "");
+    return;
+  }
+
+  syncModelValue(model, value || "");
+});
+
+watch(() => props.originalSource, (value) => {
+  if (!props.diff) return;
+  syncModelValue(originalModel, value || "");
+});
+
+watch(() => props.modifiedSource, (value) => {
+  if (!props.diff) return;
+  syncModelValue(modifiedModel, value || "");
+});
+
+watch(() => props.config, () => {
+  createEditor();
+}, { deep: true });
+
+watch(() => monacoEditorRef.value, () => {
+  if (!monacoEditorRef.value) return;
+  createEditor();
+});
+
+function getCurrentMarkers() {
+  const target = props.diff ? modifiedModel : model;
+  if (!target) return [];
+  return monaco.editor.getModelMarkers({ resource: target.uri });
 }
 
 function getErrors() {
   const markers: string[] = [];
   const ignoreError = ["All destructured elements are unused", "is declared but its value is never read"];
-  errorMarkers.forEach(marker => {
+  getCurrentMarkers().forEach(marker => {
     const { message, startLineNumber, startColumn, endLineNumber, endColumn } = marker;
 
     const isIgnore = ignoreError.some(ignore => message.indexOf(ignore) >= 0);
