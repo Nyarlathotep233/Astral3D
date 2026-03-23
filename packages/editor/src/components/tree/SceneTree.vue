@@ -413,10 +413,12 @@ onBeforeUnmount(() => {
 
 <template>
   <n-input v-model:value="pattern" :placeholder="t('layout.sider.scene.Search')"/>
-  <n-tree ref="sceneTreeRef" virtual-scroll :pattern="pattern" :data="sceneTreeData" v-model:selected-keys="sceneTreeSelected"
-          :show-irrelevant-nodes="false" v-model:expanded-keys="sceneTreeExpandedKeys" draggable :allow-drop="allowDrop"
-          :node-props="nodeProps" @drop="handleSceneTreeDrop" @update:selected-keys="handlerTreeSelectChange" block-line
-  />
+  <div class="scene-tree-scroll-x">
+    <n-tree ref="sceneTreeRef" virtual-scroll :pattern="pattern" :data="sceneTreeData" v-model:selected-keys="sceneTreeSelected"
+            :show-irrelevant-nodes="false" v-model:expanded-keys="sceneTreeExpandedKeys" draggable :allow-drop="allowDrop"
+            :node-props="nodeProps" @drop="handleSceneTreeDrop" @update:selected-keys="handlerTreeSelectChange" block-line
+    />
+  </div>
 
   <EsContextmenu ref="contextmenuRef" placement="right-start" trigger="manual" size="small"
                  :options="contextmenuOptions" @select="handleContextmenuSelect"/>
@@ -428,13 +430,25 @@ onBeforeUnmount(() => {
   height: 34px;
 }
 
-.n-tree {
+.scene-tree-scroll-x {
   height: calc(100% - 44px);
-  width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.n-tree {
+  height: 100%;
+  min-width: 100%;
+  width: max-content;
+  overflow-x: visible;
 
   :deep(.n-tree-node-wrapper) {
     white-space: nowrap;
+    width: max-content;
+  }
+
+  :deep(.n-tree-node-content) {
+    width: max-content;
   }
 
   :deep(.n-tree-node-content__text) {

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import {ref, onMounted, nextTick,provide} from 'vue';
+import {ref, onMounted, onBeforeUnmount, nextTick,provide} from 'vue';
 import {Hooks,App,Package,defaultProjectInfo} from "@astral3d/engine";
 import * as Layout from './layouts';
 import {connectWebSocket} from "@/hooks/useWebSocket";
@@ -14,7 +14,20 @@ import ObjectScript from "@/components/code/Script.vue";
 initializeConfig(App.storage);
 
 const initLoading = ref(true);
-const siderWidth = ref(300);
+const LEFT_SIDER_STORAGE_KEY = "editor:left-sider-width";
+const RIGHT_SIDER_STORAGE_KEY = "editor:right-sider-width";
+const LEFT_SIDER_MIN_WIDTH = 220;
+const RIGHT_SIDER_MIN_WIDTH = 220;
+const LEFT_SIDER_MAX_RATIO = 0.8;
+const DEFAULT_LEFT_SIDER_WIDTH = 300;
+const DEFAULT_RIGHT_SIDER_WIDTH = 300;
+
+const leftCollapsed = ref(false);
+const rightCollapsed = ref(false);
+const leftSiderWidth = ref(readLeftSiderWidth());
+const rightSiderWidth = ref(readRightSiderWidth());
+const resizingLeftSider = ref(false);
+const resizingRightSider = ref(false);
 const isCesiumScene = ref(false);
 
 const defaultInfo = defaultProjectInfo();
@@ -23,12 +36,142 @@ const drawingInfo = ref(defaultInfo.drawing);
 provide("sceneInfo",sceneInfo);
 provide("drawingInfo",drawingInfo);
 
+let resizeStartX = 0;
+let resizeStartWidth = 0;
+let rightResizeStartX = 0;
+let rightResizeStartWidth = 0;
+
 onMounted(() => {
   // 启动websocket连接
   connectWebSocket(import.meta.env.VITE_GLOB_SOCKET_URL);
+  window.addEventListener("resize", handleWindowResize);
 
   init();
 })
+
+onBeforeUnmount(() => {
+  stopLeftResize();
+  stopRightResize();
+  window.removeEventListener("resize", handleWindowResize);
+});
+
+function getSiderMaxWidth(minWidth:number) {
+  return Math.max(minWidth, Math.floor(window.innerWidth * LEFT_SIDER_MAX_RATIO));
+}
+
+function getLeftSiderMaxWidth() {
+  return getSiderMaxWidth(LEFT_SIDER_MIN_WIDTH);
+}
+
+function getRightSiderMaxWidth() {
+  return getSiderMaxWidth(RIGHT_SIDER_MIN_WIDTH);
+}
+
+function clampLeftSiderWidth(width:number) {
+  return Math.min(getLeftSiderMaxWidth(), Math.max(LEFT_SIDER_MIN_WIDTH, width));
+}
+
+function clampRightSiderWidth(width:number) {
+  return Math.min(getRightSiderMaxWidth(), Math.max(RIGHT_SIDER_MIN_WIDTH, width));
+}
+
+function readLeftSiderWidth() {
+  const raw = window.localStorage.getItem(LEFT_SIDER_STORAGE_KEY);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_LEFT_SIDER_WIDTH;
+  return clampLeftSiderWidth(parsed);
+}
+
+function saveLeftSiderWidth(width:number) {
+  window.localStorage.setItem(LEFT_SIDER_STORAGE_KEY, String(clampLeftSiderWidth(width)));
+}
+
+function readRightSiderWidth() {
+  const raw = window.localStorage.getItem(RIGHT_SIDER_STORAGE_KEY);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_RIGHT_SIDER_WIDTH;
+  return clampRightSiderWidth(parsed);
+}
+
+function saveRightSiderWidth(width:number) {
+  window.localStorage.setItem(RIGHT_SIDER_STORAGE_KEY, String(clampRightSiderWidth(width)));
+}
+
+function startLeftResize(event: MouseEvent) {
+  if (leftCollapsed.value) return;
+
+  event.preventDefault();
+  resizingLeftSider.value = true;
+  resizeStartX = event.clientX;
+  resizeStartWidth = leftSiderWidth.value;
+
+  document.body.style.userSelect = "none";
+  document.body.style.cursor = "col-resize";
+
+  window.addEventListener("mousemove", handleLeftResizeMove);
+  window.addEventListener("mouseup", stopLeftResize);
+}
+
+function handleLeftResizeMove(event: MouseEvent) {
+  if (!resizingLeftSider.value) return;
+
+  const delta = event.clientX - resizeStartX;
+  leftSiderWidth.value = clampLeftSiderWidth(resizeStartWidth + delta);
+}
+
+function handleWindowResize() {
+  leftSiderWidth.value = clampLeftSiderWidth(leftSiderWidth.value);
+  rightSiderWidth.value = clampRightSiderWidth(rightSiderWidth.value);
+}
+
+function stopLeftResize() {
+  if (!resizingLeftSider.value) return;
+
+  resizingLeftSider.value = false;
+  saveLeftSiderWidth(leftSiderWidth.value);
+
+  document.body.style.userSelect = "";
+  document.body.style.cursor = "";
+
+  window.removeEventListener("mousemove", handleLeftResizeMove);
+  window.removeEventListener("mouseup", stopLeftResize);
+}
+
+function startRightResize(event: MouseEvent) {
+  if (rightCollapsed.value) return;
+
+  event.preventDefault();
+  resizingRightSider.value = true;
+  rightResizeStartX = event.clientX;
+  rightResizeStartWidth = rightSiderWidth.value;
+
+  document.body.style.userSelect = "none";
+  document.body.style.cursor = "col-resize";
+
+  window.addEventListener("mousemove", handleRightResizeMove);
+  window.addEventListener("mouseup", stopRightResize);
+}
+
+function handleRightResizeMove(event: MouseEvent) {
+  if (!resizingRightSider.value) return;
+
+  // 右侧面板向左拖动时变宽，向右拖动时变窄
+  const delta = rightResizeStartX - event.clientX;
+  rightSiderWidth.value = clampRightSiderWidth(rightResizeStartWidth + delta);
+}
+
+function stopRightResize() {
+  if (!resizingRightSider.value) return;
+
+  resizingRightSider.value = false;
+  saveRightSiderWidth(rightSiderWidth.value);
+
+  document.body.style.userSelect = "";
+  document.body.style.cursor = "";
+
+  window.removeEventListener("mousemove", handleRightResizeMove);
+  window.removeEventListener("mouseup", stopRightResize);
+}
 
 async function init() {
   // 获取路由参数
@@ -112,18 +255,30 @@ function getScene(sceneInfo) {
       </n-layout-header>
 
       <n-layout class="n-layout-center-layout" has-sider sider-placement="right" position="absolute">
-        <n-layout-sider collapse-mode="width" :collapsed-width="0" :width="siderWidth" :native-scrollbar="false"
+        <n-layout-sider v-model:collapsed="leftCollapsed" collapse-mode="width" :collapsed-width="0" :width="leftSiderWidth" :native-scrollbar="false"
                         show-trigger="bar" trigger-style="right:0;left:auto;transform: translateX(28px);"
                         collapsed-trigger-style="left:0;right:auto;transform: rotate(0deg);">
           <Layout.Assets/>
         </n-layout-sider>
+        <div
+          v-show="!leftCollapsed"
+          class="layout-left-resize-handle"
+          :class="{ 'is-resizing': resizingLeftSider }"
+          @mousedown="startLeftResize"
+        />
 
         <n-layout-content>
           <Layout.Scene v-if="!isCesiumScene"></Layout.Scene>
 <!--          <Layout.Cesium v-else></Layout.Cesium>-->
         </n-layout-content>
+        <div
+          v-show="!rightCollapsed"
+          class="layout-right-resize-handle"
+          :class="{ 'is-resizing': resizingRightSider }"
+          @mousedown="startRightResize"
+        />
 
-        <n-layout-sider collapse-mode="transform" :collapsed-width="0" :width="siderWidth"
+        <n-layout-sider v-model:collapsed="rightCollapsed" collapse-mode="transform" :collapsed-width="0" :width="rightSiderWidth"
                         :native-scrollbar="false" show-trigger="bar" bordered>
           <Layout.Sidebar/>
         </n-layout-sider>
@@ -176,6 +331,52 @@ function getScene(sceneInfo) {
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+  }
+
+  .layout-left-resize-handle {
+    width: 6px;
+    cursor: col-resize;
+    position: relative;
+    z-index: 20;
+    background-color: transparent;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    &:hover::before,
+    &.is-resizing::before {
+      background-color: var(--main-color, #18a058);
+    }
+  }
+
+  .layout-right-resize-handle {
+    width: 6px;
+    cursor: col-resize;
+    position: relative;
+    z-index: 20;
+    background-color: transparent;
+
+    &::before {
+      content: "";
+      position: absolute;
+      right: 2px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    &:hover::before,
+    &.is-resizing::before {
+      background-color: var(--main-color, #18a058);
     }
   }
 }

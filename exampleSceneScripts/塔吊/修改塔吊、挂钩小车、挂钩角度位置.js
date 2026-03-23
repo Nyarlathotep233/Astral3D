@@ -5,12 +5,17 @@
  * - G / Shift+G：挂钩 position.y 步进（平滑 + clamp）并同步钢丝绳 scale.y
  * - R：单次接口调用 -> uuid 派生 3 个 seed -> 同时生成角度/位置目标（平滑）
  *
- * 重点改动：
- * - TopUnit001 的旋转不再依赖 topUnit.rotation.y
- * - 使用“基准 quaternion + 当前逻辑角 currentRotY + 目标逻辑角 desiredRotY”
- * - 避免导出/导入后 Euler 等价角分支（如 0,0,0 与 -180,-180,-180）导致旋转语义跳变
+ * 关键改动：
+ * 1) TopUnit001 的旋转不再依赖 topUnit.rotation.y
+ * 2) 支持从 topUnit.userData.zeroQuaternion 读取“业务零位姿态”
+ * 3) 当前加载姿态只用于恢复“当前逻辑角”，不再误当作零位
  *
- * @document http://editor-doc.astraljs.com/guide/component/h4v1bkyh/
+ * zeroQuaternion 推荐格式：
+ * topUnit.userData.zeroQuaternion = [x, y, z, w]
+ *
+ * 若未配置 zeroQuaternion：
+ * - 会回退为“当前加载姿态就是零位”
+ * - 这样脚本仍可运行，但业务上不是真正零位
  */
 
 // ==================== 目标节点名称 ====================
@@ -24,6 +29,9 @@ const KEY_ROT_STEP = "y";
 const KEY_X_STEP = "h";
 const KEY_HOOK_STEP = "g";
 const KEY_API = "r";
+
+// 可选：按 Z 打印当前 TopUnit quaternion，方便你手工记录为 zeroQuaternion
+const KEY_PRINT_ZERO = "z";
 
 // ==================== 步进参数 ====================
 const ROTATE_STEP_DEG = 10; // 每次 Y 步进角度
@@ -71,18 +79,24 @@ let rope = null;
 let ROPE_SCALE_Y_MIN = 1;
 let ROPE_SCALE_Y_MAX = 11.5;
 
-// ==================== TopUnit 旋转状态（关键改动） ====================
-// 这里不再从 topUnit.rotation.y 回读逻辑角度
-// currentRotY / desiredRotY 表示“相对于 loaded() 时基准姿态”的本地 Y 旋转量
-let currentRotY = 0;       // 当前逻辑角（rad）
-let desiredRotY = 0;       // 目标逻辑角（rad）
-const _baseTopQuat = new THREE.Quaternion();  // loaded() 时的基准姿态
+// ==================== TopUnit 旋转状态（关键） ====================
+// currentRotY / desiredRotY 表示：相对于“零位姿态”的逻辑角（rad）
+let currentRotY = 0;
+let desiredRotY = 0;
+
+// 零位姿态（业务语义：角度 = 0 时的姿态）
+const _zeroTopQuat = new THREE.Quaternion();
+
+// 当前计算用临时量
 const _axisY = new THREE.Vector3(0, 1, 0);
 const _yawQuat = new THREE.Quaternion();
+const _invBaseQuat = new THREE.Quaternion();
+const _relQuat = new THREE.Quaternion();
+const _relEuler = new THREE.Euler(0, 0, 0, "YXZ");
 
 // 其它目标值（用于动画）
-let desiredX = null;       // number
-let desiredHookY = null;   // number
+let desiredX = null;
+let desiredHookY = null;
 
 // 动画开关
 let animRot = false;
@@ -181,12 +195,32 @@ function syncRopeByHookY(hookY) {
   rope.scale.y = clamp(s, ROPE_SCALE_Y_MIN, ROPE_SCALE_Y_MAX);
 }
 
-// ---- TopUnit：应用逻辑角到真实姿态 ----
+// ---- 判断 userData.zeroQuaternion 是否有效 ----
+function isValidQuaternionArray(arr) {
+  return (
+    Array.isArray(arr) &&
+    arr.length === 4 &&
+    Number.isFinite(arr[0]) &&
+    Number.isFinite(arr[1]) &&
+    Number.isFinite(arr[2]) &&
+    Number.isFinite(arr[3])
+  );
+}
+
+// ---- 从当前姿态相对于零位姿态求“当前逻辑角” ----
+function getRelativeYawFromBase(currentQuat, baseQuat) {
+  _invBaseQuat.copy(baseQuat).invert();
+  _relQuat.copy(_invBaseQuat).multiply(currentQuat);
+  _relEuler.setFromQuaternion(_relQuat, "YXZ");
+  return normalizeRad(_relEuler.y);
+}
+
+// ---- 把逻辑角应用到真实姿态 ----
 function applyTopUnitYaw(rad) {
   if (!topUnit) return;
 
   _yawQuat.setFromAxisAngle(_axisY, rad);
-  topUnit.quaternion.copy(_baseTopQuat).multiply(_yawQuat).normalize();
+  topUnit.quaternion.copy(_zeroTopQuat).multiply(_yawQuat).normalize();
 }
 
 // ---- 设置目标值（并启动动画）----
@@ -229,12 +263,26 @@ function loaded() {
   if (hookRig) hookRig.position.x = clamp(hookRig.position.x, X_MIN, X_MAX);
   if (hook) hook.position.y = clamp(hook.position.y, HOOK_Y_MIN, HOOK_Y_MAX);
 
-  // ===== 关键：记录 TopUnit 初始姿态作为“基准姿态” =====
+  // ===== 关键：读取“真正零位姿态” =====
   if (topUnit) {
-    _baseTopQuat.copy(topUnit.quaternion);
-    currentRotY = 0;
-    desiredRotY = 0;
-    applyTopUnitYaw(currentRotY);
+    const zeroQ =
+      topUnit.userData &&
+      topUnit.userData.zeroQuaternion;
+
+    if (isValidQuaternionArray(zeroQ)) {
+      _zeroTopQuat.fromArray(zeroQ);
+      console.log("[init] 使用 userData.zeroQuaternion 作为 TopUnit 零位");
+    } else {
+      // 兜底：如果没配置零位，就回退成“当前加载姿态就是零位”
+      _zeroTopQuat.copy(topUnit.quaternion);
+      console.warn(
+        "[init] TopUnit001.userData.zeroQuaternion 未配置，回退为当前加载姿态作为零位。建议补充 zeroQuaternion。"
+      );
+    }
+
+    // 当前逻辑角 = 当前加载姿态相对于零位姿态的 yaw 差
+    currentRotY = getRelativeYawFromBase(topUnit.quaternion, _zeroTopQuat);
+    desiredRotY = currentRotY;
   }
 
   if (hookRig) desiredX = hookRig.position.x;
@@ -250,6 +298,7 @@ function loaded() {
     hasHookRig: !!hookRig,
     hasHook: !!hook,
     hasRope: !!rope,
+    currentRotYDeg: THREE.MathUtils.radToDeg(currentRotY),
     ropeScaleRange: [ROPE_SCALE_Y_MIN, ROPE_SCALE_Y_MAX],
   });
 }
@@ -259,7 +308,7 @@ function afterAnimation(delta, toBeRender) {
   let anyAnimating = false;
   let anyChanged = false;
 
-  // ---- 1) 吊臂旋转（改成脚本内部逻辑角 + quaternion 应用）----
+  // ---- 1) 吊臂旋转（脚本内部逻辑角 + quaternion 应用）----
   if (topUnit && animRot && desiredRotY != null) {
     const cur = currentRotY;
     const diff = shortestDiffRad(cur, desiredRotY);
@@ -351,7 +400,7 @@ async function onKeyDown(event) {
   // ---- G：挂钩 Y 步进 ----
   if (key === KEY_HOOK_STEP) {
     if (!hook) return;
-    // 这里约定：按 G 下放（更小），Shift+G 回收（更大）
+    // 约定：G 下放（更小），Shift+G 回收（更大）
     const dir = shift ? 1 : -1;
     setDesiredHookY(hook.position.y + dir * STEP_HOOK_Y);
     return;
@@ -397,10 +446,24 @@ async function onKeyDown(event) {
 
     return;
   }
+
+  // ---- Z：打印当前 TopUnit quaternion，方便记录为 zeroQuaternion ----
+  if (key === KEY_PRINT_ZERO) {
+    if (!topUnit) return;
+
+    const q = topUnit.quaternion;
+    const arr = [q.x, q.y, q.z, q.w];
+
+    console.log("[zeroQuaternion candidate]", arr);
+    console.log(
+      `可写入 TopUnit001.userData.zeroQuaternion = [${arr[0]}, ${arr[1]}, ${arr[2]}, ${arr[3]}]`
+    );
+    return;
+  }
 }
 
 /**
- * 可选：场景销毁前调用
+ * 场景销毁前调用
  */
 function beforeDestroy() {
   fetching = false;

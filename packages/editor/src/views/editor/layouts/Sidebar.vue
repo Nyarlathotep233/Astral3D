@@ -143,7 +143,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <n-tabs ref="tabsInstRef" v-model:value="current" type="line" size="small" pane-class="!p-10px overflow-y-auto" id="sidebar-attributes"
+    <n-tabs ref="tabsInstRef" v-model:value="current" type="line" size="small" pane-class="!p-10px overflow-y-auto overflow-x-auto" id="sidebar-attributes"
         placement="left">
         <n-tab-pane v-for="t in tabs" :key="t.name" :name="t.name" :tab="iconTabName(t.icon)"
             display-directive="show" :disabled="t.name === 'disabled'">
