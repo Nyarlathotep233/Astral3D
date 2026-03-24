@@ -19,6 +19,7 @@ export interface IAiScriptResponse {
   source: string;
   explanation: string;
   warnings: string[];
+  thinking?: string;
 }
 
 export interface IAiScriptStatusResponse {

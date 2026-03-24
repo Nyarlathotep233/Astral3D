@@ -31,6 +31,10 @@
       <div v-if="mode === 'javascript'" class="script-ai-pane">
         <div class="script-ai-title">AI 助手</div>
         <div class="script-ai-meta">{{ aiStatusText }}</div>
+        <details v-if="aiThinking" class="script-ai-thinking">
+          <summary>深度思考（可折叠）</summary>
+          <pre class="script-ai-thinking-content">{{ aiThinking }}</pre>
+        </details>
 
         <n-scrollbar class="script-ai-history">
           <div class="script-ai-history-inner">
@@ -126,6 +130,7 @@ const aiDiffPending = ref(false);
 const aiProvider = ref("mock");
 const aiModel = ref("");
 const aiStatusMessage = ref("正在获取 AI 状态...");
+const aiThinking = ref("");
 
 const isAiDiffMode = computed(() => {
   return mode.value === "javascript" && aiDiffPending.value && !!aiGeneratedSource.value;
@@ -233,6 +238,7 @@ function resetAiState() {
   aiProvider.value = "mock";
   aiModel.value = "";
   aiStatusMessage.value = "正在获取 AI 状态...";
+  aiThinking.value = "";
 }
 
 function pushAiMessage(role: AiMessageRole, content: string) {
@@ -249,6 +255,14 @@ function getRoleLabel(role: AiMessageRole) {
   if (role === "user") return "你";
   if (role === "assistant") return "AI";
   return "系统";
+}
+
+function normalizeThinking(text?: string) {
+  const normalized = text?.trim() || "";
+  if (!normalized) return "";
+  const maxLength = 12000;
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}\n\n...（思考内容过长，已截断）`;
 }
 
 async function loadAiStatus() {
@@ -282,6 +296,7 @@ async function generateWithAi() {
   aiLoading.value = true;
   aiError.value = "";
   aiApplyMessage.value = "";
+  aiThinking.value = "";
   pushAiMessage("user", requirement);
 
   try {
@@ -317,8 +332,12 @@ async function generateWithAi() {
     aiDiffPending.value = true;
     aiProvider.value = res.data.provider === "live" ? "live" : "mock";
     aiModel.value = res.data.model || aiModel.value;
+    aiThinking.value = normalizeThinking(res.data.thinking);
 
     pushAiMessage("assistant", res.data.explanation || "已生成代码预览，请确认后应用。");
+    if (aiThinking.value) {
+      pushAiMessage("system", "已捕获模型深度思考，可在上方“深度思考”面板查看。");
+    }
     (res.data.warnings || []).forEach((warning) => pushAiMessage("system", warning));
     aiStatusMessage.value = aiProvider.value === "live" ? "真实模型生成成功。" : "当前为 Mock 结果。";
     window.$message?.success("已生成代码差异预览，请确认后应用。");
@@ -494,6 +513,29 @@ function submit(e: Event) {
   border: 1px solid var(--n-border-color);
   border-radius: 4px;
   overflow: hidden;
+}
+
+.script-ai-thinking {
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 6px 8px;
+}
+
+.script-ai-thinking summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.8;
+  user-select: none;
+}
+
+.script-ai-thinking-content {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
 }
 
 .script-ai-history-inner {
