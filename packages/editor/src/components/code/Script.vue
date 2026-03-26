@@ -31,6 +31,36 @@
       <div v-if="mode === 'javascript'" class="script-ai-pane">
         <div class="script-ai-title">AI 助手</div>
         <div class="script-ai-meta">{{ aiStatusText }}</div>
+        <details class="script-ai-config">
+          <summary>模型配置</summary>
+          <div class="script-ai-config-body">
+            <n-select
+              :value="selectedProfileId"
+              :options="profileOptions"
+              size="small"
+              placeholder="选择 AI 预设"
+              @update:value="onProfileChange"
+            />
+            <div class="script-ai-config-row">
+              <n-input
+                v-model:value="customProfileName"
+                size="small"
+                placeholder="本地配置名称"
+              />
+              <n-button size="small" @click="saveCurrentAsCustomProfile">保存本地</n-button>
+              <n-button size="small" type="warning" :disabled="!isSelectedProfileCustom" @click="deleteSelectedCustomProfile">删除</n-button>
+            </div>
+            <n-input v-model:value="aiConfig.provider" size="small" placeholder="provider: openai/openai-compatible" />
+            <n-input v-model:value="aiConfig.endpoint" size="small" placeholder="endpoint: https://.../v1/chat/completions" />
+            <n-input v-model:value="aiConfig.model" size="small" placeholder="model: gpt-4o-mini / MiniMax-M2.7 / ..." />
+            <n-input v-model:value="aiConfig.apiKey" size="small" placeholder="api key（仅本地存储）" type="password" show-password-on="click" />
+            <div class="script-ai-config-row">
+              <n-input-number v-model:value="aiConfig.timeoutMs" size="small" :min="5000" :max="300000" :step="5000" placeholder="timeout(ms)" />
+              <n-input-number v-model:value="aiConfig.temperature" size="small" :min="0" :max="1" :step="0.1" placeholder="temperature" />
+            </div>
+            <div class="script-ai-config-tip">配置仅保存在当前浏览器 localStorage，不会自动写入后端配置文件。</div>
+          </div>
+        </details>
         <details v-if="aiThinking" class="script-ai-thinking">
           <summary>深度思考（可折叠）</summary>
           <pre class="script-ai-thinking-content">{{ aiThinking }}</pre>
@@ -39,7 +69,7 @@
         <n-scrollbar class="script-ai-history">
           <div class="script-ai-history-inner">
             <div v-if="!aiMessages.length" class="script-ai-empty">
-              输入需求后点击“AI 生成（Mock）”，将进入代码 Diff 预览。
+              输入需求后点击“AI 生成”，将进入代码 Diff 预览。
             </div>
 
             <div
@@ -101,13 +131,81 @@ import * as THREE from "three";
 import { App, Hooks, SetScriptValueCommand, SetMaterialValueCommand } from "@astral3d/engine";
 import { t } from "@/language";
 import CodeEditor from "@/components/code/CodeEditor.vue";
-import { fetchAiScriptStatus, fetchGenerateMockScript, fetchGenerateScript } from "@/http/api/ai";
+import { fetchAiScriptStatus, fetchGenerateScript } from "@/http/api/ai";
 
 type AiMessageRole = "user" | "assistant" | "system";
 type AiMessage = {
   role: AiMessageRole;
   content: string;
 };
+
+type AiProfile = {
+  id: string;
+  name: string;
+  custom?: boolean;
+  config: {
+    provider: string;
+    endpoint: string;
+    model: string;
+    apiKey: string;
+    timeoutMs: number;
+    temperature: number;
+  };
+};
+
+const AI_PROFILE_STORAGE_KEY = "editor.ai.script.profiles.v1";
+const AI_PROFILE_SELECTED_KEY = "editor.ai.script.profile.selected.v1";
+
+const BUILTIN_AI_PROFILES: AiProfile[] = [
+  {
+    id: "server-default",
+    name: "服务端默认",
+    config: {
+      provider: "",
+      endpoint: "",
+      model: "",
+      apiKey: "",
+      timeoutMs: 90000,
+      temperature: 0.2,
+    },
+  },
+  {
+    id: "openai-default",
+    name: "OpenAI 官方",
+    config: {
+      provider: "openai",
+      endpoint: "https://api.openai.com/v1/chat/completions",
+      model: "gpt-4o-mini",
+      apiKey: "",
+      timeoutMs: 90000,
+      temperature: 0.2,
+    },
+  },
+  {
+    id: "minimax-compat",
+    name: "MiniMax (compat)",
+    config: {
+      provider: "openai-compatible",
+      endpoint: "https://api.minimaxi.com/v1/chat/completions",
+      model: "MiniMax-M2.7",
+      apiKey: "",
+      timeoutMs: 90000,
+      temperature: 0.2,
+    },
+  },
+  {
+    id: "deepseek-compat",
+    name: "DeepSeek (compat)",
+    config: {
+      provider: "openai-compatible",
+      endpoint: "https://api.deepseek.com/v1/chat/completions",
+      model: "deepseek-chat",
+      apiKey: "",
+      timeoutMs: 90000,
+      temperature: 0.2,
+    },
+  },
+];
 
 const scriptCodeRef = ref();
 const title = ref("");
@@ -127,28 +225,78 @@ const aiMessages = ref<AiMessage[]>([]);
 const aiBaseSource = ref("");
 const aiGeneratedSource = ref("");
 const aiDiffPending = ref(false);
-const aiProvider = ref("mock");
+const aiProvider = ref("unknown");
 const aiModel = ref("");
 const aiStatusMessage = ref("正在获取 AI 状态...");
 const aiThinking = ref("");
+const customProfiles = ref<AiProfile[]>([]);
+const selectedProfileId = ref("server-default");
+const customProfileName = ref("");
+const aiConfig = reactive({
+  provider: "",
+  endpoint: "",
+  model: "",
+  apiKey: "",
+  timeoutMs: 90000,
+  temperature: 0.2,
+});
 
 const isAiDiffMode = computed(() => {
   return mode.value === "javascript" && aiDiffPending.value && !!aiGeneratedSource.value;
 });
 
+const isUsingLocalOverride = computed(() => selectedProfileId.value !== "server-default");
+
 const aiGenerateButtonText = computed(() => {
-  return aiProvider.value === "live" ? "AI 生成" : "AI 生成（Mock）";
+  if (isUsingLocalOverride.value) return "AI 生成（本地配置）";
+  return "AI 生成";
 });
 
 const aiStatusText = computed(() => {
   const modelSuffix = aiModel.value ? ` / ${aiModel.value}` : "";
-  return `模式：${aiProvider.value === "live" ? "真实模型" : "Mock"}${modelSuffix}。${aiStatusMessage.value}`;
+  const profile = selectedProfile.value ? `配置：${selectedProfile.value.name}。` : "";
+  const overrideSuffix = isUsingLocalOverride.value ? "已启用请求级覆盖。 " : "";
+  return `${profile}${overrideSuffix}模式：${resolveProviderLabel(aiProvider.value)}${modelSuffix}。${aiStatusMessage.value}`;
+});
+
+const allProfiles = computed(() => {
+  return [...BUILTIN_AI_PROFILES, ...customProfiles.value];
+});
+
+const profileOptions = computed(() => {
+  return allProfiles.value.map((profile) => ({
+    label: profile.name,
+    value: profile.id,
+  }));
+});
+
+const selectedProfile = computed(() => {
+  return allProfiles.value.find((profile) => profile.id === selectedProfileId.value) || BUILTIN_AI_PROFILES[0];
+});
+
+const isSelectedProfileCustom = computed(() => {
+  return !!selectedProfile.value?.custom;
 });
 
 let currentScript: IScript.IStruct | string | null = null;
 let currentObject: THREE.Mesh | null = null;
 
 onMounted(() => {
+  loadCustomProfilesFromStorage();
+  let initialProfileId = "server-default";
+  try {
+    const stored = localStorage.getItem(AI_PROFILE_SELECTED_KEY);
+    if (stored) {
+      initialProfileId = stored;
+    }
+  } catch {
+    // ignore
+  }
+  if (!allProfiles.value.find((profile) => profile.id === initialProfileId)) {
+    initialProfileId = "server-default";
+  }
+  onProfileChange(initialProfileId);
+
   Hooks.useAddSignal("sceneCleared", sceneCleared);
   Hooks.useAddSignal("scriptRemoved", scriptRemoved);
   Hooks.useAddSignal("editScript", editScript);
@@ -235,7 +383,7 @@ function resetAiState() {
   aiBaseSource.value = "";
   aiGeneratedSource.value = "";
   aiDiffPending.value = false;
-  aiProvider.value = "mock";
+  aiProvider.value = "unknown";
   aiModel.value = "";
   aiStatusMessage.value = "正在获取 AI 状态...";
   aiThinking.value = "";
@@ -257,6 +405,143 @@ function getRoleLabel(role: AiMessageRole) {
   return "系统";
 }
 
+function loadCustomProfilesFromStorage() {
+  try {
+    const raw = localStorage.getItem(AI_PROFILE_STORAGE_KEY);
+    if (!raw) {
+      customProfiles.value = [];
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      customProfiles.value = [];
+      return;
+    }
+    customProfiles.value = parsed
+      .filter((item) => item && typeof item === "object" && item.id && item.name && item.config)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name),
+        custom: true,
+        config: {
+          provider: String(item.config.provider || ""),
+          endpoint: String(item.config.endpoint || ""),
+          model: String(item.config.model || ""),
+          apiKey: String(item.config.apiKey || ""),
+          timeoutMs: Number(item.config.timeoutMs || 90000),
+          temperature: Number(item.config.temperature ?? 0.2),
+        },
+      }));
+  } catch {
+    customProfiles.value = [];
+  }
+}
+
+function estimateProviderFromLocalConfig() {
+  const provider = (aiConfig.provider || "").trim();
+  const hasKey = !!(aiConfig.apiKey || "").trim();
+  if ((provider === "openai" || provider === "openai-compatible") && hasKey) {
+    return "live";
+  }
+  return provider || "unknown";
+}
+
+function resolveProviderLabel(provider: string) {
+  if (provider === "live") return "真实模型";
+  if (provider === "openai" || provider === "openai-compatible") return provider;
+  if (!provider || provider === "unknown") return "未就绪";
+  return provider;
+}
+
+function saveCustomProfilesToStorage() {
+  try {
+    localStorage.setItem(AI_PROFILE_STORAGE_KEY, JSON.stringify(customProfiles.value));
+  } catch {
+    window.$message?.warning("本地存储失败，无法保存自定义 AI 配置。");
+  }
+}
+
+function applyProfileToConfig(profile?: AiProfile) {
+  const target = profile || BUILTIN_AI_PROFILES[0];
+  aiConfig.provider = target.config.provider || "";
+  aiConfig.endpoint = target.config.endpoint || "";
+  aiConfig.model = target.config.model || "";
+  aiConfig.apiKey = target.config.apiKey || "";
+  aiConfig.timeoutMs = Math.min(300000, Math.max(5000, Number(target.config.timeoutMs || 90000)));
+  aiConfig.temperature = Math.min(1, Math.max(0, Number(target.config.temperature ?? 0.2)));
+}
+
+function onProfileChange(profileId: string) {
+  selectedProfileId.value = profileId;
+  try {
+    localStorage.setItem(AI_PROFILE_SELECTED_KEY, profileId);
+  } catch {
+    // ignore
+  }
+  const profile = allProfiles.value.find((item) => item.id === profileId);
+  applyProfileToConfig(profile);
+  customProfileName.value = profile?.custom ? profile.name : "";
+  if (profileId === "server-default") {
+    aiStatusMessage.value = "使用服务端默认配置。";
+  } else {
+    aiProvider.value = estimateProviderFromLocalConfig();
+    aiModel.value = aiConfig.model || aiModel.value;
+    aiStatusMessage.value = "已切换到本地覆盖配置。";
+  }
+}
+
+function saveCurrentAsCustomProfile() {
+  const name = customProfileName.value.trim();
+  if (!name) {
+    window.$message?.warning("请输入本地配置名称");
+    return;
+  }
+
+  const existing = customProfiles.value.find((profile) => profile.name === name || profile.id === selectedProfileId.value);
+  if (existing) {
+    existing.name = name;
+    existing.custom = true;
+    existing.config = {
+      provider: aiConfig.provider.trim(),
+      endpoint: aiConfig.endpoint.trim(),
+      model: aiConfig.model.trim(),
+      apiKey: aiConfig.apiKey.trim(),
+      timeoutMs: Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000))),
+      temperature: Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2))),
+    };
+    selectedProfileId.value = existing.id;
+  } else {
+    const id = `custom-${Date.now()}`;
+    customProfiles.value.push({
+      id,
+      name,
+      custom: true,
+      config: {
+        provider: aiConfig.provider.trim(),
+        endpoint: aiConfig.endpoint.trim(),
+        model: aiConfig.model.trim(),
+        apiKey: aiConfig.apiKey.trim(),
+        timeoutMs: Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000))),
+        temperature: Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2))),
+      },
+    });
+    selectedProfileId.value = id;
+  }
+
+  saveCustomProfilesToStorage();
+  window.$message?.success("已保存到本地 AI 配置");
+}
+
+function deleteSelectedCustomProfile() {
+  if (!isSelectedProfileCustom.value) return;
+  customProfiles.value = customProfiles.value.filter((profile) => profile.id !== selectedProfileId.value);
+  saveCustomProfilesToStorage();
+  selectedProfileId.value = "server-default";
+  applyProfileToConfig(BUILTIN_AI_PROFILES[0]);
+  customProfileName.value = "";
+  window.$message?.success("已删除本地 AI 配置");
+}
+
 function normalizeThinking(text?: string) {
   const normalized = text?.trim() || "";
   if (!normalized) return "";
@@ -265,21 +550,151 @@ function normalizeThinking(text?: string) {
   return `${normalized.slice(0, maxLength)}\n\n...（思考内容过长，已截断）`;
 }
 
+function stripCodeFenceText(text: string) {
+  const trimmed = (text || "").trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+
+  const firstLineEnd = trimmed.indexOf("\n");
+  if (firstLineEnd < 0) {
+    return trimmed.replace(/```/g, "").trim();
+  }
+  const lastFence = trimmed.lastIndexOf("```");
+  if (lastFence <= firstLineEnd) {
+    return trimmed.slice(firstLineEnd + 1).trim();
+  }
+  return trimmed.slice(firstLineEnd + 1, lastFence).trim();
+}
+
+function tryParseObject(text: string): Record<string, any> | null {
+  const normalized = stripCodeFenceText(text);
+  if (!normalized) return null;
+  try {
+    const parsed = JSON.parse(normalized);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, any>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function recoverSourceEnvelope(rawSource: string) {
+  let source = rawSource || "";
+  let thinking = "";
+  let explanation = "";
+  let warnings: string[] = [];
+
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+  source = source.replace(thinkRegex, (_, block: string) => {
+    const text = (block || "").trim();
+    if (text) {
+      thinking = thinking ? `${thinking}\n\n${text}` : text;
+    }
+    return "";
+  }).trim();
+
+  const directObj = tryParseObject(source);
+  if (directObj && typeof directObj.source === "string") {
+    source = directObj.source;
+    explanation = typeof directObj.explanation === "string" ? directObj.explanation : "";
+    warnings = Array.isArray(directObj.warnings) ? directObj.warnings.filter((v) => typeof v === "string") : [];
+    if (typeof directObj.thinking === "string" && directObj.thinking.trim()) {
+      thinking = thinking ? `${thinking}\n\n${directObj.thinking.trim()}` : directObj.thinking.trim();
+    }
+    return { source, thinking, explanation, warnings };
+  }
+
+  try {
+    const parsed = JSON.parse(source);
+    if (typeof parsed === "string") {
+      const nestedObj = tryParseObject(parsed);
+      if (nestedObj && typeof nestedObj.source === "string") {
+        source = nestedObj.source;
+        explanation = typeof nestedObj.explanation === "string" ? nestedObj.explanation : "";
+        warnings = Array.isArray(nestedObj.warnings) ? nestedObj.warnings.filter((v) => typeof v === "string") : [];
+        if (typeof nestedObj.thinking === "string" && nestedObj.thinking.trim()) {
+          thinking = thinking ? `${thinking}\n\n${nestedObj.thinking.trim()}` : nestedObj.thinking.trim();
+        }
+        return { source, thinking, explanation, warnings };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const sourceAnchor = source.indexOf("\"source\"");
+  if (sourceAnchor >= 0) {
+    const start = source.lastIndexOf("{", sourceAnchor);
+    const end = source.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      const anchored = source.slice(start, end + 1);
+      const anchoredObj = tryParseObject(anchored);
+      if (anchoredObj && typeof anchoredObj.source === "string") {
+        source = anchoredObj.source;
+        explanation = typeof anchoredObj.explanation === "string" ? anchoredObj.explanation : "";
+        warnings = Array.isArray(anchoredObj.warnings) ? anchoredObj.warnings.filter((v) => typeof v === "string") : [];
+        if (typeof anchoredObj.thinking === "string" && anchoredObj.thinking.trim()) {
+          thinking = thinking ? `${thinking}\n\n${anchoredObj.thinking.trim()}` : anchoredObj.thinking.trim();
+        }
+      }
+    }
+  }
+
+  return { source, thinking, explanation, warnings };
+}
+
+function buildRuntimeOverridePayload() {
+  if (!isUsingLocalOverride.value) return {};
+
+  const provider = (aiConfig.provider || "").trim();
+  const endpoint = (aiConfig.endpoint || "").trim();
+  const model = (aiConfig.model || "").trim();
+  const apiKey = (aiConfig.apiKey || "").trim();
+  const timeoutMs = Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000)));
+  const temperature = Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2)));
+
+  if (!provider) {
+    throw new Error("本地配置缺少 provider");
+  }
+  const isLiveProvider = provider === "openai" || provider === "openai-compatible";
+  if (isLiveProvider) {
+    if (!endpoint) throw new Error("本地配置缺少 endpoint");
+    if (!model) throw new Error("本地配置缺少 model");
+    if (!apiKey) throw new Error("本地配置缺少 apiKey");
+  }
+
+  return {
+    provider,
+    endpoint,
+    model,
+    apiKey,
+    timeoutMs,
+    temperature,
+  };
+}
+
 async function loadAiStatus() {
   try {
     const res = await fetchAiScriptStatus();
     if (res.error !== null || !res.data) {
-      aiProvider.value = "mock";
-      aiStatusMessage.value = res.error?.msg || "状态获取失败，默认使用 Mock。";
+      aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : "unknown";
+      aiStatusMessage.value = isUsingLocalOverride.value
+        ? "服务端状态获取失败，当前使用本地覆盖配置。"
+        : (res.error?.msg || "状态获取失败。");
       return;
     }
 
-    aiProvider.value = res.data.liveReady ? "live" : "mock";
+    aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : (res.data.provider || "unknown");
     aiModel.value = res.data.model || "";
-    aiStatusMessage.value = res.data.message || "状态已更新。";
+    aiStatusMessage.value = isUsingLocalOverride.value
+      ? "当前使用本地覆盖配置，请以实际生成结果为准。"
+      : (res.data.message || "状态已更新。");
   } catch (error) {
-    aiProvider.value = "mock";
-    aiStatusMessage.value = error instanceof Error ? error.message : "状态获取异常，默认使用 Mock。";
+    aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : "unknown";
+    aiStatusMessage.value = isUsingLocalOverride.value
+      ? "服务端状态获取异常，当前使用本地覆盖配置。"
+      : (error instanceof Error ? error.message : "状态获取异常。");
   }
 }
 
@@ -310,16 +725,10 @@ async function generateWithAi() {
       currentSource: script.source,
       requirement,
       mode: mode.value,
+      ...buildRuntimeOverridePayload(),
     };
 
-    let res = await fetchGenerateScript(requestPayload);
-    if (res.error !== null || !res.data?.source) {
-      const fallbackRes = await fetchGenerateMockScript(requestPayload);
-      if (fallbackRes.error === null && fallbackRes.data?.source) {
-        res = fallbackRes;
-        pushAiMessage("system", "统一生成接口不可用，已自动回退到 /script/mock。");
-      }
-    }
+    const res = await fetchGenerateScript(requestPayload);
 
     if (res.error !== null || !res.data?.source) {
       aiError.value = res.error?.msg || "AI 返回为空";
@@ -327,19 +736,30 @@ async function generateWithAi() {
       return;
     }
 
-    aiBaseSource.value = script.source;
-    aiGeneratedSource.value = res.data.source;
-    aiDiffPending.value = true;
-    aiProvider.value = res.data.provider === "live" ? "live" : "mock";
-    aiModel.value = res.data.model || aiModel.value;
-    aiThinking.value = normalizeThinking(res.data.thinking);
+    const recovered = recoverSourceEnvelope(res.data.source);
+    const recoveredSource = (recovered.source || "").trim();
+    if (!recoveredSource) {
+      aiError.value = "AI 返回的代码内容为空";
+      pushAiMessage("system", aiError.value);
+      return;
+    }
 
-    pushAiMessage("assistant", res.data.explanation || "已生成代码预览，请确认后应用。");
+    aiBaseSource.value = script.source;
+    aiGeneratedSource.value = recoveredSource;
+    aiDiffPending.value = true;
+    aiProvider.value = res.data.provider || aiProvider.value || "unknown";
+    aiModel.value = res.data.model || aiModel.value;
+    const mergedThinking = [res.data.thinking || "", recovered.thinking || ""].filter(Boolean).join("\n\n").trim();
+    aiThinking.value = normalizeThinking(mergedThinking);
+
+    const mergedWarnings = [...(res.data.warnings || []), ...(recovered.warnings || [])].filter(Boolean);
+    const explanation = recovered.explanation || res.data.explanation;
+    pushAiMessage("assistant", explanation || "已生成代码预览，请确认后应用。");
     if (aiThinking.value) {
       pushAiMessage("system", "已捕获模型深度思考，可在上方“深度思考”面板查看。");
     }
-    (res.data.warnings || []).forEach((warning) => pushAiMessage("system", warning));
-    aiStatusMessage.value = aiProvider.value === "live" ? "真实模型生成成功。" : "当前为 Mock 结果。";
+    mergedWarnings.forEach((warning) => pushAiMessage("system", warning));
+    aiStatusMessage.value = "AI 生成成功。";
     window.$message?.success("已生成代码差异预览，请确认后应用。");
   } catch (error) {
     aiError.value = error instanceof Error ? error.message : "AI 生成失败";
@@ -522,6 +942,38 @@ function submit(e: Event) {
   padding: 6px 8px;
 }
 
+.script-ai-config {
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.06);
+  padding: 6px 8px;
+}
+
+.script-ai-config summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.8;
+  user-select: none;
+}
+
+.script-ai-config-body {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.script-ai-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.script-ai-config-tip {
+  font-size: 11px;
+  opacity: 0.65;
+  line-height: 1.4;
+}
+
 .script-ai-thinking summary {
   cursor: pointer;
   font-size: 12px;
@@ -619,6 +1071,10 @@ function submit(e: Event) {
 
   .script-ai-actions .action-generate {
     grid-column: auto;
+  }
+
+  .script-ai-config-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

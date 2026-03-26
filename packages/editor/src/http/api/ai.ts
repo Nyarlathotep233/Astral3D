@@ -9,6 +9,12 @@ export interface IAiScriptRequest {
   currentSource?: string;
   requirement: string;
   mode?: string;
+  provider?: string;
+  endpoint?: string;
+  apiKey?: string;
+  model?: string;
+  timeoutMs?: number;
+  temperature?: number;
 }
 
 export interface IAiScriptResponse {
@@ -25,14 +31,13 @@ export interface IAiScriptResponse {
 export interface IAiScriptStatusResponse {
   provider: string;
   liveReady: boolean;
-  mockOnly: boolean;
   model: string;
   endpoint: string;
   message: string;
 }
 
 /**
- * 统一脚本生成：优先真实模型，失败自动回退 Mock
+ * 统一脚本生成：仅调用真实模型，失败直接返回错误
  */
 export function fetchGenerateScript(data: IAiScriptRequest) {
   return request.post<IAiScriptResponse>("/editor3d/ai/script/generate", data);
@@ -43,11 +48,4 @@ export function fetchGenerateScript(data: IAiScriptRequest) {
  */
 export function fetchAiScriptStatus() {
   return request.get<IAiScriptStatusResponse>("/editor3d/ai/script/status");
-}
-
-/**
- * 兼容保留：仅 mock 脚本生成
- */
-export function fetchGenerateMockScript(data: IAiScriptRequest) {
-  return request.post<IAiScriptResponse>("/editor3d/ai/script/mock", data);
 }
