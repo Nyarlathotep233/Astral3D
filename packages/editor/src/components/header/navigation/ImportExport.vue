@@ -86,6 +86,16 @@ interface SceneProjectZipManifest {
   };
 }
 
+interface SceneStandaloneManifest {
+  signature: string;
+  version: number;
+  exportedAt: string;
+  sourceSceneId: string;
+  sourceSceneInfo: ISceneInfo;
+  firstPackageName: string;
+  packageFiles: string[];
+}
+
 const exportOptions = [
   {
     label: t("layout.header['Export Object']"),
@@ -176,6 +186,10 @@ const exportOptions = [
       {
         label: `${t("layout.header['Project Package']")} (.zip)`,
         key: "exportSceneProjectPackageZip"
+      },
+      {
+        label: "Standalone 预览包 (.zip)",
+        key: "exportSceneStandalonePreviewZip"
       }
     ]
   }
@@ -475,6 +489,217 @@ async function exportProjectBundleZip() {
   }
 }
 
+function buildStandalonePreviewHtml(sceneName: string) {
+  const escapedTitle = (sceneName || "Astral3D Standalone Preview")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  const closeScriptTag = "</scr" + "ipt>";
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapedTitle}</title>
+  <style>
+    :root, :root > body, #app {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0b1020;
+      color: #dbe7ff;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    /* 防止全局样式污染 HtmlPanel 注入的嵌套 html/body，导致黑底方块 */
+    .css3d-imported-content,
+    .css3d-imported-content html,
+    .css3d-imported-content body {
+      background: transparent !important;
+    }
+
+    #status {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(16, 24, 48, 0.8);
+      border: 1px solid rgba(130, 180, 255, 0.35);
+      font-size: 12px;
+      line-height: 1.5;
+      max-width: calc(100vw - 24px);
+      box-sizing: border-box;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="status">正在初始化 Standalone 预览...</div>
+
+  <script src="./runtime/astral3d.umd.js">${closeScriptTag}
+  <script>
+    (async function () {
+      const statusEl = document.getElementById("status");
+      const setStatus = function (text) {
+        if (statusEl) statusEl.textContent = String(text || "");
+      };
+
+      const ensure = function (value, message) {
+        if (!value) throw new Error(message);
+        return value;
+      };
+
+      try {
+        const sdk = ensure(window.Astral3D, "Astral3D runtime 未加载");
+        const manifestRes = await fetch("./project.json");
+        if (!manifestRes.ok) throw new Error("读取 project.json 失败: HTTP " + manifestRes.status);
+        const manifest = await manifestRes.json();
+        const firstPackageName = ensure(manifest.firstPackageName, "project.json 缺少 firstPackageName");
+
+        const viewer = new sdk.Viewer({
+          container: ensure(document.getElementById("app"), "容器不存在"),
+          edit: { enabled: false },
+          grid: { enabled: false },
+          request: { baseUrl: "" }
+        });
+
+        window.viewer = viewer;
+
+        setStatus("正在加载场景首包...");
+        const loader = new sdk.Package(viewer);
+        await new Promise(function (resolve, reject) {
+          const timer = window.setTimeout(function () {
+            reject(new Error("场景加载超时（180s）"));
+          }, 180000);
+
+          loader.unpack({
+            url: "./packages/" + firstPackageName,
+            onProgress: function (progress) {
+              const p = Number(progress || 0).toFixed(2);
+              setStatus("正在加载场景... " + p + "%");
+            },
+            onComplete: function () {
+              window.clearTimeout(timer);
+              loader.dispose();
+              resolve();
+            }
+          });
+        });
+
+        setStatus("场景加载完成");
+        window.setTimeout(function () {
+          if (statusEl) statusEl.style.display = "none";
+        }, 1200);
+      } catch (err) {
+        console.error(err);
+        setStatus("Standalone 预览初始化失败:\\n" + (err && err.message ? err.message : String(err)));
+      }
+    })();
+  ${closeScriptTag}
+</body>
+</html>`;
+}
+
+async function fetchRuntimeFile(path: string) {
+  const res = await fetch(path);
+  if (!res.ok) {
+    throw new Error(`读取运行时文件失败: ${path} (HTTP ${res.status})`);
+  }
+  return await res.arrayBuffer();
+}
+
+async function exportStandalonePreviewZip() {
+  const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
+  if (!sceneInfo?.id) {
+    window.$message?.error(window.$t("scene['The project does not exist!']"));
+    return;
+  }
+
+  exportingProjectBundle.value = true;
+  globalConfigStore.loading = true;
+  globalConfigStore.loadingText = "正在生成 Standalone 预览包(.zip)...";
+
+  const packageInstance = new Package(window.viewer);
+  const packageFiles: File[] = [];
+
+  try {
+    const exported = await packageInstance.pack({
+      name: `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}`,
+      layer: 2,
+      zipUploadFun: async (zipFile: File) => {
+        const cloned = new File([await zipFile.arrayBuffer()], zipFile.name, {type: zipFile.type});
+        packageFiles.push(cloned);
+        return cloned.name;
+      },
+      onProgress: (progress) => {
+        globalConfigStore.loadingText = `${progress}%`;
+      }
+    });
+
+    const firstPackageName = String(exported.firstUploadResult || packageFiles[0]?.name || "");
+    if (!firstPackageName) {
+      throw new Error("Failed to find first package");
+    }
+
+    const archive = new JSZip();
+    const packageFolder = archive.folder("packages") as JSZip;
+    const runtimeFolder = archive.folder("runtime") as JSZip;
+
+    for (const pkg of packageFiles) {
+      packageFolder.file(pkg.name, await pkg.arrayBuffer());
+    }
+
+    const manifest: SceneStandaloneManifest = {
+      signature: "h3d-scene-standalone-preview-package-zip",
+      version: BUNDLE_VERSION,
+      exportedAt: new Date().toISOString(),
+      sourceSceneId: sceneInfo.id,
+      sourceSceneInfo: JSON.parse(JSON.stringify(sceneInfo)),
+      firstPackageName,
+      packageFiles: packageFiles.map(file => file.name),
+    };
+
+    // 运行时资源：MVP 仅注入核心 SDK UMD
+    const runtimeUmd = await fetchRuntimeFile("/standalone-runtime/astral3d.umd.js");
+    runtimeFolder.file("astral3d.umd.js", runtimeUmd);
+    archive.file("project.json", JSON.stringify(manifest, null, 2));
+    archive.file("index.html", buildStandalonePreviewHtml(sceneInfo.sceneName || sceneInfo.id));
+    archive.file("README.txt", [
+      "Standalone 预览包（MVP）",
+      "",
+      "打开方式：",
+      "1. 解压后在该目录启动一个静态文件服务（例如 npx serve .）",
+      "2. 浏览器访问 http://127.0.0.1:3000/index.html（或实际端口）",
+      "",
+      "说明：",
+      "- 该包仅用于预览，不包含编辑能力。",
+      "- 该包不依赖 astral 后端接口。",
+      "- 若场景脚本主动调用外部接口，离线环境下可能失败。",
+      "",
+    ].join("\n"));
+
+    const zipBlob = await archive.generateAsync({type: "blob"});
+    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}.h3d-standalone-preview.zip`;
+    downloadBlobFile(zipBlob, fileName);
+
+    window.$message?.success("Standalone 预览包导出成功");
+  } catch (err) {
+    console.error(err);
+    window.$message?.error(err instanceof Error ? err.message : "Standalone 预览包导出失败");
+  } finally {
+    packageInstance.dispose();
+    exportingProjectBundle.value = false;
+    globalConfigStore.loading = false;
+  }
+}
+
 async function importProjectBundleFile(bundleData: SceneProjectBundle) {
   importingProjectBundle.value = true;
   globalConfigStore.loading = true;
@@ -716,6 +941,11 @@ function handleImport() {
 }
 
 async function handleExportSelect(key: string) {
+  if (key === "exportSceneStandalonePreviewZip") {
+    await exportStandalonePreviewZip();
+    return;
+  }
+
   if (key === "exportSceneProjectPackageZip") {
     await exportProjectBundleZip();
     return;
