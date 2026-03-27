@@ -38,6 +38,7 @@ import {reactive,onMounted} from "vue";
 import {t} from "@/language";
 import EsTip from "@/components/es/EsTip.vue";
 import {App,RemoveObjectCommand,Hooks,Utils} from "@astral3d/engine";
+import {duplicateObjectWithScripts} from "@/utils/common/scenes";
 
 // 由于撤消/重做，目前不能使用z
 const form = reactive({
@@ -58,12 +59,36 @@ function shortcutsKeyup(event:KeyboardEvent, varName:string) {
   App.config.setShortcutItem(varName, event.key.toLowerCase());
 }
 
+function isInputTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toUpperCase();
+  return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+}
+
+function handleDuplicateShortcut(event: KeyboardEvent) {
+  const isModifierPressed = Utils.IS_MAC ? event.metaKey : event.ctrlKey;
+  const isDuplicateShortcut = isModifierPressed && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "d";
+
+  if (!isDuplicateShortcut) return false;
+
+  // 避免触发浏览器默认收藏快捷键
+  event.preventDefault();
+
+  if (App.selected !== null && App.selected.parent !== null) {
+    duplicateObjectWithScripts(App.selected);
+  }
+
+  return true;
+}
+
 onMounted(() => {
   document.addEventListener("keydown", (event) => {
     // 如果事件目标是输入框（INPUT 或 TEXTAREA），则直接返回
-    if (event.target && ['INPUT', 'TEXTAREA'].includes((<HTMLElement>event.target).tagName.toUpperCase())) {
+    if (isInputTarget(event.target)) {
       return;
     }
+
+    if (handleDuplicateShortcut(event)) return;
 
     switch (event.key.toLowerCase()) {
       case 'delete':

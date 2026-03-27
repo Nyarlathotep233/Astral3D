@@ -19,9 +19,9 @@ import {
   ChoroplethMap
 } from '@vicons/carbon';
 import {t} from "@/language";
-import {App,Hooks, MoveObjectCommand, RemoveObjectCommand, AddObjectCommand} from "@astral3d/engine";
+import {App,Hooks, MoveObjectCommand, RemoveObjectCommand} from "@astral3d/engine";
 import {escapeHTML, findSiblingsAndIndex} from "@/utils/common/utils";
-import {getMaterialName} from "@/utils/common/scenes";
+import {getMaterialName, duplicateObjectWithScripts} from "@/utils/common/scenes";
 import EsContextmenu from "@/components/es/EsContextmenu.vue";
 
 const sceneTreeRef = ref();
@@ -367,9 +367,7 @@ function handleContextmenuSelect(key: string) {
       if (parent !== null) App.execute(new RemoveObjectCommand(object));
       break;
     case "clone":
-      const _object = object.clone();
-
-      App.execute(new AddObjectCommand(_object));
+      duplicateObjectWithScripts(object);
       break;
   }
 }
