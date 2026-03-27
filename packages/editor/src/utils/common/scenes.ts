@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons';
-import { App } from "@astral3d/engine";
+import { App, Hooks, AddObjectCommand } from "@astral3d/engine";
 
 export interface IModel extends THREE.Object3D {
 	metadata: Object;
@@ -228,4 +228,65 @@ export function createBasicScene(container: HTMLElement) {
 		controls,
 		dispose
 	}
+}
+
+function deepCloneScript(script: ISceneScript): ISceneScript {
+	return JSON.parse(JSON.stringify(script));
+}
+
+function getUniqueNameInParent(parent: THREE.Object3D, sourceName: string) {
+	const fallbackName = "Object3D";
+	const rawName = (sourceName || fallbackName).trim() || fallbackName;
+	const siblingNames = new Set(parent.children.map((child) => child.name));
+
+	if (!siblingNames.has(rawName)) return rawName;
+
+	const match = rawName.match(/^(.*?)(?: \((\d+)\))?$/);
+	const nameBase = (match && match[1] ? match[1] : rawName).trim() || fallbackName;
+	let index = match && match[2] ? Number(match[2]) + 1 : 1;
+
+	let candidate = `${nameBase} (${index})`;
+	while (siblingNames.has(candidate)) {
+		index += 1;
+		candidate = `${nameBase} (${index})`;
+	}
+
+	return candidate;
+}
+
+/**
+ * 复制场景对象（包含子层级）并同步复制脚本。
+ * 注意：复制后的对象会作为新对象添加到场景中。
+ */
+export function duplicateObjectWithScripts(sourceObject: THREE.Object3D | null) {
+	if (!sourceObject || sourceObject.parent === null) return null;
+
+	const duplicatedObject = sourceObject.clone();
+	duplicatedObject.name = getUniqueNameInParent(App.scene, sourceObject.name || duplicatedObject.name);
+
+	const sourceNodes: THREE.Object3D[] = [];
+	const duplicatedNodes: THREE.Object3D[] = [];
+
+	sourceObject.traverse((node) => sourceNodes.push(node));
+	duplicatedObject.traverse((node) => duplicatedNodes.push(node));
+
+	const pairCount = Math.min(sourceNodes.length, duplicatedNodes.length);
+
+	for (let i = 0; i < pairCount; i++) {
+		const sourceNode = sourceNodes[i];
+		const duplicatedNode = duplicatedNodes[i];
+		const sourceScripts = App.scripts[sourceNode.uuid];
+
+		if (!sourceScripts || sourceScripts.length === 0) continue;
+
+		const copiedScripts = sourceScripts.map((script) => deepCloneScript(script));
+		App.scripts[duplicatedNode.uuid] = copiedScripts;
+
+		copiedScripts.forEach((script) => {
+			Hooks.useDispatchSignal("scriptAdded", duplicatedNode, script);
+		});
+	}
+
+	App.execute(new AddObjectCommand(duplicatedObject));
+	return duplicatedObject;
 }
