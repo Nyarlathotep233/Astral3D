@@ -125,6 +125,7 @@ declare module 'vue' {
     SaveToService: typeof import('./src/components/header/right/SaveToService.vue')['default']
     SceneTree: typeof import('./src/components/tree/SceneTree.vue')['default']
     Script: typeof import('./src/components/code/Script.vue')['default']
+    ScriptAiAgentPanel: typeof import('./src/components/code/ScriptAiAgentPanel.vue')['default']
     Setting: typeof import('./src/components/setting/Setting.vue')['default']
     SettingCenter: typeof import('./src/components/setting/common/SettingCenter.vue')['default']
     SettingTabs: typeof import('./src/components/setting/components/SettingTabs.vue')['default']
