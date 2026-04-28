@@ -192,6 +192,11 @@ export default defineConfig(async ({mode, command}) => {
                     changeOrigin: true,
                     rewrite: (path) => path.replace(new RegExp(`^/api`), '/api')
                 },
+                '^/llm-api': {
+                    target: env.VITE_LLM_PROXY_URL || 'http://127.0.0.1:3001',
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(new RegExp(`^/llm-api`), '/api')
+                },
                 "^/file/static": {
                     target: env.VITE_PROXY_URL,
                     changeOrigin: true,

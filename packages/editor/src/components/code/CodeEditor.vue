@@ -349,7 +349,9 @@ function getErrors() {
   const markers: string[] = [];
   const ignoreError = ["All destructured elements are unused", "is declared but its value is never read"];
   getCurrentMarkers().forEach(marker => {
-    const { message, startLineNumber, startColumn, endLineNumber, endColumn } = marker;
+    const { message, severity, startLineNumber, startColumn, endLineNumber, endColumn } = marker;
+
+    if (severity !== monaco.MarkerSeverity.Error) return;
 
     const isIgnore = ignoreError.some(ignore => message.indexOf(ignore) >= 0);
 

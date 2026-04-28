@@ -1,41 +1,37 @@
-export interface IAiScriptRequest {
-    sceneId?: string;
-    objectId?: string;
-    objectName?: string;
-    objectType?: string;
-    scriptName?: string;
-    currentSource?: string;
-    requirement: string;
-    mode?: string;
-    provider?: string;
-    endpoint?: string;
-    apiKey?: string;
+export type IAiChatRole = "user" | "assistant";
+export interface IAiChatMessage {
+    role: IAiChatRole;
+    content: string;
+}
+export interface IAiChatStreamRequest {
     model?: string;
-    timeoutMs?: number;
-    temperature?: number;
+    thinkingType?: "enabled" | "disabled";
+    thinkingEnabled?: boolean;
+    reasoningEffort?: "high" | "max";
+    reasoning_effort?: "high" | "max";
+    messages: IAiChatMessage[];
 }
-export interface IAiScriptResponse {
-    requestId: string;
-    model: string;
-    provider?: string;
-    scriptName: string;
-    source: string;
-    explanation: string;
-    warnings: string[];
-    thinking?: string;
+export interface IAiChatStreamMeta {
+    requestId?: string;
+    model?: string;
+    thinkingType?: "enabled" | "disabled";
+    reasoningEffort?: "high" | "max" | null;
+    context?: Record<string, unknown>;
+    limits?: Record<string, unknown>;
 }
-export interface IAiScriptStatusResponse {
-    provider: string;
-    liveReady: boolean;
-    model: string;
-    endpoint: string;
-    message: string;
+export interface IAiChatStreamResult {
+    meta?: IAiChatStreamMeta;
+    content: string;
+    reasoning: string;
+}
+export interface IAiChatStreamHandlers {
+    signal?: AbortSignal;
+    onMeta?: (data: IAiChatStreamMeta) => void;
+    onReasoning?: (content: string) => void;
+    onMessage?: (content: string) => void;
+    onDone?: (data: Record<string, unknown>) => void;
 }
 /**
- * 统一脚本生成：仅调用真实模型，失败直接返回错误
+ * 调用 astral-llm-service 已有的 SSE 流式聊天接口。
  */
-export declare function fetchGenerateScript(data: IAiScriptRequest): Promise<Service.RequestResult<T>>;
-/**
- * 获取当前 AI 脚本生成状态（是否已配置真实模型）
- */
-export declare function fetchAiScriptStatus(): Promise<Service.RequestResult<T>>;
+export declare function fetchAiChatStream(data: IAiChatStreamRequest, handlers?: IAiChatStreamHandlers): Promise<IAiChatStreamResult>;

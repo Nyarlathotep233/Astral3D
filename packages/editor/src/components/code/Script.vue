@@ -32,7 +32,7 @@
         <div class="script-ai-title">AI 助手</div>
         <div class="script-ai-meta">{{ aiStatusText }}</div>
         <details class="script-ai-config">
-          <summary>模型配置</summary>
+          <summary>流式模型配置</summary>
           <div class="script-ai-config-body">
             <n-select
               :value="selectedProfileId"
@@ -50,15 +50,17 @@
               <n-button size="small" @click="saveCurrentAsCustomProfile">保存本地</n-button>
               <n-button size="small" type="warning" :disabled="!isSelectedProfileCustom" @click="deleteSelectedCustomProfile">删除</n-button>
             </div>
-            <n-input v-model:value="aiConfig.provider" size="small" placeholder="provider: openai/openai-compatible" />
-            <n-input v-model:value="aiConfig.endpoint" size="small" placeholder="endpoint: https://.../v1/chat/completions" />
-            <n-input v-model:value="aiConfig.model" size="small" placeholder="model: gpt-4o-mini / MiniMax-M2.7 / ..." />
-            <n-input v-model:value="aiConfig.apiKey" size="small" placeholder="api key（仅本地存储）" type="password" show-password-on="click" />
+            <n-input v-model:value="aiConfig.model" size="small" placeholder="model: 留空使用服务端默认" />
             <div class="script-ai-config-row">
-              <n-input-number v-model:value="aiConfig.timeoutMs" size="small" :min="5000" :max="300000" :step="5000" placeholder="timeout(ms)" />
-              <n-input-number v-model:value="aiConfig.temperature" size="small" :min="0" :max="1" :step="0.1" placeholder="temperature" />
+              <n-select v-model:value="aiConfig.thinkingType" :options="thinkingTypeOptions" size="small" />
+              <n-select
+                v-model:value="aiConfig.reasoningEffort"
+                :options="reasoningEffortOptions"
+                size="small"
+                :disabled="aiConfig.thinkingType === 'disabled'"
+              />
             </div>
-            <div class="script-ai-config-tip">配置仅保存在当前浏览器 localStorage，不会自动写入后端配置文件。</div>
+            <div class="script-ai-config-tip">使用 astral-llm-service 已有 `/chat/stream` 接口；API Key、baseURL 与模型白名单由服务端控制。</div>
           </div>
         </details>
         <details v-if="aiThinking" class="script-ai-thinking">
@@ -131,7 +133,7 @@ import * as THREE from "three";
 import { App, Hooks, SetScriptValueCommand, SetMaterialValueCommand } from "@astral3d/engine";
 import { t } from "@/language";
 import CodeEditor from "@/components/code/CodeEditor.vue";
-import { fetchAiScriptStatus, fetchGenerateScript } from "@/http/api/ai";
+import { fetchAiChatStream } from "@/http/api/ai";
 
 type AiMessageRole = "user" | "assistant" | "system";
 type AiMessage = {
@@ -144,12 +146,9 @@ type AiProfile = {
   name: string;
   custom?: boolean;
   config: {
-    provider: string;
-    endpoint: string;
     model: string;
-    apiKey: string;
-    timeoutMs: number;
-    temperature: number;
+    thinkingType: "enabled" | "disabled";
+    reasoningEffort: "high" | "max";
   };
 };
 
@@ -161,48 +160,27 @@ const BUILTIN_AI_PROFILES: AiProfile[] = [
     id: "server-default",
     name: "服务端默认",
     config: {
-      provider: "",
-      endpoint: "",
       model: "",
-      apiKey: "",
-      timeoutMs: 90000,
-      temperature: 0.2,
+      thinkingType: "enabled",
+      reasoningEffort: "high",
     },
   },
   {
-    id: "openai-default",
-    name: "OpenAI 官方",
+    id: "deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
     config: {
-      provider: "openai",
-      endpoint: "https://api.openai.com/v1/chat/completions",
-      model: "gpt-4o-mini",
-      apiKey: "",
-      timeoutMs: 90000,
-      temperature: 0.2,
+      model: "deepseek-v4-pro",
+      thinkingType: "enabled",
+      reasoningEffort: "high",
     },
   },
   {
-    id: "minimax-compat",
-    name: "MiniMax (compat)",
+    id: "deepseek-v4-flash",
+    name: "DeepSeek V4 Flash",
     config: {
-      provider: "openai-compatible",
-      endpoint: "https://api.minimaxi.com/v1/chat/completions",
-      model: "MiniMax-M2.7",
-      apiKey: "",
-      timeoutMs: 90000,
-      temperature: 0.2,
-    },
-  },
-  {
-    id: "deepseek-compat",
-    name: "DeepSeek (compat)",
-    config: {
-      provider: "openai-compatible",
-      endpoint: "https://api.deepseek.com/v1/chat/completions",
-      model: "deepseek-chat",
-      apiKey: "",
-      timeoutMs: 90000,
-      temperature: 0.2,
+      model: "deepseek-v4-flash",
+      thinkingType: "disabled",
+      reasoningEffort: "high",
     },
   },
 ];
@@ -225,21 +203,28 @@ const aiMessages = ref<AiMessage[]>([]);
 const aiBaseSource = ref("");
 const aiGeneratedSource = ref("");
 const aiDiffPending = ref(false);
-const aiProvider = ref("unknown");
+const aiProvider = ref("stream");
 const aiModel = ref("");
-const aiStatusMessage = ref("正在获取 AI 状态...");
+const aiStatusMessage = ref("使用 astral-llm-service /chat/stream 流式生成。");
 const aiThinking = ref("");
 const customProfiles = ref<AiProfile[]>([]);
 const selectedProfileId = ref("server-default");
 const customProfileName = ref("");
 const aiConfig = reactive({
-  provider: "",
-  endpoint: "",
   model: "",
-  apiKey: "",
-  timeoutMs: 90000,
-  temperature: 0.2,
+  thinkingType: "enabled" as "enabled" | "disabled",
+  reasoningEffort: "high" as "high" | "max",
 });
+
+const thinkingTypeOptions = [
+  { label: "开启深度思考", value: "enabled" },
+  { label: "关闭深度思考", value: "disabled" },
+];
+
+const reasoningEffortOptions = [
+  { label: "high", value: "high" },
+  { label: "max", value: "max" },
+];
 
 const isAiDiffMode = computed(() => {
   return mode.value === "javascript" && aiDiffPending.value && !!aiGeneratedSource.value;
@@ -248,14 +233,14 @@ const isAiDiffMode = computed(() => {
 const isUsingLocalOverride = computed(() => selectedProfileId.value !== "server-default");
 
 const aiGenerateButtonText = computed(() => {
-  if (isUsingLocalOverride.value) return "AI 生成（本地配置）";
-  return "AI 生成";
+  if (isUsingLocalOverride.value) return "AI 生成（流式/本地预设）";
+  return "AI 生成（流式）";
 });
 
 const aiStatusText = computed(() => {
   const modelSuffix = aiModel.value ? ` / ${aiModel.value}` : "";
   const profile = selectedProfile.value ? `配置：${selectedProfile.value.name}。` : "";
-  const overrideSuffix = isUsingLocalOverride.value ? "已启用请求级覆盖。 " : "";
+  const overrideSuffix = isUsingLocalOverride.value ? "已启用请求级模型参数。 " : "";
   return `${profile}${overrideSuffix}模式：${resolveProviderLabel(aiProvider.value)}${modelSuffix}。${aiStatusMessage.value}`;
 });
 
@@ -383,9 +368,9 @@ function resetAiState() {
   aiBaseSource.value = "";
   aiGeneratedSource.value = "";
   aiDiffPending.value = false;
-  aiProvider.value = "unknown";
+  aiProvider.value = "stream";
   aiModel.value = "";
-  aiStatusMessage.value = "正在获取 AI 状态...";
+  aiStatusMessage.value = "使用 astral-llm-service /chat/stream 流式生成。";
   aiThinking.value = "";
 }
 
@@ -424,12 +409,9 @@ function loadCustomProfilesFromStorage() {
         name: String(item.name),
         custom: true,
         config: {
-          provider: String(item.config.provider || ""),
-          endpoint: String(item.config.endpoint || ""),
           model: String(item.config.model || ""),
-          apiKey: String(item.config.apiKey || ""),
-          timeoutMs: Number(item.config.timeoutMs || 90000),
-          temperature: Number(item.config.temperature ?? 0.2),
+          thinkingType: item.config.thinkingType === "disabled" ? "disabled" : "enabled",
+          reasoningEffort: item.config.reasoningEffort === "max" ? "max" : "high",
         },
       }));
   } catch {
@@ -438,15 +420,11 @@ function loadCustomProfilesFromStorage() {
 }
 
 function estimateProviderFromLocalConfig() {
-  const provider = (aiConfig.provider || "").trim();
-  const hasKey = !!(aiConfig.apiKey || "").trim();
-  if ((provider === "openai" || provider === "openai-compatible") && hasKey) {
-    return "live";
-  }
-  return provider || "unknown";
+  return "stream";
 }
 
 function resolveProviderLabel(provider: string) {
+  if (provider === "stream") return "LLM 流式接口";
   if (provider === "live") return "真实模型";
   if (provider === "openai" || provider === "openai-compatible") return provider;
   if (!provider || provider === "unknown") return "未就绪";
@@ -463,12 +441,9 @@ function saveCustomProfilesToStorage() {
 
 function applyProfileToConfig(profile?: AiProfile) {
   const target = profile || BUILTIN_AI_PROFILES[0];
-  aiConfig.provider = target.config.provider || "";
-  aiConfig.endpoint = target.config.endpoint || "";
   aiConfig.model = target.config.model || "";
-  aiConfig.apiKey = target.config.apiKey || "";
-  aiConfig.timeoutMs = Math.min(300000, Math.max(5000, Number(target.config.timeoutMs || 90000)));
-  aiConfig.temperature = Math.min(1, Math.max(0, Number(target.config.temperature ?? 0.2)));
+  aiConfig.thinkingType = target.config.thinkingType || "enabled";
+  aiConfig.reasoningEffort = target.config.reasoningEffort || "high";
 }
 
 function onProfileChange(profileId: string) {
@@ -482,11 +457,13 @@ function onProfileChange(profileId: string) {
   applyProfileToConfig(profile);
   customProfileName.value = profile?.custom ? profile.name : "";
   if (profileId === "server-default") {
-    aiStatusMessage.value = "使用服务端默认配置。";
+    aiProvider.value = "stream";
+    aiModel.value = "";
+    aiStatusMessage.value = "使用服务端默认流式模型配置。";
   } else {
     aiProvider.value = estimateProviderFromLocalConfig();
     aiModel.value = aiConfig.model || aiModel.value;
-    aiStatusMessage.value = "已切换到本地覆盖配置。";
+    aiStatusMessage.value = "已切换到本地模型参数。";
   }
 }
 
@@ -502,12 +479,9 @@ function saveCurrentAsCustomProfile() {
     existing.name = name;
     existing.custom = true;
     existing.config = {
-      provider: aiConfig.provider.trim(),
-      endpoint: aiConfig.endpoint.trim(),
       model: aiConfig.model.trim(),
-      apiKey: aiConfig.apiKey.trim(),
-      timeoutMs: Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000))),
-      temperature: Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2))),
+      thinkingType: aiConfig.thinkingType,
+      reasoningEffort: aiConfig.reasoningEffort,
     };
     selectedProfileId.value = existing.id;
   } else {
@@ -517,19 +491,16 @@ function saveCurrentAsCustomProfile() {
       name,
       custom: true,
       config: {
-        provider: aiConfig.provider.trim(),
-        endpoint: aiConfig.endpoint.trim(),
         model: aiConfig.model.trim(),
-        apiKey: aiConfig.apiKey.trim(),
-        timeoutMs: Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000))),
-        temperature: Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2))),
+        thinkingType: aiConfig.thinkingType,
+        reasoningEffort: aiConfig.reasoningEffort,
       },
     });
     selectedProfileId.value = id;
   }
 
   saveCustomProfilesToStorage();
-  window.$message?.success("已保存到本地 AI 配置");
+  window.$message?.success("已保存到本地 AI 模型参数");
 }
 
 function deleteSelectedCustomProfile() {
@@ -539,7 +510,7 @@ function deleteSelectedCustomProfile() {
   selectedProfileId.value = "server-default";
   applyProfileToConfig(BUILTIN_AI_PROFILES[0]);
   customProfileName.value = "";
-  window.$message?.success("已删除本地 AI 配置");
+  window.$message?.success("已删除本地 AI 模型参数");
 }
 
 function normalizeThinking(text?: string) {
@@ -644,58 +615,86 @@ function recoverSourceEnvelope(rawSource: string) {
   return { source, thinking, explanation, warnings };
 }
 
-function buildRuntimeOverridePayload() {
+function buildStreamModelOptions() {
   if (!isUsingLocalOverride.value) return {};
 
-  const provider = (aiConfig.provider || "").trim();
-  const endpoint = (aiConfig.endpoint || "").trim();
-  const model = (aiConfig.model || "").trim();
-  const apiKey = (aiConfig.apiKey || "").trim();
-  const timeoutMs = Math.min(300000, Math.max(5000, Number(aiConfig.timeoutMs || 90000)));
-  const temperature = Math.min(1, Math.max(0, Number(aiConfig.temperature ?? 0.2)));
-
-  if (!provider) {
-    throw new Error("本地配置缺少 provider");
-  }
-  const isLiveProvider = provider === "openai" || provider === "openai-compatible";
-  if (isLiveProvider) {
-    if (!endpoint) throw new Error("本地配置缺少 endpoint");
-    if (!model) throw new Error("本地配置缺少 model");
-    if (!apiKey) throw new Error("本地配置缺少 apiKey");
-  }
-
+  const model = aiConfig.model.trim();
   return {
-    provider,
-    endpoint,
-    model,
-    apiKey,
-    timeoutMs,
-    temperature,
+    ...(model ? { model } : {}),
+    thinkingType: aiConfig.thinkingType,
+    reasoningEffort: aiConfig.reasoningEffort,
   };
 }
 
-async function loadAiStatus() {
-  try {
-    const res = await fetchAiScriptStatus();
-    if (res.error !== null || !res.data) {
-      aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : "unknown";
-      aiStatusMessage.value = isUsingLocalOverride.value
-        ? "服务端状态获取失败，当前使用本地覆盖配置。"
-        : (res.error?.msg || "状态获取失败。");
-      return;
-    }
+function loadAiStatus() {
+  aiProvider.value = "stream";
+  aiModel.value = isUsingLocalOverride.value ? aiConfig.model : "";
+  aiStatusMessage.value = isUsingLocalOverride.value
+    ? "使用 /llm-api/chat/stream 流式生成，并传入当前模型参数。"
+    : "使用 /llm-api/chat/stream 流式生成，模型参数由 astral-llm-service 默认配置决定。";
+}
 
-    aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : (res.data.provider || "unknown");
-    aiModel.value = res.data.model || "";
-    aiStatusMessage.value = isUsingLocalOverride.value
-      ? "当前使用本地覆盖配置，请以实际生成结果为准。"
-      : (res.data.message || "状态已更新。");
-  } catch (error) {
-    aiProvider.value = isUsingLocalOverride.value ? estimateProviderFromLocalConfig() : "unknown";
-    aiStatusMessage.value = isUsingLocalOverride.value
-      ? "服务端状态获取异常，当前使用本地覆盖配置。"
-      : (error instanceof Error ? error.message : "状态获取异常。");
-  }
+function escapePromptText(text?: string) {
+  return String(text || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`");
+}
+
+function limitPromptText(text?: string, maxLength = 16000) {
+  const normalized = String(text || "").replace(/\r/g, "");
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}\n/* ... truncated ... */`;
+}
+
+function buildScriptGenerationPrompt(params: {
+  sceneId?: string;
+  objectId?: string;
+  objectName?: string;
+  objectType?: string;
+  scriptName?: string;
+  currentSource?: string;
+  requirement: string;
+  mode?: string;
+}) {
+  return `你是 3D 编辑器脚本助手，请按用户需求生成可直接运行的 JavaScript 脚本。
+
+输出要求：
+- 必须只输出 JSON 对象，不要 Markdown 代码块，不要额外解释。
+- JSON 格式：{"source":"...","explanation":"...","warnings":["..."]}。
+- source 必须是完整脚本源码字符串。
+
+运行时约束：
+- afterAnimation 签名为 (delta, toBeRender)。
+- 键盘事件使用 onKeyDown(event)。
+- 可用内置变量：this, THREE, helper, renderer, scene, camera, controls, timer。
+- 若包含连续动画，请在 afterAnimation 中调用 toBeRender(true)。
+- 不要使用 window/globalThis 保存状态。
+- 不要给 this 挂载临时状态（禁止 this.xxx = ...）；this 只表示当前脚本对象。
+- 临时状态必须定义为脚本顶层 let/const，例如：let target = null; let axis = null; let speed = 1;
+- 不要虚构不存在的 API、生命周期或参数。
+- 尽量在 currentSource 基础上最小改动，避免无关重写。
+
+脚本 API 速查：
+- 内置方法：render(delta?)
+- 生命周期：loaded(); beforeAnimation(delta); afterAnimation(delta,toBeRender); beforeRender(delta); afterRender(delta); beforeDestroy(); afterDestroy();
+- 常用事件：onPick/onDoubleClick/onKeyDown/onKeyUp/onPointerDown/onPointerUp/onPointerMove/onTouchStart/onTouchEnd
+- helper：new helper.Animation(this); helper.objectByUuid(uuid)
+
+上下文：
+- sceneId: ${escapePromptText(params.sceneId)}
+- objectId: ${escapePromptText(params.objectId)}
+- objectName: ${escapePromptText(params.objectName)}
+- objectType: ${escapePromptText(params.objectType)}
+- scriptName: ${escapePromptText(params.scriptName)}
+- mode: ${escapePromptText(params.mode)}
+
+用户需求：
+${escapePromptText(params.requirement)}
+
+当前脚本：
+\`\`\`javascript
+${limitPromptText(params.currentSource)}
+\`\`\``;
 }
 
 async function generateWithAi() {
@@ -714,9 +713,12 @@ async function generateWithAi() {
   aiThinking.value = "";
   pushAiMessage("user", requirement);
 
+  const assistantMessage: AiMessage = { role: "assistant", content: "正在流式生成..." };
+  aiMessages.value.push(assistantMessage);
+
   try {
     const sceneInfo = App.project.getKey("sceneInfo") || {};
-    const requestPayload = {
+    const prompt = buildScriptGenerationPrompt({
       sceneId: sceneInfo.id,
       objectId: currentObject.uuid,
       objectName: currentObject.name,
@@ -725,44 +727,64 @@ async function generateWithAi() {
       currentSource: script.source,
       requirement,
       mode: mode.value,
-      ...buildRuntimeOverridePayload(),
-    };
+    });
 
-    const res = await fetchGenerateScript(requestPayload);
+    let streamedContent = "";
+    let streamedReasoning = "";
 
-    if (res.error !== null || !res.data?.source) {
-      aiError.value = res.error?.msg || "AI 返回为空";
-      pushAiMessage("system", aiError.value);
-      return;
-    }
+    const streamResult = await fetchAiChatStream(
+      {
+        ...buildStreamModelOptions(),
+        messages: [{ role: "user", content: prompt }],
+      },
+      {
+        onMeta(meta) {
+          aiProvider.value = "stream";
+          aiModel.value = meta.model || aiConfig.model || aiModel.value;
+          aiStatusMessage.value = "正在接收流式响应...";
+        },
+        onReasoning(chunk) {
+          streamedReasoning += chunk;
+          aiThinking.value = normalizeThinking(streamedReasoning);
+        },
+        onMessage(chunk) {
+          streamedContent += chunk;
+          assistantMessage.content = `正在生成代码...\n\n${streamedContent.slice(-1600)}`;
+        },
+      },
+    );
 
-    const recovered = recoverSourceEnvelope(res.data.source);
+    const recovered = recoverSourceEnvelope(streamResult.content || streamedContent);
     const recoveredSource = (recovered.source || "").trim();
     if (!recoveredSource) {
       aiError.value = "AI 返回的代码内容为空";
-      pushAiMessage("system", aiError.value);
+      assistantMessage.content = aiError.value;
+      pushAiMessage("system", "流式响应已结束，但未解析到 source 字段或代码内容。");
       return;
     }
 
     aiBaseSource.value = script.source;
     aiGeneratedSource.value = recoveredSource;
     aiDiffPending.value = true;
-    aiProvider.value = res.data.provider || aiProvider.value || "unknown";
-    aiModel.value = res.data.model || aiModel.value;
-    const mergedThinking = [res.data.thinking || "", recovered.thinking || ""].filter(Boolean).join("\n\n").trim();
+    aiProvider.value = "stream";
+    aiModel.value = streamResult.meta?.model || aiConfig.model || aiModel.value;
+
+    const mergedThinking = [streamResult.reasoning || streamedReasoning, recovered.thinking]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
     aiThinking.value = normalizeThinking(mergedThinking);
 
-    const mergedWarnings = [...(res.data.warnings || []), ...(recovered.warnings || [])].filter(Boolean);
-    const explanation = recovered.explanation || res.data.explanation;
-    pushAiMessage("assistant", explanation || "已生成代码预览，请确认后应用。");
+    assistantMessage.content = recovered.explanation || "已生成代码预览，请确认后应用。";
     if (aiThinking.value) {
       pushAiMessage("system", "已捕获模型深度思考，可在上方“深度思考”面板查看。");
     }
-    mergedWarnings.forEach((warning) => pushAiMessage("system", warning));
-    aiStatusMessage.value = "AI 生成成功。";
+    recovered.warnings.filter(Boolean).forEach((warning) => pushAiMessage("system", warning));
+    aiStatusMessage.value = "流式生成成功。";
     window.$message?.success("已生成代码差异预览，请确认后应用。");
   } catch (error) {
     aiError.value = error instanceof Error ? error.message : "AI 生成失败";
+    assistantMessage.content = aiError.value;
     pushAiMessage("system", aiError.value);
   } finally {
     aiLoading.value = false;

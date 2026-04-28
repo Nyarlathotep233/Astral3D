@@ -2,7 +2,7 @@
 
 ## 目标
 
-验证 `POST /api/editor3d/ai/script/generate` 在不同需求类型下能返回“可运行、可应用、可理解”的脚本，不局限于旋转场景。
+验证前端通过 `POST /llm-api/chat/stream` 流式生成脚本时，在不同需求类型下能返回“可运行、可应用、可理解”的脚本，不局限于旋转场景。
 
 ---
 
@@ -10,9 +10,9 @@
 
 - 编辑器入口：`https://localhost:8090/#/editor/9d7e80cd0a8956bf0be2d100d9c31ea9`
 - 推荐对象：`Box` / `Box2`（按实际场景对象名）
-- 后端接口：
-  - `GET /api/editor3d/ai/script/status`
-  - `POST /api/editor3d/ai/script/generate`
+- AI 接口由 `astral-llm-service` 已有流式接口提供，前端通过 Nginx 反向代理访问：
+  - `POST /llm-api/chat/stream`
+  - 监听 `meta` / `reasoning` / `message` / `done` / `error` 事件
 
 ---
 
