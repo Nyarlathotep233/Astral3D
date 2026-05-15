@@ -1,18 +1,26 @@
 <script setup lang="ts">
-import {nextTick, onMounted, provide, ref} from "vue";
-import {useRoute} from 'vue-router';
-import {t} from "@/language";
-import {fetchGetOneScene} from "@/http/api/scenes";
-import {App,Viewer,Hooks,Package,defaultProjectInfo} from "@astral3d/engine";
-import {usePreviewOperationStore} from "@/store/modules/previewOperation";
+import { nextTick, onMounted, provide, ref, computed } from "vue";
+import { useRoute } from 'vue-router';
+import { t } from "@/language";
+import { fetchGetOneScene } from "@/http/api/scenes";
+import { App, Viewer, Hooks, Package, defaultProjectInfo } from "@astral3d/engine";
+import { usePreviewOperationStore } from "@/store/modules/previewOperation";
 import EsCubeLoading from "@/components/es/EsCubeLoading.vue";
 import PreviewSceneTree from "@/views/preview/components/PreviewSceneTree.vue";
 import PreviewOperations from "@/views/preview/components/Operations.vue";
 import Drawing from "@/components/drawing/Drawing.vue";
-import {useGlobalConfigStore} from "@/store/modules/globalConfig";
-import {MenuOperation} from "@/utils/preview/menuOperation";
+import { useGlobalConfigStore } from "@/store/modules/globalConfig";
+import { MenuOperation } from "@/utils/preview/menuOperation";
 
 const route = useRoute();
+
+/**
+ * 是否隐藏右侧/顶部操作工具栏
+ *
+ * 使用方式：
+ * https://vothing.haolink.cn:8070/#/editor/场景ID?hideToolbar=true
+ */
+const hideToolbar = computed(() => route.query.hideToolbar === "true");
 
 const globalStore = useGlobalConfigStore();
 const operationStore = usePreviewOperationStore();
@@ -20,8 +28,9 @@ const operationStore = usePreviewOperationStore();
 const defaultInfo = defaultProjectInfo();
 const sceneInfo = ref(defaultInfo.sceneInfo);
 const drawingInfo = ref(defaultInfo.drawing);
-provide("sceneInfo",sceneInfo);
-provide("drawingInfo",drawingInfo);
+
+provide("sceneInfo", sceneInfo);
+provide("drawingInfo", drawingInfo);
 
 const viewportRef = ref();
 const initLoading = ref(true);
@@ -37,11 +46,11 @@ onMounted(async () => {
     edit: {
       enabled: false,
     },
-    grid:{
-      enabled:false,
+    grid: {
+      enabled: false,
     },
     request: {
-      baseUrl:"/file/static/"
+      baseUrl: "/file/static/"
     }
   });
 
@@ -53,14 +62,16 @@ onMounted(async () => {
 async function init() {
   // 获取路由参数
   const id = route.params.id as string;
+
   if (!id) {
     window.$message?.error(t("prompt['Parameter error!']"));
     return;
   }
 
   const res = await fetchGetOneScene(id);
+
   if (res.error !== null) {
-    window.$message?.error(t("scene.Failed to get scene data"))
+    window.$message?.error(t("scene.Failed to get scene data"));
     return;
   }
 
@@ -72,7 +83,7 @@ async function init() {
     res.data.cesiumConfig = undefined;
   }
 
-  App.project.setKey('sceneInfo',res.data);
+  App.project.setKey('sceneInfo', res.data);
   sceneInfo.value = res.data;
 
   initLoading.value = false;
@@ -80,7 +91,7 @@ async function init() {
   getScene(res.data);
 }
 
-//拉取场景
+// 拉取场景
 function getScene(sceneInfo) {
   // 如果创建的是空场景则无场景包
   if (!sceneInfo.zip) {
@@ -95,11 +106,13 @@ function getScene(sceneInfo) {
     title: window.$t("scene['Get the scene data']") + "...",
     content: window.$t("other.Loading") + "...",
     closable: false,
-  })
+  });
 
   const p = new Package(window.viewer);
+
   p.unpack({
     url: sceneInfo.zip,
+
     onSceneLoad: (sceneJson: ISceneJson) => {
       if (sceneJson.controls?.state) {
         MenuOperation.InitControlsState = sceneJson.controls.state;
@@ -107,24 +120,27 @@ function getScene(sceneInfo) {
 
       Hooks.useDispatchSignal("sceneResize");
     },
-    onComplete: () => {
-      // 加载完成后，生成Collider环境
-      MenuOperation.Roaming.generateColliderEnvironment().then(() => {
-        // 检查人物模型是否已加载
-        const checkPlayer = () => {
-          if (MenuOperation.Roaming.person !== undefined) {
-            operationStore.menuList.roaming.loading = false;
-          } else {
-            setTimeout(() => {
-              checkPlayer();
-            }, 200)
-          }
-        }
 
-        checkPlayer();
-      }).catch(error => {
-        window.$message?.error(`[Roaming]: ${error}`);
-      })
+    onComplete: () => {
+      // 加载完成后，生成 Collider 环境
+      MenuOperation.Roaming.generateColliderEnvironment()
+        .then(() => {
+          // 检查人物模型是否已加载
+          const checkPlayer = () => {
+            if (MenuOperation.Roaming.person !== undefined) {
+              operationStore.menuList.roaming.loading = false;
+            } else {
+              setTimeout(() => {
+                checkPlayer();
+              }, 200);
+            }
+          };
+
+          checkPlayer();
+        })
+        .catch(error => {
+          window.$message?.error(`[Roaming]: ${error}`);
+        });
 
       window.$message?.success(t("scene['Loading completed!']"));
 
@@ -134,27 +150,37 @@ function getScene(sceneInfo) {
 
       p.dispose();
     }
-  })
+  });
+
   return;
 }
 </script>
 
 <template>
-  <EsCubeLoading v-model:visible="initLoading"/>
+  <EsCubeLoading v-model:visible="initLoading" />
 
   <div id="preview" class="w-full h-full">
-    <n-split direction="horizontal" :max="0.85" :min="0.15"
-             :pane1-style="{ display: drawingInfo.isUploaded ? 'flex' : 'none' }"
-             :resize-trigger-size="drawingInfo.isUploaded ? 3 : 0">
+    <n-split
+      direction="horizontal"
+      :max="0.85"
+      :min="0.15"
+      :pane1-style="{ display: drawingInfo.isUploaded ? 'flex' : 'none' }"
+      :resize-trigger-size="drawingInfo.isUploaded ? 3 : 0"
+    >
       <template #1 v-if="drawingInfo.isUploaded">
-        <Drawing/>
+        <Drawing />
       </template>
+
       <template #2>
         <div ref="viewportRef" class="relative w-full h-full"></div>
 
-        <PreviewSceneTree/>
+        <PreviewSceneTree />
 
-        <PreviewOperations/>
+        <!-- 
+          hideToolbar=true 时隐藏操作工具栏
+          示例：#/editor/场景ID?hideToolbar=true
+        -->
+        <PreviewOperations v-if="!hideToolbar" />
       </template>
     </n-split>
   </div>
