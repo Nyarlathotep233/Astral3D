@@ -6,6 +6,14 @@ import CardAction from "@/views/home/project/components/CardAction.vue";
 import CreateProject from "@/views/home/project/components/CreateProject.vue";
 import {getServiceStaticFile} from "@/utils/common/file";
 
+const props = withDefaults(defineProps<{
+  sceneSource?: "INTERNAL" | "EXTERNAL";
+  showCreate?: boolean;
+}>(), {
+  sceneSource: "INTERNAL",
+  showCreate: true
+});
+
 const data = ref<ISceneFetchData[]>([]);
 const paginationReactive = reactive({
   page: 1,
@@ -25,7 +33,7 @@ async function fetchProjectList() {
     limit: paginationReactive.pageSize,
     sortby:"updateTime",
     order:"desc",
-    query:``
+    query:`sceneSource:${props.sceneSource}`
   });
   if(res.data !== null){
     data.value = res.data.items || [];
@@ -85,7 +93,7 @@ onMounted(() => {
     <div class="project-cards-scroll">
       <n-spin class="project-list-spin" :show="loading">
         <div class="project-cards-list">
-          <n-card embedded hoverable :bordered="false" content-class="!p-2" class="cursor-pointer" @click="showCreateModal = true">
+          <n-card v-if="props.showCreate" embedded hoverable :bordered="false" content-class="!p-2" class="cursor-pointer" @click="showCreateModal = true">
             <div class="new-container h-full min-h-200px flex flex-col justify-center items-center b-1 b-dashed b-rd-1">
               <span class="text-16 color-#fff">🫵</span>
               <p>{{ t('home.New project') }}</p>
@@ -97,7 +105,10 @@ onMounted(() => {
               <n-skeleton v-if="loadingProjectId === Number(project.id)" height="100%" width="100%" />
               <template v-else>
                 <div class="absolute top-10px right-10px z-10">
-                  <n-tag type="success" :bordered="false" >
+                  <n-tag v-if="project.sceneSource === 'EXTERNAL'" type="warning" :bordered="false" >
+                    EXTERNAL
+                  </n-tag>
+                  <n-tag type="success" :bordered="false" :class="project.sceneSource === 'EXTERNAL' ? 'ml-5px' : ''">
                     {{ project.projectType === 0 ? "Web3D" : "WebGIS" }}
                   </n-tag>
                   <n-tag type="success" :bordered="false" class="ml-5px">

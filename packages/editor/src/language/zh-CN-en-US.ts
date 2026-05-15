@@ -17,6 +17,7 @@ export default {
         /* 项目 */
         'My Project': "我的项目",
         'Shared Project': "共享项目",
+        'External Project': "外部项目",
         'New project': "新建项目",
         "Template": "模板",
         'Empty project': "空项目",

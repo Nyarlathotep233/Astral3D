@@ -17,7 +17,10 @@ import SharedProject from "@/views/home/project/SharedProject.vue";
         <MyProject />
       </n-tab-pane>
       <n-tab-pane name="shared-project" :tab="t('home.Shared Project')">
-        <SharedProject />
+        <SharedProject scene-source="INTERNAL" />
+      </n-tab-pane>
+      <n-tab-pane name="external-project" :tab="t('home.External Project')">
+        <SharedProject scene-source="EXTERNAL" :show-create="false" />
       </n-tab-pane>
     </n-tabs>
   </n-layout-content>
