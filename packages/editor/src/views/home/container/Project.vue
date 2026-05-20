@@ -1,9 +1,36 @@
 <script setup lang="ts">
+import {computed} from "vue";
+import {useRoute} from "vue-router";
 import {t} from "@/language";
 import HeaderCarousel from "@/views/home/components/HeaderCarousel.vue";
 import MyProject from "@/views/home/project/MyProject.vue";
 import SharedProject from "@/views/home/project/SharedProject.vue";
 
+const route = useRoute();
+const EXTERNAL_PROJECT_FLAG_KEY = "showExternalProject";
+const truthyValues = new Set(["1", "true", "yes", "on"]);
+
+function parseBooleanFlag(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.some(item => parseBooleanFlag(item));
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  if (typeof value === "string") {
+    return truthyValues.has(value.trim().toLowerCase());
+  }
+
+  return false;
+}
+
+const showExternalProject = computed(() => parseBooleanFlag(route.query[EXTERNAL_PROJECT_FLAG_KEY]));
 </script>
 
 <template>
@@ -19,7 +46,7 @@ import SharedProject from "@/views/home/project/SharedProject.vue";
       <n-tab-pane name="shared-project" :tab="t('home.Shared Project')">
         <SharedProject scene-source="INTERNAL" />
       </n-tab-pane>
-      <n-tab-pane name="external-project" :tab="t('home.External Project')">
+      <n-tab-pane v-if="showExternalProject" name="external-project" :tab="t('home.External Project')">
         <SharedProject scene-source="EXTERNAL" :show-create="false" />
       </n-tab-pane>
     </n-tabs>
