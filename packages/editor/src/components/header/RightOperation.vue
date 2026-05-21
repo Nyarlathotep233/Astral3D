@@ -4,6 +4,7 @@ import XR from '@/components/header/right/XR.vue';
 import {App,Hooks} from "@astral3d/engine";
 import Setting from "@/components/setting/Setting.vue";
 import SaveToService from "@/components/header/right/SaveToService.vue";
+import LayoutModeToggle from "@/components/header/LayoutModeToggle.vue";
 import {t} from "@/language";
 import {Airplay} from "@vicons/carbon";
 
@@ -30,6 +31,8 @@ function handlePreview(){
 
 <template>
   <div id="rightOperation">
+    <LayoutModeToggle />
+
     <!--  保存至服务器  -->
     <SaveToService class="mr-2" />
 

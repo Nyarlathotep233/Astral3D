@@ -105,6 +105,10 @@ export default {
             Undertint: '浅色',
             Dark: '深色',
             'Main color': '主色调',
+            'Simple layout': '简洁布局',
+            'Full layout': '完整布局',
+            'Hide auxiliary panels': '隐藏部分辅助面板，减少界面干扰',
+            'Restore all function panels': '恢复全部功能面板',
         },
         scene: {
             toolbar: {

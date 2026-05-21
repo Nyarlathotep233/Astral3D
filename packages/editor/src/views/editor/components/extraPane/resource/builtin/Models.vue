@@ -24,16 +24,16 @@ import type { Ref } from "vue";
 import { cpt } from "@/language";
 import Card from "./components/ModelCard.vue";
 import {
-  editorLayoutPresetKey,
   filterByIncludeList,
   filterItemsByKey,
   listHasRestrictions,
+  useInjectedEditorLayoutPreset,
   type ModelSubCategoryKey,
 } from "@/views/editor/layoutPresets";
 
 const searchText = inject('searchText') as Ref<string>;
-const layoutPreset = inject(editorLayoutPresetKey)!;
-const modelsPreset = computed(() => layoutPreset.resource?.builtin?.models);
+const layoutPreset = useInjectedEditorLayoutPreset();
+const modelsPreset = computed(() => layoutPreset.value.resource?.builtin?.models);
 
 const allSubCategories = [
     { key: 'shape' as ModelSubCategoryKey, name: cpt('extra.resource.model.Shape') },

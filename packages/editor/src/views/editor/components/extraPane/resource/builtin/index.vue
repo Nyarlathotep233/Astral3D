@@ -41,12 +41,12 @@ import Tiles from "@/views/editor/components/extraPane/resource/builtin/Tiles.vu
 import Lights from "@/views/editor/components/extraPane/resource/builtin/Lights.vue";
 import Cameras from "@/views/editor/components/extraPane/resource/builtin/Cameras.vue";
 import {
-  editorLayoutPresetKey,
   filterByIncludeList,
+  useInjectedEditorLayoutPreset,
   type BuiltinCategoryKey,
 } from "@/views/editor/layoutPresets";
 
-const layoutPreset = inject(editorLayoutPresetKey)!;
+const layoutPreset = useInjectedEditorLayoutPreset();
 
 const allCategories = [
   { key: 'prefabs' as BuiltinCategoryKey, name: 'Prefab', icon: markRaw(ModelAlt), component: markRaw(Prefabs) },
@@ -63,13 +63,14 @@ const allCategories = [
 const visibleCategories = computed(() => {
   const allowed = filterByIncludeList(
     allCategories.map((c) => c.key),
-    layoutPreset.resource?.builtin?.categories
+    layoutPreset.value.resource?.builtin?.categories
   );
   return allCategories.filter((c) => allowed.includes(c.key));
 });
 
-const defaultCategory =
-  layoutPreset.resource?.builtin?.defaultCategory ?? "models";
+const defaultCategory = computed(
+  () => layoutPreset.value.resource?.builtin?.defaultCategory ?? "models"
+);
 
 const currentCategory = ref<BuiltinCategoryKey>("models");
 
@@ -77,8 +78,8 @@ function ensureValidCategory() {
   const keys = visibleCategories.value.map((c) => c.key);
   if (keys.length === 0) return;
   if (keys.includes(currentCategory.value)) return;
-  const preferred = keys.includes(defaultCategory as BuiltinCategoryKey)
-    ? defaultCategory
+  const preferred = keys.includes(defaultCategory.value as BuiltinCategoryKey)
+    ? defaultCategory.value
     : keys[0];
   currentCategory.value = preferred as BuiltinCategoryKey;
 }

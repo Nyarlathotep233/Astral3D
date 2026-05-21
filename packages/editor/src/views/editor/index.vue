@@ -1,14 +1,15 @@
 <script lang="ts" setup>
-import {ref, computed, onMounted, onBeforeUnmount, nextTick,provide} from 'vue';
+import {ref, computed, onMounted, onBeforeUnmount, nextTick, provide} from 'vue';
 import {Hooks,App,Package,defaultProjectInfo} from "@astral3d/engine";
 import * as Layout from './layouts';
 import {connectWebSocket} from "@/hooks/useWebSocket";
 import {applyPersistedSceneVisibility} from "@/hooks/useSceneVisibility";
 import {useRoute} from "vue-router";
 import {
+  editorLayoutModeKey,
   editorLayoutPresetKey,
-  resolveEditorLayoutPreset,
 } from "@/views/editor/layoutPresets";
+import { useEditorLayoutMode } from "@/hooks/useEditorLayoutMode";
 import {fetchGetOneScene} from "@/http/api/scenes";
 import {t} from "@/language";
 import {initializeConfig} from "@/utils/storage/config";
@@ -36,12 +37,13 @@ const resizingRightSider = ref(false);
 const isCesiumScene = ref(false);
 
 const route = useRoute();
-const editorLayoutPreset = resolveEditorLayoutPreset(
-  route.query.layout as string | undefined
-);
-provide(editorLayoutPresetKey, editorLayoutPreset);
+const layoutMode = useEditorLayoutMode();
+provide(editorLayoutModeKey, layoutMode);
+provide(editorLayoutPresetKey, layoutMode.effectivePreset);
 
-const showPluginFab = computed(() => editorLayoutPreset.pluginFab !== false);
+const showPluginFab = computed(
+  () => layoutMode.effectivePreset.value.pluginFab !== false
+);
 
 const defaultInfo = defaultProjectInfo();
 const sceneInfo = ref(defaultInfo.sceneInfo);

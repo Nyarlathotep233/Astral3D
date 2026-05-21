@@ -38,19 +38,19 @@
 </template>
 
 <script setup lang="ts">
-import {computed, inject, provide, ref} from 'vue';
+import {computed, inject, provide, ref, watch} from 'vue';
 import {Search} from "@vicons/carbon";
 import {t} from "@/language";
 import Builtin from "./builtin/index.vue";
 import Public from "./public/index.vue";
 import EsTip from "@/components/es/EsTip.vue";
 import {
-  editorLayoutPresetKey,
   filterByIncludeList,
+  useInjectedEditorLayoutPreset,
   type ResourceSourceKey,
 } from "@/views/editor/layoutPresets";
 
-const layoutPreset = inject(editorLayoutPresetKey)!;
+const layoutPreset = useInjectedEditorLayoutPreset();
 
 const searchText = ref("");
 provide('searchText', searchText);
@@ -58,19 +58,28 @@ provide('searchText', searchText);
 const allowedSources = computed(() =>
   filterByIncludeList(
     ["builtin", "public"] as ResourceSourceKey[],
-    layoutPreset.resource?.sources
+    layoutPreset.value.resource?.sources
   )
 );
 
-const defaultSource =
-  layoutPreset.resource?.defaultSource ?? "builtin";
+const defaultSource = computed(
+  () => layoutPreset.value.resource?.defaultSource ?? "builtin"
+);
 
 const initialSource = computed(() => {
-  if (allowedSources.value.includes(defaultSource)) return defaultSource;
+  if (allowedSources.value.includes(defaultSource.value)) {
+    return defaultSource.value;
+  }
   return allowedSources.value[0] ?? "builtin";
 });
 
 const type = ref<ResourceSourceKey>(initialSource.value);
+
+watch(initialSource, (source) => {
+  if (!allowedSources.value.includes(type.value)) {
+    type.value = source;
+  }
+});
 </script>
 
 <style lang="less" scoped>

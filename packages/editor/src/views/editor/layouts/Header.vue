@@ -22,12 +22,16 @@ function handleLogoClick(){
     <NavigationOperation />
   </div>
 
-  <h3>{{sceneInfo?.sceneName}}</h3>
+  <h3 class="header-title truncate m-0 flex-1 min-w-0 px-2 text-center">{{ sceneInfo?.sceneName }}</h3>
 
   <RightOperation />
 </template>
 
 <style lang="less" scoped>
+.header-title {
+  line-height: var(--header-height);
+}
+
 .n-menu.n-menu--horizontal {
   width: auto;
 

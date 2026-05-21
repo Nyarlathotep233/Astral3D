@@ -32,26 +32,26 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, inject } from "vue";
+import { computed } from "vue";
 import BIMLibrary from "./assets/BIMLibrary.vue";
 import SceneTree from "@/components/tree/SceneTree.vue";
 import CadLibrary from "./assets/CadLibrary.vue";
 import {
-  editorLayoutPresetKey,
   filterByIncludeList,
   listHasRestrictions,
+  useInjectedEditorLayoutPreset,
   type AssetLibraryKey,
 } from "@/views/editor/layoutPresets";
 
-const layoutPreset = inject(editorLayoutPresetKey)!;
+const layoutPreset = useInjectedEditorLayoutPreset();
 
 const showSceneTree = computed(
-  () => layoutPreset.left?.sceneTree !== false
+  () => layoutPreset.value.left?.sceneTree !== false
 );
 
 const assetLibraryTabs = computed(() => {
   const all: AssetLibraryKey[] = ["cad", "bim"];
-  const list = layoutPreset.left?.assetLibraries;
+  const list = layoutPreset.value.left?.assetLibraries;
   if (!listHasRestrictions(list)) return all;
   return filterByIncludeList(all, list);
 });

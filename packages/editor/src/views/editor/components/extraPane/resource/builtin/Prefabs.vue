@@ -18,14 +18,14 @@ import {computed, inject} from "vue";
 import type {Ref} from "vue";
 import PrefabCard from "./components/PrefabCard.vue";
 import {
-  editorLayoutPresetKey,
   filterItemsByKey,
+  useInjectedEditorLayoutPreset,
 } from "@/views/editor/layoutPresets";
 
 const searchText = inject('searchText') as Ref<string>;
-const layoutPreset = inject(editorLayoutPresetKey)!;
+const layoutPreset = useInjectedEditorLayoutPreset();
 const prefabItemsFilter = computed(
-  () => layoutPreset.resource?.builtin?.prefabs?.items
+  () => layoutPreset.value.resource?.builtin?.prefabs?.items
 );
 
 const allList: Array<{

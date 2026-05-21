@@ -25,19 +25,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, h, inject } from 'vue';
+import { computed, ref, h, watch } from 'vue';
 import { NIcon, useThemeVars } from 'naive-ui';
 import { CaretDown, VolumeFileStorage, AlignBoxTopLeft, SankeyDiagram } from '@vicons/carbon';
 import Resource from './resource/index.vue';
 import Log from './log/index.vue';
 import Animation from './animation/index.vue';
 import {
-  editorLayoutPresetKey,
   filterByIncludeList,
+  useInjectedEditorLayoutPreset,
   type BottomPaneKey,
 } from '@/views/editor/layoutPresets';
 
-const layoutPreset = inject(editorLayoutPresetKey)!;
+const layoutPreset = useInjectedEditorLayoutPreset();
 
 const themeVars = useThemeVars();
 const cardColor = computed(() => themeVars.value.cardColor);
@@ -67,19 +67,27 @@ const allPaneOptions = [
 const options = computed(() => {
   const allowed = filterByIncludeList(
     allPaneOptions.map((o) => o.value),
-    layoutPreset.bottom?.panes
+    layoutPreset.value.bottom?.panes
   );
   return allPaneOptions.filter((o) => allowed.includes(o.value));
 });
 
-const defaultPane = layoutPreset.bottom?.defaultPane ?? 'resource';
+const defaultPane = computed(
+  () => layoutPreset.value.bottom?.defaultPane ?? 'resource'
+);
 const initialPane = computed(() => {
   const allowed = options.value.map((o) => o.value);
-  if (allowed.includes(defaultPane)) return defaultPane;
+  if (allowed.includes(defaultPane.value)) return defaultPane.value;
   return allowed[0] ?? 'resource';
 });
 
 const selected = ref(initialPane.value);
+
+watch(initialPane, (pane) => {
+  if (!options.value.some((o) => o.value === selected.value)) {
+    selected.value = pane;
+  }
+});
 const selectedIndex = computed(() => {
   const index = options.value.findIndex((item) => item.value === selected.value);
   return index >= 0 ? index : 0;

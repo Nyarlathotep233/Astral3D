@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {h, onBeforeUnmount, onMounted, ref, markRaw, nextTick, inject, computed} from "vue";
+import {h, onBeforeUnmount, onMounted, ref, markRaw, nextTick, computed, watch} from "vue";
 import type {Component, DefineComponent} from "vue";
 import { NIcon, NTooltip } from "naive-ui";
 import type { TabsInst } from 'naive-ui'
@@ -22,9 +22,9 @@ import {
 } from "@vicons/carbon";
 
 import { t } from "@/language";
-import {Utils,Hooks} from "@astral3d/engine";
+import {App, Utils, Hooks} from "@astral3d/engine";
 import {
-  editorLayoutPresetKey,
+  useInjectedEditorLayoutPreset,
   isIncludedInList,
   listHasRestrictions,
   type SidebarTabKey,
@@ -45,9 +45,13 @@ import SidebarBillboard from "./sidebar/SidebarBillboard.vue";
 import SidebarHtmlPanel from "./sidebar/SidebarHtmlPanel.vue";
 import Sidebar3DTiles from "./sidebar/Sidebar3DTiles.vue";
 
-const layoutPreset = inject(editorLayoutPresetKey)!;
-const layoutTabsRestricted = listHasRestrictions(layoutPreset.right?.tabs);
-const layoutDefaultTab = layoutPreset.right?.defaultTab ?? "scene";
+const layoutPreset = useInjectedEditorLayoutPreset();
+const layoutTabsRestricted = computed(() =>
+  listHasRestrictions(layoutPreset.value.right?.tabs)
+);
+const layoutDefaultTab = computed(
+  () => layoutPreset.value.right?.defaultTab ?? "scene"
+);
 
 type SidebarTabGroup = "scene" | "object";
 
@@ -61,7 +65,7 @@ interface SidebarTabItem {
 const tabsInstRef = ref<TabsInst | null>(null);
 const tabs = ref<SidebarTabItem[]>([]);
 const current = ref<string>(
-  layoutTabsRestricted ? layoutDefaultTab : "scene"
+  layoutTabsRestricted.value ? layoutDefaultTab.value : "scene"
 );
 
 /** 对象组第一个可见 tab（如 object），用于在其前显示分割线 */
@@ -71,13 +75,13 @@ const dividerTabName = computed(
 
 function isSidebarTabAllowed(name: string): boolean {
   return isIncludedInList(
-    layoutPreset.right?.tabs,
+    layoutPreset.value.right?.tabs,
     name as SidebarTabKey
   );
 }
 
 function filterSidebarTabs(tabList: SidebarTabItem[]) {
-  if (!layoutTabsRestricted) return tabList;
+  if (!layoutTabsRestricted.value) return tabList;
   return tabList.filter((tab) => isSidebarTabAllowed(tab.name));
 }
 
@@ -85,8 +89,8 @@ function ensureCurrentTabVisible() {
   const names = tabs.value.map((tab) => tab.name);
   if (names.length === 0) return;
   if (names.includes(current.value)) return;
-  current.value = names.includes(layoutDefaultTab)
-    ? layoutDefaultTab
+  current.value = names.includes(layoutDefaultTab.value)
+    ? layoutDefaultTab.value
     : names[0];
 }
 
@@ -180,6 +184,11 @@ function setTabs(object){
     }
   }
 }
+
+watch(
+  () => layoutPreset.value.key,
+  () => setTabs(App.selected ?? undefined)
+);
 
 onMounted(()=>{
   Hooks.useAddSignal("objectSelected",setTabs);
