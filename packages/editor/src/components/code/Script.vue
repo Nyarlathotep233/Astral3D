@@ -3,7 +3,7 @@
     <div class="script-modal-main" :class="{ 'with-ai-pane': mode === 'javascript' }">
       <div class="script-editor-pane">
         <div v-if="isAiDiffMode" class="script-diff-banner">
-          AI 预览模式（Diff）：请确认后在右侧应用或放弃候选
+          AI 预览模式：请在右侧确认、应用或放弃候选修改
         </div>
 
         <CodeEditor
@@ -214,7 +214,7 @@ function submit(e: Event) {
   e.stopPropagation();
 
   if (isAiDiffMode.value) {
-    window.$message?.warning("当前处于 AI Diff 预览，请先应用或放弃预览。取舍后仍需点击确定保存脚本。");
+    window.$message?.warning("当前处于 AI 预览模式，请先应用或放弃预览。取舍后仍需点击确定保存脚本。");
     return;
   }
 
@@ -295,7 +295,7 @@ function submit(e: Event) {
   border: 1px solid var(--n-border-color);
   border-radius: 6px;
   overflow: hidden;
-  background: #1b1b1b;
+  background: var(--n-color);
   display: flex;
   flex-direction: column;
 }

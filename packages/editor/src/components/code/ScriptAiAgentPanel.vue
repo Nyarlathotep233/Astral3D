@@ -13,7 +13,8 @@
 
     <div class="script-ai-agent-meta">
       <div>{{ aiStatusText }}</div>
-      <div>历史按当前场景 / 对象 / 脚本保存在浏览器本地。</div>
+      <div>Agent 当前为 Demo 功能，生成结果仅供参考，不保证可靠性和可用性。</div>
+      <div>生成结果会先进入预览，确认后才会应用到编辑器。</div>
     </div>
 
     <details class="script-ai-agent-config">
@@ -23,15 +24,15 @@
           :value="selectedProfileId"
           :options="profileOptions"
           size="small"
-          placeholder="选择 AI 预设"
+          placeholder="选择 AI 配置"
           @update:value="onProfileChange"
         />
         <div class="script-ai-agent-config-row">
-          <n-input v-model:value="customProfileName" size="small" placeholder="本地配置名称" />
-          <n-button size="small" @click="saveCurrentAsCustomProfile">保存本地</n-button>
+          <n-input v-model:value="customProfileName" size="small" placeholder="配置名称" />
+          <n-button size="small" @click="saveCurrentAsCustomProfile">保存配置</n-button>
           <n-button size="small" type="warning" :disabled="!isSelectedProfileCustom" @click="deleteSelectedCustomProfile">删除</n-button>
         </div>
-        <n-input v-model:value="aiConfig.model" size="small" placeholder="model: 留空使用服务端默认" />
+        <n-input v-model:value="aiConfig.model" size="small" placeholder="模型名称（留空使用默认）" />
         <div class="script-ai-agent-config-row is-two">
           <n-select v-model:value="aiConfig.thinkingType" :options="thinkingTypeOptions" size="small" />
           <n-select
@@ -41,7 +42,7 @@
             :disabled="aiConfig.thinkingType === 'disabled'"
           />
         </div>
-        <div class="script-ai-agent-tip">复用 astral-llm-service 已有 /chat/stream 接口。</div>
+        <div class="script-ai-agent-tip">可按需调整模型参数；不熟悉时保持默认即可。</div>
       </div>
     </details>
 
@@ -56,14 +57,14 @@
           <div class="script-ai-agent-card-title">当前候选修改</div>
           <div class="script-ai-agent-card-meta">{{ candidateLineSummary }}</div>
         </div>
-        <n-tag size="small" type="warning">Diff 待处理</n-tag>
+        <n-tag size="small" type="warning">待确认</n-tag>
       </div>
       <div v-if="pendingCandidate.explanation" class="script-ai-agent-card-desc">{{ pendingCandidate.explanation }}</div>
       <div v-if="!canApplyPendingCandidate" class="script-ai-agent-warning">
         当前编辑器代码已变化。请放弃候选后重新生成，避免覆盖手动修改。
       </div>
       <div class="script-ai-agent-card-actions">
-        <n-button size="small" @click="previewPendingCandidate">查看 Diff</n-button>
+        <n-button size="small" @click="previewPendingCandidate">查看变更</n-button>
         <n-button size="small" type="primary" :disabled="!canApplyPendingCandidate" @click="applyPendingCandidate">应用到编辑器</n-button>
         <n-button size="small" @click="discardPendingCandidate">放弃</n-button>
       </div>
@@ -86,7 +87,7 @@
     <n-scrollbar ref="historyRef" class="script-ai-agent-history">
       <div class="script-ai-agent-history-inner">
         <div v-if="!aiMessages.length" class="script-ai-agent-empty">
-          像 code agent 一样直接描述需求。生成完成后会先进入 Diff 预览，不会自动保存脚本。
+          描述你希望脚本如何调整。生成结果会先进入预览，确认后才会应用。
         </div>
         <div
           v-for="msg in aiMessages"
@@ -191,9 +192,8 @@ const aiApplyMessage = ref("");
 const aiMessages = ref<AiAgentMessage[]>([]);
 const pendingCandidate = ref<AiPendingCandidate | null>(null);
 const lastAppliedChange = ref<AiAppliedChange | null>(null);
-const aiProvider = ref("stream");
 const aiModel = ref("");
-const aiStatusMessage = ref("使用 astral-llm-service /chat/stream 流式生成。");
+const aiStatusMessage = ref("准备就绪。");
 const aiThinking = ref("");
 const sessionId = ref(createId("session"));
 const customProfiles = ref<AiProfile[]>([]);
@@ -227,12 +227,11 @@ const profileOptions = computed(() => allProfiles.value.map((profile) => ({ labe
 const selectedProfile = computed(() => allProfiles.value.find((profile) => profile.id === selectedProfileId.value) || BUILTIN_AI_PROFILES[0]);
 const isSelectedProfileCustom = computed(() => !!selectedProfile.value?.custom);
 const isUsingLocalOverride = computed(() => selectedProfileId.value !== "server-default");
-const aiGenerateButtonText = computed(() => isUsingLocalOverride.value ? "发送给 Agent（本地预设）" : "发送给 Agent");
+const aiGenerateButtonText = computed(() => "发送给 Agent");
 const aiStatusText = computed(() => {
   const modelSuffix = aiModel.value ? ` / ${aiModel.value}` : "";
-  const profile = selectedProfile.value ? `配置：${selectedProfile.value.name}。` : "";
-  const overrideSuffix = isUsingLocalOverride.value ? "已启用请求级模型参数。 " : "";
-  return `${profile}${overrideSuffix}模式：${resolveProviderLabel(aiProvider.value)}${modelSuffix}。${aiStatusMessage.value}`;
+  const profile = selectedProfile.value ? `当前配置：${selectedProfile.value.name}${modelSuffix}。` : "";
+  return `${profile}${aiStatusMessage.value}`;
 });
 const canGenerate = computed(() => !aiLoading.value && !!aiRequirement.value.trim() && !pendingCandidate.value && !props.diffPending);
 const canApplyPendingCandidate = computed(() => !!pendingCandidate.value && props.source === pendingCandidate.value.baseSource);
@@ -270,11 +269,6 @@ function formatTime(value?: number) {
 }
 function countLines(text: string) {
   return text ? text.split(/\r?\n/).length : 0;
-}
-function resolveProviderLabel(provider: string) {
-  if (provider === "stream") return "LLM 流式接口";
-  if (!provider || provider === "unknown") return "未就绪";
-  return provider;
 }
 function getRoleLabel(role: AiAgentMessageRole) {
   if (role === "user") return "你";
@@ -336,7 +330,7 @@ function saveCustomProfilesToStorage() {
   try {
     localStorage.setItem(AI_PROFILE_STORAGE_KEY, JSON.stringify(customProfiles.value));
   } catch {
-    window.$message?.warning("本地存储失败，无法保存自定义 AI 配置。");
+    window.$message?.warning("配置保存失败，请检查浏览器存储权限。");
   }
 }
 function applyProfileToConfig(profile?: AiProfile) {
@@ -355,14 +349,13 @@ function onProfileChange(profileId: string) {
   const profile = allProfiles.value.find((item) => item.id === profileId);
   applyProfileToConfig(profile);
   customProfileName.value = profile?.custom ? profile.name : "";
-  aiProvider.value = "stream";
   aiModel.value = profileId === "server-default" ? "" : aiConfig.model || aiModel.value;
-  aiStatusMessage.value = profileId === "server-default" ? "使用服务端默认流式模型配置。" : "已切换到本地模型参数。";
+  aiStatusMessage.value = profileId === "server-default" ? "已切换为默认配置。" : "已切换模型配置。";
 }
 function saveCurrentAsCustomProfile() {
   const name = customProfileName.value.trim();
   if (!name) {
-    window.$message?.warning("请输入本地配置名称");
+    window.$message?.warning("请输入配置名称");
     return;
   }
   const config = { model: aiConfig.model.trim(), thinkingType: aiConfig.thinkingType, reasoningEffort: aiConfig.reasoningEffort };
@@ -382,7 +375,7 @@ function saveCurrentAsCustomProfile() {
   } catch {
     // ignore
   }
-  window.$message?.success("已保存到本地 AI 模型参数");
+  window.$message?.success("已保存 AI 模型配置");
 }
 function deleteSelectedCustomProfile() {
   if (!isSelectedProfileCustom.value) return;
@@ -390,7 +383,7 @@ function deleteSelectedCustomProfile() {
   saveCustomProfilesToStorage();
   onProfileChange("server-default");
   customProfileName.value = "";
-  window.$message?.success("已删除本地 AI 模型参数");
+  window.$message?.success("已删除 AI 模型配置");
 }
 function buildStreamModelOptions() {
   if (!isUsingLocalOverride.value) return {};
@@ -411,7 +404,7 @@ function loadSessionFromStorage() {
   try {
     const parsed = JSON.parse(localStorage.getItem(sessionStorageKey.value) || "null");
     if (!parsed || typeof parsed !== "object") {
-      aiStatusMessage.value = "当前脚本暂无本地会话。";
+      aiStatusMessage.value = "准备就绪。";
       return;
     }
     sessionId.value = String(parsed.sessionId || createId("session"));
@@ -419,11 +412,11 @@ function loadSessionFromStorage() {
     pendingCandidate.value = sanitizeCandidate(parsed.pendingCandidate);
     lastAppliedChange.value = sanitizeAppliedChange(parsed.lastAppliedChange);
     aiThinking.value = normalizeThinking(parsed.thinking);
-    aiStatusMessage.value = "已恢复当前脚本的本地会话。";
+    aiStatusMessage.value = "已载入当前脚本的会话记录。";
     if (pendingCandidate.value) previewPendingCandidate();
     void nextTick(() => historyRef.value?.scrollTo?.({ top: Number.MAX_SAFE_INTEGER }));
   } catch {
-    aiStatusMessage.value = "本地会话读取失败，已使用空会话。";
+    aiStatusMessage.value = "会话记录读取失败，已使用空会话。";
   }
 }
 function saveSessionToStorage() {
@@ -440,7 +433,7 @@ function saveSessionToStorage() {
       thinking: normalizeThinking(aiThinking.value),
     }));
   } catch {
-    window.$message?.warning("本地存储空间不足，AI 会话未能完整保存。");
+    window.$message?.warning("浏览器存储空间不足，AI 会话可能未完整保存。");
   }
 }
 function sanitizeMessages(rawMessages: any): AiAgentMessage[] {
@@ -473,20 +466,20 @@ function startNewSession() {
   sessionId.value = createId("session");
   aiRequirement.value = "";
   aiError.value = "";
-  aiApplyMessage.value = "已开始新的本地会话。";
+  aiApplyMessage.value = "已开始新的会话。";
   aiThinking.value = "";
   aiMessages.value = [];
   pendingCandidate.value = null;
   lastAppliedChange.value = null;
   emit("discard");
-  pushAiMessage("action", "已开始新的本地会话。", { save: true });
+  pushAiMessage("action", "已开始新的会话。", { save: true });
 }
 function clearCurrentSession() {
-  if (!window.confirm("确定清空当前脚本的本地 AI 聊天记录和候选修改吗？")) return;
+  if (!window.confirm("确定清空当前脚本的 AI 聊天记录和候选修改吗？")) return;
   abortActiveStream();
   aiRequirement.value = "";
   aiError.value = "";
-  aiApplyMessage.value = "已清空当前脚本的本地会话。";
+  aiApplyMessage.value = "已清空当前脚本的会话。";
   aiThinking.value = "";
   aiMessages.value = [];
   pendingCandidate.value = null;
@@ -514,7 +507,7 @@ async function generateWithAi() {
     return;
   }
   if (pendingCandidate.value || props.diffPending) {
-    aiError.value = "当前有未处理的 Diff 候选，请先应用或放弃。";
+    aiError.value = "当前有未处理的候选修改，请先应用或放弃。";
     return;
   }
 
@@ -524,10 +517,10 @@ async function generateWithAi() {
   aiError.value = "";
   aiApplyMessage.value = "";
   aiThinking.value = "";
-  aiStatusMessage.value = "正在请求模型...";
+  aiStatusMessage.value = "正在生成...";
   activeController = new AbortController();
   pushAiMessage("user", requirement);
-  const assistantMessage = pushAiMessage("assistant", "正在流式生成...");
+  const assistantMessage = pushAiMessage("assistant", "正在生成...");
 
   try {
     const prompt = buildScriptGenerationPrompt({
@@ -548,9 +541,8 @@ async function generateWithAi() {
         signal: activeController.signal,
         onMeta(meta) {
           if (requestSessionKey !== sessionStorageKey.value) return;
-          aiProvider.value = "stream";
           aiModel.value = meta.model || aiConfig.model || aiModel.value;
-          aiStatusMessage.value = "正在接收流式响应...";
+          aiStatusMessage.value = "正在接收响应...";
         },
         onReasoning(chunk) {
           if (requestSessionKey !== sessionStorageKey.value) return;
@@ -572,7 +564,7 @@ async function generateWithAi() {
     if (!recoveredSource) {
       aiError.value = "AI 返回的代码内容为空";
       if (assistantMessage) assistantMessage.content = aiError.value;
-      pushAiMessage("system", "流式响应已结束，但未解析到 source 字段或代码内容。");
+      pushAiMessage("system", "响应已结束，但未解析到可用代码内容。");
       saveSessionToStorage();
       return;
     }
@@ -587,9 +579,8 @@ async function generateWithAi() {
     };
     previewPendingCandidate();
     aiThinking.value = normalizeThinking([streamResult.reasoning || streamedReasoning, recovered.thinking].filter(Boolean).join("\n\n"));
-    aiProvider.value = "stream";
     aiModel.value = streamResult.meta?.model || aiConfig.model || aiModel.value;
-    aiStatusMessage.value = "流式生成成功。";
+    aiStatusMessage.value = "生成成功。";
     if (assistantMessage) assistantMessage.content = recovered.explanation || "已生成代码预览，请确认后应用。";
     if (aiThinking.value) pushAiMessage("system", "已捕获模型深度思考，可在上方“深度思考”面板查看。");
     recovered.warnings.filter(Boolean).forEach((warning) => pushAiMessage("system", warning));
@@ -681,7 +672,8 @@ function undoLastApply() {
   flex-direction: column;
   gap: 10px;
   overflow: hidden;
-  background: rgba(24, 24, 28, 0.92);
+  background: var(--n-color);
+  color: var(--n-text-color);
 }
 .script-ai-agent-header,
 .script-ai-agent-card-header {
@@ -782,7 +774,7 @@ function undoLastApply() {
   line-height: 1.45;
 }
 .script-ai-agent-warning {
-  color: #ffb347;
+  color: var(--n-warning-color, #f0a020);
 }
 .script-ai-agent-card-actions,
 .script-ai-agent-actions {

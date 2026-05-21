@@ -3,13 +3,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { useOsTheme } from "naive-ui";
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+import { useGlobalConfigStore } from "@/store/modules/globalConfig";
 
 const props = withDefaults(defineProps<{
   source: string,
@@ -30,6 +32,8 @@ const props = withDefaults(defineProps<{
 })
 const emits = defineEmits(["update:source"]);
 
+const globalConfigStore = useGlobalConfigStore();
+const osTheme = useOsTheme();
 const monacoEditorRef = ref();
 // 编辑器实列
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
@@ -42,6 +46,12 @@ let sqlLanguage:any = null;
 // sql语法提示示例
 let sqlProvider:monaco.IDisposable | null = null;
 let contentChangeDisposable: monaco.IDisposable | null = null;
+
+const monacoTheme = computed(() => {
+  const theme = globalConfigStore.theme;
+  const isDark = theme === "darkTheme" || (theme === "osTheme" && osTheme.value === "dark");
+  return isDark ? "vs-dark" : "vs";
+});
 
 onMounted(async () => {
   await nextTick();
@@ -159,7 +169,7 @@ function createSingleEditor() {
   editor = monaco.editor.create(monacoEditorRef.value, {
     model,
     ...Object.assign({
-      theme: 'vs-dark', //官方自带三种主题vs, hc-black, or vs-dark
+      theme: monacoTheme.value, // 官方自带三种主题 vs, hc-black, or vs-dark
       readOnly: false, // 是否只读内容不可编辑
       readOnlyMessage: { value: "不可以修改哦", supportThemeIcons: true, supportHtml: true }, // 为只读时编辑内日提示词
       codeLens: true, // 代码透镜
@@ -230,7 +240,7 @@ function createDiffEditor() {
   modifiedModel = monaco.editor.createModel(nextModified, props.mode);
 
   diffEditor = monaco.editor.createDiffEditor(monacoEditorRef.value, {
-    theme: "vs-dark",
+    theme: monacoTheme.value,
     renderSideBySide: true,
     readOnly: true,
     originalEditable: false,
@@ -333,6 +343,10 @@ watch(() => props.modifiedSource, (value) => {
 watch(() => props.config, () => {
   createEditor();
 }, { deep: true });
+
+watch(monacoTheme, (theme) => {
+  monaco.editor.setTheme(theme);
+});
 
 watch(() => monacoEditorRef.value, () => {
   if (!monacoEditorRef.value) return;
