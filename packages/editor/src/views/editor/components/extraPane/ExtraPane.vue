@@ -25,39 +25,65 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, h } from 'vue';
+import { computed, ref, h, inject } from 'vue';
 import { NIcon, useThemeVars } from 'naive-ui';
 import { CaretDown, VolumeFileStorage, AlignBoxTopLeft, SankeyDiagram } from '@vicons/carbon';
 import Resource from './resource/index.vue';
 import Log from './log/index.vue';
 import Animation from './animation/index.vue';
+import {
+  editorLayoutPresetKey,
+  filterByIncludeList,
+  type BottomPaneKey,
+} from '@/views/editor/layoutPresets';
+
+const layoutPreset = inject(editorLayoutPresetKey)!;
 
 const themeVars = useThemeVars();
 const cardColor = computed(() => themeVars.value.cardColor);
 const dividerColor = computed(() => themeVars.value.dividerColor);
 
-const selected = ref('resource');
-const selectedIndex = computed(() => options.findIndex(item => item.value === selected.value) || 0);
-const options = [
+const allPaneOptions = [
     {
         label: '资源中心',
-        value: 'resource',
+        value: 'resource' as BottomPaneKey,
         icon: VolumeFileStorage,
         component: Resource
     },
     {
         label: '动画编辑器',
-        value: 'animation',
+        value: 'animation' as BottomPaneKey,
         icon: SankeyDiagram,
         component: Animation
     },
     {
         label: '日志',
-        value: 'logs',
+        value: 'logs' as BottomPaneKey,
         icon: AlignBoxTopLeft,
         component: Log
     }
 ];
+
+const options = computed(() => {
+  const allowed = filterByIncludeList(
+    allPaneOptions.map((o) => o.value),
+    layoutPreset.bottom?.panes
+  );
+  return allPaneOptions.filter((o) => allowed.includes(o.value));
+});
+
+const defaultPane = layoutPreset.bottom?.defaultPane ?? 'resource';
+const initialPane = computed(() => {
+  const allowed = options.value.map((o) => o.value);
+  if (allowed.includes(defaultPane)) return defaultPane;
+  return allowed[0] ?? 'resource';
+});
+
+const selected = ref(initialPane.value);
+const selectedIndex = computed(() => {
+  const index = options.value.findIndex((item) => item.value === selected.value);
+  return index >= 0 ? index : 0;
+});
 
 function renderLabel(option: any) {
     return [

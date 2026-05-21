@@ -3,7 +3,7 @@
     <!-- 左侧分类 -->
     <n-card embedded class="resource-category-card w-36 h-full overflow-y-auto rounded-lg shadow-sm">
       <div class="grid grid-cols-2 gap-2">
-        <n-button class="py-2 rounded-lg h-max" :quaternary="category.key !== currentCategory" v-for="category in categories"
+        <n-button class="py-2 rounded-lg h-max" :quaternary="category.key !== currentCategory" v-for="category in visibleCategories"
                   :key="category.key" :type="category.key === currentCategory ? 'primary' : 'default'"
                   @click="handleSelectCategory(category.key)">
           <n-icon :size="30" class="text-xl mb-2">
@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, markRaw, reactive, ref, provide, useTemplateRef} from "vue";
+import {computed, markRaw, reactive, ref, provide, useTemplateRef, watch, inject} from "vue";
 import {cpt} from "@/language";
 import {Buoy, CameraAction, HeatMap, LocationCompany, LocationHeart,ChoroplethMap, ModelAlt, Opacity} from "@vicons/carbon";
 import CommonPreview from "@/components/preview/CommonPreview.vue";
@@ -40,22 +40,56 @@ import HtmlPanel from "@/views/editor/components/extraPane/resource/builtin/Html
 import Tiles from "@/views/editor/components/extraPane/resource/builtin/Tiles.vue";
 import Lights from "@/views/editor/components/extraPane/resource/builtin/Lights.vue";
 import Cameras from "@/views/editor/components/extraPane/resource/builtin/Cameras.vue";
+import {
+  editorLayoutPresetKey,
+  filterByIncludeList,
+  type BuiltinCategoryKey,
+} from "@/views/editor/layoutPresets";
 
-const currentCategory = ref("models");
-const categories = ref([
-  { key: 'prefabs', name: 'Prefab', icon: markRaw(ModelAlt), component: markRaw(Prefabs) },
-  { key: 'models', name: cpt("home.assets.Model"), icon: markRaw(ModelAlt), component: markRaw(Models) },
-  { key: 'materials', name: cpt("home.assets.Material"), icon: markRaw(Opacity), component: markRaw(Materials) },
-  { key: 'particles', name: cpt("layout.sider.Particle"), icon: markRaw(HeatMap), component: markRaw(Particles) },
-  { key: 'billboard', name: cpt("home.assets.Billboard"), icon: markRaw(LocationHeart), component: markRaw(Billboard) },
-  { key: 'htmlPanel', name: cpt("extra.resource.Html panel"), icon: markRaw(LocationCompany), component: markRaw(HtmlPanel) },
-  { key: 'tiles', name: "3D Tiles", icon: markRaw(ChoroplethMap), component: markRaw(Tiles) },
-  { key: 'lights', name: cpt("extra.resource.Light"), icon: markRaw(Buoy), component: markRaw(Lights) },
-  { key: 'cameras', name: cpt("extra.resource.Camera"), icon: markRaw(CameraAction), component: markRaw(Cameras) },
-]);
-const currentComponent = computed(() => categories.value.find(category => category.key === currentCategory.value)?.component)
+const layoutPreset = inject(editorLayoutPresetKey)!;
 
-function handleSelectCategory(key: string) {
+const allCategories = [
+  { key: 'prefabs' as BuiltinCategoryKey, name: 'Prefab', icon: markRaw(ModelAlt), component: markRaw(Prefabs) },
+  { key: 'models' as BuiltinCategoryKey, name: cpt("home.assets.Model"), icon: markRaw(ModelAlt), component: markRaw(Models) },
+  { key: 'materials' as BuiltinCategoryKey, name: cpt("home.assets.Material"), icon: markRaw(Opacity), component: markRaw(Materials) },
+  { key: 'particles' as BuiltinCategoryKey, name: cpt("layout.sider.Particle"), icon: markRaw(HeatMap), component: markRaw(Particles) },
+  { key: 'billboard' as BuiltinCategoryKey, name: cpt("home.assets.Billboard"), icon: markRaw(LocationHeart), component: markRaw(Billboard) },
+  { key: 'htmlPanel' as BuiltinCategoryKey, name: cpt("extra.resource.Html panel"), icon: markRaw(LocationCompany), component: markRaw(HtmlPanel) },
+  { key: 'tiles' as BuiltinCategoryKey, name: "3D Tiles", icon: markRaw(ChoroplethMap), component: markRaw(Tiles) },
+  { key: 'lights' as BuiltinCategoryKey, name: cpt("extra.resource.Light"), icon: markRaw(Buoy), component: markRaw(Lights) },
+  { key: 'cameras' as BuiltinCategoryKey, name: cpt("extra.resource.Camera"), icon: markRaw(CameraAction), component: markRaw(Cameras) },
+];
+
+const visibleCategories = computed(() => {
+  const allowed = filterByIncludeList(
+    allCategories.map((c) => c.key),
+    layoutPreset.resource?.builtin?.categories
+  );
+  return allCategories.filter((c) => allowed.includes(c.key));
+});
+
+const defaultCategory =
+  layoutPreset.resource?.builtin?.defaultCategory ?? "models";
+
+const currentCategory = ref<BuiltinCategoryKey>("models");
+
+function ensureValidCategory() {
+  const keys = visibleCategories.value.map((c) => c.key);
+  if (keys.length === 0) return;
+  if (keys.includes(currentCategory.value)) return;
+  const preferred = keys.includes(defaultCategory as BuiltinCategoryKey)
+    ? defaultCategory
+    : keys[0];
+  currentCategory.value = preferred as BuiltinCategoryKey;
+}
+
+watch(visibleCategories, ensureValidCategory, { immediate: true });
+
+const currentComponent = computed(() =>
+  visibleCategories.value.find((category) => category.key === currentCategory.value)?.component
+);
+
+function handleSelectCategory(key: BuiltinCategoryKey) {
   currentCategory.value = key;
 }
 

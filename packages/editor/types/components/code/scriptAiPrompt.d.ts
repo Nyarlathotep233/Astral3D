@@ -1,0 +1,20 @@
+export type ScriptGenerationPromptParams = {
+    sceneId?: string;
+    objectId?: string;
+    objectName?: string;
+    objectType?: string;
+    scriptName?: string;
+    currentSource?: string;
+    requirement: string;
+    mode?: string;
+};
+export type ScriptSourceEnvelope = {
+    source: string;
+    thinking: string;
+    explanation: string;
+    warnings: string[];
+};
+export declare const SCRIPT_API_REFERENCE = "\u811A\u672C API \u538B\u7F29\u53C2\u8003\uFF08\u6458\u81EA\u7F16\u8F91\u5668\u6587\u6863 packages/docs/.../rightSidebar/\u811A\u672C.md\uFF09\uFF1A\n- \u811A\u672C\u662F\u6302\u8F7D\u5230\u5B9E\u4F53\u6A21\u578B\u4E0A\u7684 JavaScript\uFF0C\u4E8B\u4EF6/\u751F\u547D\u5468\u671F\u7531\u7F16\u8F91\u5668\u8C03\u7528\uFF1B\u8F93\u51FA\u5B8C\u6574\u811A\u672C\u6E90\u7801\uFF0C\u4E0D\u8981 import/export\u3002\n- \u5185\u7F6E\u53D8\u91CF\uFF1A\n  - this\uFF1A\u5F53\u524D\u5B9E\u4F53\u6A21\u578B THREE.Object3D\uFF1B\u53EF\u8BFB\u5199 position/rotation/scale/visible \u7B49\u5BF9\u8C61\u5C5E\u6027\u3002\n  - THREE\uFF1AThree.js \u547D\u540D\u7A7A\u95F4\u3002\n  - helper\uFF1A\u8F85\u52A9\u7C7B\u96C6\u5408\uFF1Brenderer/scene/camera/controls/timer \u5206\u522B\u4E3A\u5F53\u524D\u6E32\u67D3\u5668\u3001\u573A\u666F\u3001\u76F8\u673A\u3001\u63A7\u5236\u5668\u3001\u8FD0\u884C\u8BA1\u65F6\u5668\u3002\n- \u5185\u7F6E\u65B9\u6CD5\uFF1Arender(delta?) \u53EF\u9A71\u52A8\u573A\u666F\u6E32\u67D3\u4E00\u5E27\u3002\n- \u751F\u547D\u5468\u671F\u51FD\u6570\uFF1A\n  - loaded()\uFF1A\u573A\u666F\u52A0\u8F7D\u5B8C\u6210\u540E\u6267\u884C\u4E00\u6B21\uFF0C\u9002\u5408\u521D\u59CB\u5316\u5BF9\u8C61\u5F15\u7528\u3001\u65B9\u5411\u3001\u901F\u5EA6\u3001\u52A8\u753B\u5B9E\u4F8B\u3002\n  - beforeAnimation(delta)\uFF1A\u6BCF\u5E27\u52A8\u753B\u5FAA\u73AF\u5F00\u59CB\u524D\u8C03\u7528\u3002\n  - afterAnimation(delta, toBeRender)\uFF1A\u6BCF\u5E27\u52A8\u753B\u5FAA\u73AF\u5B8C\u6210\u540E\u8C03\u7528\uFF1B\u82E5\u4FEE\u6539\u5BF9\u8C61\u5E76\u9700\u8981\u8FDE\u7EED\u5237\u65B0\uFF0C\u5FC5\u987B\u8C03\u7528 toBeRender(true)\u3002\n  - beforeRender(delta) / afterRender(delta)\uFF1A\u6BCF\u6B21\u6E32\u67D3\u524D/\u540E\u8C03\u7528\u3002\n  - beforeDestroy() / afterDestroy()\uFF1A\u573A\u666F\u9500\u6BC1\u524D/\u540E\u8C03\u7528\uFF0C\u9002\u5408\u505C\u6B62\u52A8\u753B\u6216\u6E05\u7406\u72B6\u6001\u3002\n- \u4E8B\u4EF6\u51FD\u6570\uFF1A\n  - onPick(intersect) / onDoubleClick(intersect)\uFF1A\u6A21\u578B\u5355\u51FB/\u53CC\u51FB\uFF0C\u53C2\u6570\u4E3A THREE.Intersection\u3002\n  - onKeyDown(event) / onKeyUp(event)\uFF1A\u5168\u5C40\u952E\u76D8\u6309\u4E0B/\u62AC\u8D77\uFF0C\u53C2\u6570\u4E3A KeyboardEvent\uFF1B\u6CE8\u610F\u51FD\u6570\u540D\u4F7F\u7528\u5927\u5199 D/U\u3002\n  - onPointerDown(event) / onPointerUp(event) / onPointerMove(event)\uFF1A\u5168\u5C40\u6307\u9488\u4E8B\u4EF6\u3002\n  - onTouchStart(event) / onTouchEnd(event)\uFF1A\u89E6\u5C4F\u4E8B\u4EF6\u3002\n- helper\uFF1A\n  - helper.objectByUuid(uuid)\uFF1A\u6309 uuid \u83B7\u53D6\u573A\u666F\u4E2D\u7684 THREE.Object3D\u3002\n  - helper.moveObject(object, parent, before)\uFF1A\u79FB\u52A8\u5BF9\u8C61\u5230\u6307\u5B9A\u7236\u7EA7/\u4F4D\u7F6E\u3002\n  - helper.removeObject(object)\uFF1A\u4ECE\u573A\u666F\u79FB\u9664\u5BF9\u8C61\u3002\n  - new helper.Animation(object)\uFF1A\u521B\u5EFA\u5BF9\u8C61\u52A8\u753B\u63A7\u5236\u5668\uFF0C\u5E38\u7528 new helper.Animation(this)\u3002\n- helper.Animation\uFF1A\n  - play(name, loop = helper.Animation.ActionLoop.LoopRepeat, timeScale = 1)\uFF1A\u64AD\u653E\u52A8\u753B\uFF0C\u652F\u6301\u94FE\u5F0F\u8C03\u7528\u3002\n  - pause(name?) / stop(name?)\uFF1A\u6682\u505C/\u505C\u6B62\u52A8\u753B\uFF0CbeforeDestroy \u4E2D\u5E94\u505C\u6B62\u957F\u671F\u52A8\u753B\u3002\n  - getAction(name)\uFF1A\u83B7\u53D6 THREE.AnimationAction\u3002\n  - ActionLoop \u53EF\u7528 LoopOnce\u3001LoopRepeat\u3001LoopPingPong\u3002";
+export declare function limitPromptText(text?: string, maxLength?: number): string;
+export declare function buildScriptGenerationPrompt(params: ScriptGenerationPromptParams): string;
+export declare function recoverSourceEnvelope(rawSource: string): ScriptSourceEnvelope;

@@ -468,7 +468,7 @@ const handleUserDataClick = () => {
       v-model:value="objectData.userData" @update:value="update" />
   </div>
 
-  <n-result v-show="!hasMaterial" status="418" title="Empty"
+  <n-result v-show="!hasMaterial" class="mt-6" status="418" title="Empty"
     :description="t('prompt[\'No material data for the time being\']')" />
 </template>
 

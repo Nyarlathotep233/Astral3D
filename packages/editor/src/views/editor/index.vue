@@ -1,9 +1,14 @@
 <script lang="ts" setup>
-import {ref, onMounted, onBeforeUnmount, nextTick,provide} from 'vue';
+import {ref, computed, onMounted, onBeforeUnmount, nextTick,provide} from 'vue';
 import {Hooks,App,Package,defaultProjectInfo} from "@astral3d/engine";
 import * as Layout from './layouts';
 import {connectWebSocket} from "@/hooks/useWebSocket";
+import {applyPersistedSceneVisibility} from "@/hooks/useSceneVisibility";
 import {useRoute} from "vue-router";
+import {
+  editorLayoutPresetKey,
+  resolveEditorLayoutPreset,
+} from "@/views/editor/layoutPresets";
 import {fetchGetOneScene} from "@/http/api/scenes";
 import {t} from "@/language";
 import {initializeConfig} from "@/utils/storage/config";
@@ -30,6 +35,14 @@ const resizingLeftSider = ref(false);
 const resizingRightSider = ref(false);
 const isCesiumScene = ref(false);
 
+const route = useRoute();
+const editorLayoutPreset = resolveEditorLayoutPreset(
+  route.query.layout as string | undefined
+);
+provide(editorLayoutPresetKey, editorLayoutPreset);
+
+const showPluginFab = computed(() => editorLayoutPreset.pluginFab !== false);
+
 const defaultInfo = defaultProjectInfo();
 const sceneInfo = ref(defaultInfo.sceneInfo);
 const drawingInfo = ref(defaultInfo.drawing);
@@ -45,6 +58,10 @@ onMounted(() => {
   // 启动websocket连接
   connectWebSocket(import.meta.env.VITE_GLOB_SOCKET_URL);
   window.addEventListener("resize", handleWindowResize);
+  Hooks.useAddSignal("sceneCleared", applyPersistedSceneVisibility);
+  Hooks.useAddSignal("sceneLoadComplete", applyPersistedSceneVisibility);
+
+  applyPersistedSceneVisibility();
 
   init();
 })
@@ -53,6 +70,8 @@ onBeforeUnmount(() => {
   stopLeftResize();
   stopRightResize();
   window.removeEventListener("resize", handleWindowResize);
+  Hooks.useRemoveSignal("sceneCleared", applyPersistedSceneVisibility);
+  Hooks.useRemoveSignal("sceneLoadComplete", applyPersistedSceneVisibility);
 });
 
 function getSiderMaxWidth(minWidth:number) {
@@ -175,7 +194,7 @@ function stopRightResize() {
 
 async function init() {
   // 获取路由参数
-  const id = useRoute().params.id as string;
+  const id = route.params.id as string;
   if (id) {
     const res = await fetchGetOneScene(id);
 
@@ -289,7 +308,7 @@ function getScene(sceneInfo) {
 </n-layout-footer> -->
     </n-layout>
 
-    <EsPlugin/>
+    <EsPlugin v-if="showPluginFab"/>
 
     <ObjectScript />
   </div>

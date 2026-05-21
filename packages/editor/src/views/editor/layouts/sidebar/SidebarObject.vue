@@ -660,7 +660,7 @@ const handleUserDataClick = () => {
         <UserData v-model:show="userDataEditorShow" @update:show="(s) => userDataEditorShow = s"
             v-model:value="objectData.userData" @update:value="update('userData')" />
     </div>
-    <n-result v-else status="418" title="Empty" :description="t('prompt[\'No object selected.\']')" />
+    <n-result v-else class="mt-6" status="418" title="Empty" :description="t('prompt[\'No object selected.\']')" />
 </template>
 
 <style lang="less" scoped>

@@ -17,8 +17,16 @@
 import {computed, inject} from "vue";
 import type {Ref} from "vue";
 import PrefabCard from "./components/PrefabCard.vue";
+import {
+  editorLayoutPresetKey,
+  filterItemsByKey,
+} from "@/views/editor/layoutPresets";
 
 const searchText = inject('searchText') as Ref<string>;
+const layoutPreset = inject(editorLayoutPresetKey)!;
+const prefabItemsFilter = computed(
+  () => layoutPreset.resource?.builtin?.prefabs?.items
+);
 
 const allList: Array<{
   key: string;
@@ -37,7 +45,8 @@ const allList: Array<{
 
 const filteredList = computed(() => {
   const keyword = searchText.value.toLowerCase();
-  return allList.filter((item) => item.name.toLowerCase().includes(keyword));
+  const byPreset = filterItemsByKey(allList, prefabItemsFilter.value);
+  return byPreset.filter((item) => item.name.toLowerCase().includes(keyword));
 });
 </script>
 

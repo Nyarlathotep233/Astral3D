@@ -100,7 +100,7 @@
     <div class="extra-pane-item-content">
       <Animation v-show="isSelectObject3D" :isSelectObject3D="isSelectObject3D"/>
 
-      <n-result v-show="!isSelectObject3D" status="418" title="Empty" class="h-full flex-center flex-col"
+      <n-result v-show="!isSelectObject3D" status="418" title="Empty" class="mt-6 h-full flex-center flex-col"
                 :description="t('prompt[\'No object selected.\']')"/>
     </div>
   </div>

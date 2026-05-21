@@ -32,7 +32,7 @@
                      :max="10" :decimal="2" :show-button="false" @change="handleTimeScaleChange()"/>
     </div>
   </div>
-  <n-result v-else status="418" title="Empty" :description="t('prompt[\'No animation data for the time being\']')"/>
+  <n-result v-else class="mt-6" status="418" title="Empty" :description="t('prompt[\'No animation data for the time being\']')"/>
 </template>
 
 <script setup lang="ts">

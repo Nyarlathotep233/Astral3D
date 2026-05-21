@@ -19,26 +19,57 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, inject, computed } from "vue";
+import { ref, inject, computed, watch } from "vue";
 import type { Ref } from "vue";
 import { cpt } from "@/language";
 import Card from "./components/ModelCard.vue";
+import {
+  editorLayoutPresetKey,
+  filterByIncludeList,
+  filterItemsByKey,
+  listHasRestrictions,
+  type ModelSubCategoryKey,
+} from "@/views/editor/layoutPresets";
 
 const searchText = inject('searchText') as Ref<string>;
+const layoutPreset = inject(editorLayoutPresetKey)!;
+const modelsPreset = computed(() => layoutPreset.resource?.builtin?.models);
 
-const activeSubCategory = ref('shape');
-const subCategories = ref([
-    { key: 'shape', name: cpt('extra.resource.model.Shape') },
-    { key: 'building', name: cpt('extra.resource.model.Building') },
-    { key: 'person', name: cpt('extra.resource.model.Person') },
-    { key: 'plant', name: cpt('extra.resource.model.Plant') },
-    { key: 'animal', name: cpt('extra.resource.model.Animal') },
-    { key: 'vehicle', name: cpt('extra.resource.model.Vehicle') },
-    { key: 'mehicle', name: cpt('extra.resource.model.Machine') },
-    { key: 'furniture', name: cpt('extra.resource.model.Furniture') },
-    { key: 'outdoor', name: cpt('extra.resource.model.Outdoor') },
-    { key: 'other', name: cpt('extra.resource.model.Other') },
-]);
+const allSubCategories = [
+    { key: 'shape' as ModelSubCategoryKey, name: cpt('extra.resource.model.Shape') },
+    { key: 'building' as ModelSubCategoryKey, name: cpt('extra.resource.model.Building') },
+    { key: 'person' as ModelSubCategoryKey, name: cpt('extra.resource.model.Person') },
+    { key: 'plant' as ModelSubCategoryKey, name: cpt('extra.resource.model.Plant') },
+    { key: 'animal' as ModelSubCategoryKey, name: cpt('extra.resource.model.Animal') },
+    { key: 'vehicle' as ModelSubCategoryKey, name: cpt('extra.resource.model.Vehicle') },
+    { key: 'mehicle' as ModelSubCategoryKey, name: cpt('extra.resource.model.Machine') },
+    { key: 'furniture' as ModelSubCategoryKey, name: cpt('extra.resource.model.Furniture') },
+    { key: 'outdoor' as ModelSubCategoryKey, name: cpt('extra.resource.model.Outdoor') },
+    { key: 'other' as ModelSubCategoryKey, name: cpt('extra.resource.model.Other') },
+];
+
+const subCategories = computed(() => {
+  const allowed = filterByIncludeList(
+    allSubCategories.map((s) => s.key),
+    modelsPreset.value?.subCategories
+  );
+  return allSubCategories.filter((s) => allowed.includes(s.key));
+});
+
+const defaultSubCategory = modelsPreset.value?.defaultSubCategory ?? 'shape';
+const activeSubCategory = ref<ModelSubCategoryKey>('shape');
+
+function ensureValidSubCategory() {
+  const keys = subCategories.value.map((s) => s.key);
+  if (keys.length === 0) return;
+  if (keys.includes(activeSubCategory.value)) return;
+  const preferred = keys.includes(defaultSubCategory)
+    ? defaultSubCategory
+    : keys[0];
+  activeSubCategory.value = preferred;
+}
+
+watch(subCategories, ensureValidSubCategory, { immediate: true });
 
 const allList = {
     // 形状
@@ -106,12 +137,20 @@ const allList = {
     ],
 }
 
+function getItemsForSubCategory(subKey: ModelSubCategoryKey) {
+  const items = allList[subKey] ?? [];
+  const itemFilter = modelsPreset.value?.items?.[subKey];
+  if (!listHasRestrictions(itemFilter)) return items;
+  return filterItemsByKey(items, itemFilter);
+}
+
 const filteredList = computed(() => {
-    return allList[activeSubCategory.value].filter((item) => (item.name.value || item.name).toLowerCase().includes(searchText.value.toLowerCase()));
+    return getItemsForSubCategory(activeSubCategory.value).filter((item) =>
+      (item.name.value || item.name).toLowerCase().includes(searchText.value.toLowerCase())
+    );
 });
 
-// 切换子分类
-function selectSubCategory(key: string) {
+function selectSubCategory(key: ModelSubCategoryKey) {
     activeSubCategory.value = key;
 }
 </script>

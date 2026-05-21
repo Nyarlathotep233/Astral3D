@@ -54,12 +54,15 @@
 import {nextTick, onBeforeUnmount, onMounted, ref, toRaw} from "vue";
 import {Color,Texture,CubeTexture,EquirectangularReflectionMapping} from "three";
 import {App,Hooks} from "@astral3d/engine";
+import {
+  readGridVisible,
+  readHelpersVisible,
+  setGridVisible,
+  setHelpersVisible,
+} from "@/hooks/useSceneVisibility";
 import {t} from "@/language";
 import EsInputNumber from "@/components/es/EsInputNumber.vue";
 import EsTexture from "@/components/es/EsTexture.vue";
-
-const GRID_STORAGE_KEY = "editor:scene-setting:grid-visible";
-const HELPERS_STORAGE_KEY = "editor:scene-setting:helpers-visible";
 
 //背景
 const backgroundType = ref("Equirectangular");
@@ -81,19 +84,14 @@ onMounted(async () => {
   await nextTick();
   restorePersistedToggles();
   refreshUI();
-  applySceneVisibility();
 
   Hooks.useAddSignal("sceneCleared", refreshUI);
   Hooks.useAddSignal("sceneGraphChanged", refreshUI);
-  Hooks.useAddSignal("sceneCleared", applySceneVisibility);
-  Hooks.useAddSignal("sceneLoadComplete", applySceneVisibility);
 })
 
 onBeforeUnmount(()=>{
   Hooks.useRemoveSignal("sceneCleared", refreshUI);
   Hooks.useRemoveSignal("sceneGraphChanged", refreshUI);
-  Hooks.useRemoveSignal("sceneCleared", applySceneVisibility);
-  Hooks.useRemoveSignal("sceneLoadComplete", applySceneVisibility);
 })
 
 // 更新树及背景/环境
@@ -154,59 +152,18 @@ function onEnvironmentChanged() {
   Hooks.useDispatchSignal("sceneEnvironmentChanged", toRaw(environmentSelect.value), toRaw(environmentTexture.value));
 }
 
-function readPersistedBoolean(key:string, fallback:boolean) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (raw === "true") return true;
-    if (raw === "false") return false;
-  } catch (error) {
-    console.warn("[SceneSetting] read localStorage failed:", error);
-  }
-
-  return fallback;
-}
-
-function persistBoolean(key:string, value:boolean) {
-  try {
-    window.localStorage.setItem(key, String(value));
-  } catch (error) {
-    console.warn("[SceneSetting] write localStorage failed:", error);
-  }
-}
-
 function restorePersistedToggles() {
-  grid.value = readPersistedBoolean(GRID_STORAGE_KEY, true);
-  helpers.value = readPersistedBoolean(HELPERS_STORAGE_KEY, true);
-}
-
-function applySceneVisibility() {
-  Hooks.useDispatchSignal("showGridChanged", grid.value);
-  applyHelpersVisibility();
+  grid.value = readGridVisible();
+  helpers.value = readHelpersVisible();
 }
 
 function handleShowGrid(value:boolean){
   grid.value = value;
-  persistBoolean(GRID_STORAGE_KEY, value);
-
-  Hooks.useDispatchSignal("showGridChanged", value);
-}
-
-function applyHelpersVisibility() {
-  if (!window.viewer) return;
-
-  window.viewer.edit = {
-    enabled: helpers.value,
-    helpers: true,
-    gizmo: true
-  }
-
-  window.viewer.render();
+  setGridVisible(value);
 }
 
 function handleShowHelpers(value:boolean){
   helpers.value = value;
-  persistBoolean(HELPERS_STORAGE_KEY, value);
-
-  applyHelpersVisibility();
+  setHelpersVisible(value);
 }
 </script>

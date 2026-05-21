@@ -159,7 +159,7 @@ const update = (method: string) => {
     </div>
   </div>
 
-  <n-result v-show="!hasGeometry" status="418" title="Empty" :description="t('prompt[\'No geometric data for the time being\']')" />
+  <n-result v-show="!hasGeometry" class="mt-6" status="418" title="Empty" :description="t('prompt[\'No geometric data for the time being\']')" />
 </template>
 
 <style lang="less">
