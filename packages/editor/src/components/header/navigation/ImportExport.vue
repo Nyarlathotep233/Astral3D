@@ -27,6 +27,7 @@ import JSZip from "jszip";
 import {t} from "@/language";
 import {App, Export, Loader, Package} from "@astral3d/engine";
 import {useGlobalConfigStore} from "@/store/modules/globalConfig";
+import {createPrefabFile} from "@/utils/common/prefab";
 
 const exportClass = new Export();
 const globalConfigStore = useGlobalConfigStore();
@@ -136,6 +137,10 @@ const exportOptions = [
       {
         label: "USDZ",
         key: "exportObjectToUSDZ"
+      },
+      {
+        label: "Prefab",
+        key: "exportObjectToPrefab"
       }
     ]
   },
@@ -959,6 +964,13 @@ async function handleExportSelect(key: string) {
   if (key.startsWith("exportObject")) {
     if (App.selected === null) {
       window.$message?.error(window.$t("prompt['No object selected.']"));
+      return;
+    }
+
+    if (key === "exportObjectToPrefab") {
+      const prefabFile = await createPrefabFile(App.selected);
+      downloadBlobFile(prefabFile, prefabFile.name);
+      window.$message?.success("Prefab 导出成功");
       return;
     }
   }

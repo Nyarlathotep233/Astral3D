@@ -1,4 +1,5 @@
 export { AddObjectCommand } from './AddObjectCommand';
+export { AddObjectWithScriptsCommand } from './AddObjectWithScriptsCommand';
 export { AddScriptCommand } from './AddScriptCommand';
 export { MoveObjectCommand } from './MoveObjectCommand';
 export { RemoveObjectCommand } from './RemoveObjectCommand';

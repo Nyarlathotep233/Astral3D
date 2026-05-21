@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons';
-import { App, Hooks, AddObjectCommand } from "@astral3d/engine";
+import { App, AddObjectWithScriptsCommand } from "@astral3d/engine";
 
 export interface IModel extends THREE.Object3D {
 	metadata: Object;
@@ -266,6 +266,7 @@ export function duplicateObjectWithScripts(sourceObject: THREE.Object3D | null) 
 
 	const sourceNodes: THREE.Object3D[] = [];
 	const duplicatedNodes: THREE.Object3D[] = [];
+	const scripts: ISceneJson['scripts'] = {};
 
 	sourceObject.traverse((node) => sourceNodes.push(node));
 	duplicatedObject.traverse((node) => duplicatedNodes.push(node));
@@ -279,14 +280,9 @@ export function duplicateObjectWithScripts(sourceObject: THREE.Object3D | null) 
 
 		if (!sourceScripts || sourceScripts.length === 0) continue;
 
-		const copiedScripts = sourceScripts.map((script) => deepCloneScript(script));
-		App.scripts[duplicatedNode.uuid] = copiedScripts;
-
-		copiedScripts.forEach((script) => {
-			Hooks.useDispatchSignal("scriptAdded", duplicatedNode, script);
-		});
+		scripts[duplicatedNode.uuid] = sourceScripts.map((script) => deepCloneScript(script));
 	}
 
-	App.execute(new AddObjectCommand(duplicatedObject));
+	App.execute(new AddObjectWithScriptsCommand(duplicatedObject, scripts));
 	return duplicatedObject;
 }

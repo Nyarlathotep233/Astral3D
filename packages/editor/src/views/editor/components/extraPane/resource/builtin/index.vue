@@ -31,6 +31,7 @@ import {computed, markRaw, reactive, ref, provide, useTemplateRef} from "vue";
 import {cpt} from "@/language";
 import {Buoy, CameraAction, HeatMap, LocationCompany, LocationHeart,ChoroplethMap, ModelAlt, Opacity} from "@vicons/carbon";
 import CommonPreview from "@/components/preview/CommonPreview.vue";
+import Prefabs from "@/views/editor/components/extraPane/resource/builtin/Prefabs.vue";
 import Models from "@/views/editor/components/extraPane/resource/builtin/Models.vue";
 import Materials from "@/views/editor/components/extraPane/resource/builtin/Materials.vue";
 import Particles from "@/views/editor/components/extraPane/resource/builtin/Particles.vue";
@@ -42,6 +43,7 @@ import Cameras from "@/views/editor/components/extraPane/resource/builtin/Camera
 
 const currentCategory = ref("models");
 const categories = ref([
+  { key: 'prefabs', name: 'Prefab', icon: markRaw(ModelAlt), component: markRaw(Prefabs) },
   { key: 'models', name: cpt("home.assets.Model"), icon: markRaw(ModelAlt), component: markRaw(Models) },
   { key: 'materials', name: cpt("home.assets.Material"), icon: markRaw(Opacity), component: markRaw(Materials) },
   { key: 'particles', name: cpt("layout.sider.Particle"), icon: markRaw(HeatMap), component: markRaw(Particles) },

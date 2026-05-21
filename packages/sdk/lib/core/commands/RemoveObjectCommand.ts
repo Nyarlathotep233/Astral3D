@@ -1,6 +1,7 @@
 import { Command } from './Command';
 import { ObjectLoader } from '../loader/ObjectLoader';
 import App from "../app/App";
+import { cloneScriptsByUuid, collectScriptsByObject, installObjectScripts, uninstallObjectScripts } from './ScriptCommandUtils';
 
 /**
  * @param object THREE.Object3D
@@ -10,8 +11,9 @@ class RemoveObjectCommand extends Command {
 	public object;
 	public parent;
 	public index;
+	public scripts: ISceneJson['scripts'];
 
-	constructor( object ) {
+	constructor( object? ) {
 		super();
 
 		this.type = 'RemoveObjectCommand';
@@ -19,18 +21,21 @@ class RemoveObjectCommand extends Command {
 
 		this.object = object;
 		this.parent = ( object !== undefined ) ? object.parent : undefined;
+		this.scripts = object !== undefined && typeof object.traverse === 'function' ? collectScriptsByObject(object) : {};
 		if ( this.parent !== undefined ) {
 			this.index = this.parent.children.indexOf( this.object );
 		}
 	}
 
 	execute() {
+		uninstallObjectScripts(this.object, this.scripts);
 		App.removeObject( this.object );
 		App.deselect();
 	}
 
 	undo() {
 		App.addObject( this.object, this.parent, this.index );
+		installObjectScripts(this.object, this.scripts);
 		App.select( this.object );
 	}
 
@@ -39,6 +44,7 @@ class RemoveObjectCommand extends Command {
 		output.object = this.object.toJSON();
 		output.index = this.index;
 		output.parentUuid = this.parent.uuid;
+		output.scripts = this.scripts;
 
 		return output;
 	}
@@ -52,6 +58,7 @@ class RemoveObjectCommand extends Command {
 		}
 
 		this.index = json.index;
+		this.scripts = cloneScriptsByUuid(json.scripts || {});
 		this.object = App.getObjectByUuid( json.object.object.uuid );
 
 		if ( this.object === undefined ) {
