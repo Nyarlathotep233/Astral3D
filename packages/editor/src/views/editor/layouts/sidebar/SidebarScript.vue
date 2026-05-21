@@ -3,13 +3,13 @@
 
   <div v-if="isSelectObject3D">
     <n-list hoverable clickable>
-      <n-list-item v-for="(script, index) in scripts" :key="index">
-        <EsInput size="small" defaultNoBorder v-model:value="script.name"
-                 @change="(n) => handleNameChange(script, n)"/>
-        <n-button size="small" class="ml-5px" @click="handleEdit(script)">
+      <n-list-item v-for="(item, index) in scripts" :key="index">
+        <EsInput size="small" defaultNoBorder v-model:value="item.name"
+                 @change="(n) => handleNameChange(item, n)"/>
+        <n-button size="small" class="ml-5px" @click="handleEdit(item.script)">
           {{ t('layout.sider.script.Edit') }}
         </n-button>
-        <n-button size="small" class="ml-5px" @click="handleRemove(script)">
+        <n-button size="small" class="ml-5px" @click="handleRemove(item.script)">
           {{ t('layout.sider.script.Remove') }}
         </n-button>
       </n-list-item>
@@ -32,7 +32,12 @@ import EsInput from "@/components/es/EsInput.vue";
 import EsDocument from "@/components/es/EsDocument.vue";
 
 const isSelectObject3D = ref(false);
-const scripts = ref<IScript.IStruct[]>([]);
+interface ScriptListItem {
+  script: IScript.IStruct;
+  name: string;
+}
+
+const scripts = ref<ScriptListItem[]>([]);
 
 onMounted(() => {
   Hooks.useAddSignal("objectSelected", objectSelected);
@@ -64,7 +69,10 @@ function updateUI() {
   // 直接使用scripts.value = App.scripts[object.uuid]会导致数据更新不及时，所以这里重新获取数据
   scripts.value = [];
   App.scripts[object.uuid]?.forEach((sc: IScript.IStruct) => {
-    scripts.value.push(sc);
+    scripts.value.push({
+      script: sc,
+      name: sc.name,
+    });
   });
 }
 
@@ -106,10 +114,23 @@ function handleNew() {
   })
 }
 
-function handleNameChange(script: IScript.IStruct, name: string) {
+function handleNameChange(item: ScriptListItem, name: string) {
   if(!App.selected) return;
 
-  App.execute(new SetScriptValueCommand(App.selected, script, 'name', name));
+  if (!name) {
+    item.name = item.script.name;
+    return;
+  }
+
+  if (name === item.script.name) return;
+
+  if (App.scripts[App.selected.uuid]?.some((s) => s !== item.script && s.name === name)) {
+    window.$message?.error(t("layout.sider.script['The script name already exists']"));
+    item.name = item.script.name;
+    return;
+  }
+
+  App.execute(new SetScriptValueCommand(App.selected, item.script, 'name', name));
 }
 
 function handleEdit(script: IScript.IStruct) {

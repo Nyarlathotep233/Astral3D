@@ -453,8 +453,8 @@ export class Signals {
     /**
      * 添加脚本
      */
-    scriptAdded(object:THREE.Object3D, _:ISceneScript){
-        this.viewer.installScripts([object.uuid]);
+    scriptAdded(object:THREE.Object3D, sc:ISceneScript){
+        this.viewer.installScripts([object.uuid], sc.name, { invokeLoaded: true });
     }
 
     /**
@@ -467,10 +467,18 @@ export class Signals {
     /**
      * 脚本变化
      */
-    scriptChanged(attributeName:string,object:THREE.Object3D, sc:ISceneScript){
-        if(attributeName !== "source") return;
+    scriptChanged(attributeName:string,object:THREE.Object3D, sc:ISceneScript, oldValue?: string){
+        if(attributeName === "source") {
+            this.viewer.installScripts([object.uuid], sc.name, { invokeLoaded: true });
+            return;
+        }
 
-        this.viewer.installScripts([object.uuid],sc.name);
+        if(attributeName === "name") {
+            if (oldValue && oldValue !== sc.name) {
+                this.viewer.uninstallScriptsByUuid(object.uuid, oldValue);
+            }
+            this.viewer.installScripts([object.uuid], sc.name, { invokeLoaded: true });
+        }
     }
 
     /**

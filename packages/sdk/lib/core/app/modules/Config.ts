@@ -18,7 +18,7 @@ class Config {
         this.config = {
             // UI相关配置
             theme: 'os',
-            mainColor: '#7FE7C4',
+            mainColor: '#388dc2',
             // 历史记录功能是否启用
             history: false,
             // 快捷键相关配置

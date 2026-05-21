@@ -170,6 +170,10 @@ let events: EventHandlers = {
 // UUID 到事件的映射
 const uuidEventMap: Map<string, Map<string, { name: string, fn: Function }[]>> = new Map();
 
+interface InstallScriptsOptions {
+    invokeLoaded?: boolean;
+}
+
 export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     public container: HTMLElement;
     public options: IViewerSetting;
@@ -594,8 +598,9 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 组装脚本（支持热更新）
      * @param uuids 传入此参数则仅组装此数组下Object.uuid的脚本
      * @param filterName 传入此参数则仅组装此数组下Object.uuid的脚本中name匹配的脚本
+     * @param options.invokeLoaded 是否在运行时安装完成后立即触发目标脚本 loaded
      */
-    installScripts(uuids?: string | string[], filterName: string = "") {
+    installScripts(uuids?: string | string[], filterName: string = "", options: InstallScriptsOptions = {}) {
         if (!this.enableScript) return;
 
         // 注册 Helper
@@ -648,6 +653,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                     THREE, helper, this.renderer, this.scene,
                     this.camera, this.modules.controls, this.timer, fns.render
                 );
+                const loadedFns: Function[] = [];
 
                 Object.entries(functions).forEach(([name, fn]) => {
                     if (!fn || !validEvents.includes(name)) {
@@ -689,7 +695,13 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
 
                     // 添加事件监听
                     this.addEventListener(name as keyof ViewerEventMap, boundFn);
+
+                    if (options.invokeLoaded && name === "loaded") {
+                        loadedFns.push(boundFn);
+                    }
                 });
+
+                loadedFns.forEach(fn => fn({ type: "loaded", target: this }));
             });
 
             // 更新 UUID 映射
@@ -724,6 +736,21 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         if (!uuidEventMap.has(uuid)) return;
 
         const uuidEvents = uuidEventMap.get(uuid)!;
+        const destroyHandlers = uuidEvents.get("beforeDestroy") || [];
+        const destroyFns = new Set<Function>();
+
+        destroyHandlers.forEach((sc) => {
+            if (filterName && filterName !== sc.name) return;
+            destroyFns.add(sc.fn);
+        });
+
+        destroyFns.forEach((fn) => {
+            try {
+                fn({ type: "beforeDestroy", target: this });
+            } catch (error) {
+                App.log.error(`[Script] beforeDestroy 执行失败: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        });
 
         const uuidEventsArray = Array.from(uuidEvents);
         for (let i = uuidEventsArray.length - 1; i >= 0; i--) {

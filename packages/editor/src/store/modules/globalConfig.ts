@@ -50,14 +50,14 @@ export const useGlobalConfigStore = defineStore('global-config', () => {
 
     /* 主色 */
     const mainColor = useStorage<IConfig.Color>("astral-main-color",  {
-        "CMYK": [56, 0, 19, 11],
-        "RGB": [99, 226, 183],
-        "hex": "#63E2B7",
-        "hexHover": "#7FE7C4",
-        "hexPressed": "#5ACEA7",
-        "hexSuppl": "#2A947D",
-        "name": "\u9e23\u7fe0\u67f3",
-        "pinyin": "mingcuiliu"
+        "CMYK": [99, 48, 11, 1],
+        "RGB": [23, 114, 180],
+        "hex": "#1772b4",
+        "hexHover": "#388dc2",
+        "hexPressed": "#033869",
+        "hexSuppl": "#0b548f",
+        "name": "\u7fa4\u9752",
+        "pinyin": "qunqing"
     });
     const setPrimaryColor = (color: IConfig.Color) => {
         const colors = generate(color.hex);

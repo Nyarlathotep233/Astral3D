@@ -113,7 +113,7 @@ export class Helper {
             color: 0x333333,
             labelColor: 0xdddddd,
             hover: {
-                color: App.config.getKey('mainColor') || "#7FE7C4",
+                color: App.config.getKey('mainColor') || "#388dc2",
                 labelColor: 0xffffff,
             },
         };

@@ -22,7 +22,7 @@ class SetScriptValueCommand extends Command {
 
 		this.type = 'SetScriptValueCommand';
 		this.name = `Set script.${attributeName}`;
-		this.updatable = true;
+		this.updatable = attributeName !== 'name';
 
 		this.object = object;
 		this.script = script;
@@ -33,15 +33,17 @@ class SetScriptValueCommand extends Command {
 	}
 
 	execute() {
+		const previousValue = this.script[this.attributeName];
 		this.script[this.attributeName] = this.newValue;
 
-		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script);
+		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script,previousValue);
 	}
 
 	undo() {
+		const previousValue = this.script[this.attributeName];
 		this.script[this.attributeName] = this.oldValue;
 
-		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script);
+		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script,previousValue);
 	}
 
 	update(cmd) {
