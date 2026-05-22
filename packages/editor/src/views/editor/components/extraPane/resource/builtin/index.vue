@@ -72,7 +72,7 @@ const defaultCategory = computed(
   () => layoutPreset.value.resource?.builtin?.defaultCategory ?? "models"
 );
 
-const currentCategory = ref<BuiltinCategoryKey>("models");
+const currentCategory = ref<BuiltinCategoryKey>(defaultCategory.value as BuiltinCategoryKey);
 
 function ensureValidCategory() {
   const keys = visibleCategories.value.map((c) => c.key);

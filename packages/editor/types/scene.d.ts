@@ -86,6 +86,8 @@ declare interface ISceneJson {
 
 declare interface ISceneFetchData extends ISceneInfo {
     exampleSceneId?: string, // 所使用的示例场景id
+    templateKey?: string,
+    templateMeta?: string,
     sceneSource?: "INTERNAL" | "EXTERNAL" | string,
     externalSystem?: string,
     externalBizId?: string,

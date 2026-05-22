@@ -1,3 +1,6 @@
+/**
+ * 布局预设类型。builtin 细粒度拓展与重构约定见同目录 README.md。
+ */
 export type IncludeList<T extends string> = "*" | T[];
 
 export type AssetLibraryKey = "cad" | "bim";
@@ -60,11 +63,13 @@ export interface EditorLayoutPreset {
     builtin?: {
       categories?: IncludeList<BuiltinCategoryKey>;
       defaultCategory?: BuiltinCategoryKey;
+      /** 分组列表；items 按子分类 key 过滤，语义见 README.md */
       models?: {
         subCategories?: IncludeList<ModelSubCategoryKey>;
         defaultSubCategory?: ModelSubCategoryKey;
         items?: Record<string, IncludeList<string>>;
       };
+      /** 扁平列表；items 直接过滤资源 key，语义见 README.md */
       prefabs?: {
         items?: IncludeList<string>;
       };

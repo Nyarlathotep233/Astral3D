@@ -1,36 +1,15 @@
 <script setup lang="ts">
 import {computed} from "vue";
-import {useRoute} from "vue-router";
 import {t} from "@/language";
 import HeaderCarousel from "@/views/home/components/HeaderCarousel.vue";
 import MyProject from "@/views/home/project/MyProject.vue";
 import SharedProject from "@/views/home/project/SharedProject.vue";
+import TemplateManagement from "@/views/home/project/TemplateManagement.vue";
+import {ADMIN_KEY_STORAGE_KEY} from "@/http/api/sceneExample";
 
-const route = useRoute();
-const EXTERNAL_PROJECT_FLAG_KEY = "showExternalProject";
-const truthyValues = new Set(["1", "true", "yes", "on"]);
-
-function parseBooleanFlag(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.some(item => parseBooleanFlag(item));
-  }
-
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "number") {
-    return value === 1;
-  }
-
-  if (typeof value === "string") {
-    return truthyValues.has(value.trim().toLowerCase());
-  }
-
-  return false;
-}
-
-const showExternalProject = computed(() => parseBooleanFlag(route.query[EXTERNAL_PROJECT_FLAG_KEY]));
+const hasAdminKey = computed(() => Boolean(window.localStorage.getItem(ADMIN_KEY_STORAGE_KEY)));
+const showExternalProject = hasAdminKey;
+const showTemplateManagement = hasAdminKey;
 </script>
 
 <template>
@@ -48,6 +27,9 @@ const showExternalProject = computed(() => parseBooleanFlag(route.query[EXTERNAL
       </n-tab-pane>
       <n-tab-pane v-if="showExternalProject" name="external-project" :tab="t('home.External Project')">
         <SharedProject scene-source="EXTERNAL" :show-create="false" />
+      </n-tab-pane>
+      <n-tab-pane v-if="showTemplateManagement" name="template-management" tab="模板管理">
+        <TemplateManagement />
       </n-tab-pane>
     </n-tabs>
   </n-layout-content>
