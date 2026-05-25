@@ -15,9 +15,9 @@ class SetScriptValueCommand extends Command {
 	private script: IScript.IStruct;
 	private attributeName: string;
 	private oldValue: any;
-	private newValue: string;
+	private newValue: any;
 
-	constructor(object:Object3D, script:IScript.IStruct, attributeName:string, newValue:string) {
+	constructor(object:Object3D, script:IScript.IStruct, attributeName:string, newValue:any) {
 		super();
 
 		this.type = 'SetScriptValueCommand';
@@ -28,26 +28,66 @@ class SetScriptValueCommand extends Command {
 		this.script = script;
 
 		this.attributeName = attributeName;
-		this.oldValue = ( script !== undefined ) ? script[ this.attributeName ] : undefined;
-		this.newValue = newValue;
+		this.oldValue = this.captureValue(script, attributeName);
+		this.newValue = attributeName === 'params' ? this.cloneParams(newValue) : newValue;
+	}
+
+	private cloneParams(params?: Record<string, unknown>) {
+		if (!params) return {};
+
+		try {
+			return JSON.parse(JSON.stringify(params));
+		} catch {
+			return { ...params };
+		}
+	}
+
+	private captureValue(script: IScript.IStruct, attributeName: string) {
+		if (attributeName === 'params') {
+			return this.cloneParams(script.params);
+		}
+
+		return script !== undefined ? script[attributeName] : undefined;
+	}
+
+	private applyParamsValue(params: Record<string, unknown>) {
+		if (!this.script.params) {
+			this.script.params = {};
+		}
+
+		for (const key of Object.keys(this.script.params)) {
+			delete this.script.params[key];
+		}
+
+		Object.assign(this.script.params, params);
 	}
 
 	execute() {
-		const previousValue = this.script[this.attributeName];
-		this.script[this.attributeName] = this.newValue;
+		const previousValue = this.captureValue(this.script, this.attributeName);
+
+		if (this.attributeName === 'params') {
+			this.applyParamsValue(this.newValue);
+		} else {
+			this.script[this.attributeName] = this.newValue;
+		}
 
 		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script,previousValue);
 	}
 
 	undo() {
-		const previousValue = this.script[this.attributeName];
-		this.script[this.attributeName] = this.oldValue;
+		const previousValue = this.captureValue(this.script, this.attributeName);
+
+		if (this.attributeName === 'params') {
+			this.applyParamsValue(this.oldValue);
+		} else {
+			this.script[this.attributeName] = this.oldValue;
+		}
 
 		useDispatchSignal("scriptChanged",this.attributeName,this.object,this.script,previousValue);
 	}
 
 	update(cmd) {
-		this.newValue = cmd.newValue;
+		this.newValue = this.attributeName === 'params' ? this.cloneParams(cmd.newValue) : cmd.newValue;
 	}
 
 	toJSON() {

@@ -22,7 +22,8 @@ declare interface ISceneInfo {
 
 declare interface ISceneScript {
     "name": string,
-    "source": string
+    "source": string,
+    "params"?: Record<string, unknown>
 }
 
 declare interface ISceneJson {

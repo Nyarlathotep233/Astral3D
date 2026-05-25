@@ -467,7 +467,12 @@ export class Signals {
     /**
      * 脚本变化
      */
-    scriptChanged(attributeName:string,object:THREE.Object3D, sc:ISceneScript, oldValue?: string){
+    scriptChanged(attributeName:string,object:THREE.Object3D, sc:ISceneScript, oldValue?: any){
+        if(attributeName === "params") {
+            this.viewer.render();
+            return;
+        }
+
         if(attributeName === "source") {
             this.viewer.installScripts([object.uuid], sc.name, { invokeLoaded: true });
             return;

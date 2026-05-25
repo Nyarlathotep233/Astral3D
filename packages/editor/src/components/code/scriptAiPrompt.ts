@@ -22,6 +22,8 @@ export const SCRIPT_API_REFERENCE = `脚本 API 压缩参考（摘自编辑器�
   - this：当前实体模型 THREE.Object3D；可读写 position/rotation/scale/visible 等对象属性。
   - THREE：Three.js 命名空间。
   - helper：辅助类集合；renderer/scene/camera/controls/timer 分别为当前渲染器、场景、相机、控制器、运行计时器。
+  - scriptParams：脚本参数对象，声明来自脚本源码中的 /* script-params ... */ JSON 注释；例如 {"speed":90,"enabled":true} 后可用 scriptParams.speed 读取。右侧脚本卡片可编辑这些参数的运行时取值。
+- 脚本参数：若需要可复制/可编辑的配置，请保留或新增源码顶部的 /* script-params ... */ 注释块，不要使用额外参数声明字段或参数声明面板。
 - 内置方法：render(delta?) 可驱动场景渲染一帧。
 - 生命周期函数：
   - loaded()：场景加载完成后执行一次，适合初始化对象引用、方向、速度、动画实例。
@@ -67,6 +69,12 @@ export function buildScriptGenerationPrompt(params: ScriptGenerationPromptParams
 - 不要给 this 挂载临时状态（禁止 this.xxx = ...）；this 只表示当前脚本对象。
 - 临时状态必须定义为脚本顶层 let/const，例如：let target = null; let axis = null; let speed = 1;
 - 不要虚构不存在的 API、生命周期或参数。
+- 如需脚本参数，使用源码注释声明：
+  /* script-params
+  {"speed":90,"enabled":true}
+  */
+  然后在脚本中通过 scriptParams.speed / scriptParams["some-key"] 读取。
+- 需要显示名或数字范围时可写 {"speed":{"type":"number","default":90,"label":"速度","min":0,"max":360,"step":5}}。
 - 必须以“当前脚本”为准，尽量最小改动，避免无关重写。
 
 ${SCRIPT_API_REFERENCE}

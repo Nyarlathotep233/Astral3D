@@ -30,7 +30,7 @@ import {
 import {Emitter} from '@/core/libs/three-nebula';
 import ParticleEmitter from "@/core/objects/ParticleEmitter.ts";
 import {ViewerPathTracer} from "@/core/viewer/ViewerPathTracer.ts";
-import {Helper as ScriptHelper} from "../script";
+import {Helper as ScriptHelper, syncScriptParamsFromSource} from "../script";
 import Tiles from "../objects/Tile.ts";
 
 export interface ViewerEventMap {
@@ -607,7 +607,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         const helper = new ScriptHelper(this.scene);
 
         // 定义注入的参数名
-        let scriptWrapParams = 'THREE,helper,renderer,scene,camera,controls,timer,render';
+        let scriptWrapParams = 'THREE,helper,scriptParams,renderer,scene,camera,controls,timer,render';
         // 定义返回的结构
         const scriptWrapResultObj = {};
         // 注入的函数绑定this
@@ -646,11 +646,15 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                 // 如果存在需要按照name过滤
                 if (filterName && filterName !== script.name) return;
 
+                const { params: scriptParams, error: scriptParamsError } = syncScriptParamsFromSource(script);
+                if (scriptParamsError) {
+                    App.log.warn(`[Script] ${script.name} 参数声明解析失败：${scriptParamsError}`);
+                }
                 const functions = new Function(
                     scriptWrapParams,
                     `${script.source}\nreturn ${scriptWrapResult};`
                 ).bind(object)(
-                    THREE, helper, this.renderer, this.scene,
+                    THREE, helper, scriptParams, this.renderer, this.scene,
                     this.camera, this.modules.controls, this.timer, fns.render
                 );
                 const loadedFns: Function[] = [];
