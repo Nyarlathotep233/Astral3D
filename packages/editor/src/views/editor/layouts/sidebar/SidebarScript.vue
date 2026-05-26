@@ -23,17 +23,10 @@
 					</div>
 				</div>
 
-				<div class="script-params">
+				<div v-if="item.paramsError || item.fields.length > 0" class="script-params">
 					<n-alert v-if="item.paramsError" type="error" class="script-params__error" :show-icon="false">
 						{{ item.paramsError }}
 					</n-alert>
-
-					<n-empty
-						v-else-if="item.fields.length === 0"
-						size="small"
-						description="在脚本源码注释中声明参数后，将在此显示运行时取值"
-						class="script-params__empty"
-					/>
 
 					<div v-else class="script-param-rows">
 						<div
@@ -392,14 +385,6 @@
 
 	.script-params {
 		padding: 10px;
-	}
-
-	.script-params__empty {
-		margin: 0;
-		padding: 8px 0;
-		border: 1px dashed var(--n-border-color);
-		border-radius: 8px;
-		background: rgba(127, 127, 127, 0.03);
 	}
 
 	.script-param-rows {

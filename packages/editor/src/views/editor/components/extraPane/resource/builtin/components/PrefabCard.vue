@@ -1,5 +1,5 @@
 <template>
-  <n-card size="small" hoverable draggable="true" @dblclick="addToScene" @dragend="dragEnd">
+  <n-card size="small" hoverable draggable="true" @contextmenu.prevent="handlePreview" @dblclick="addToScene" @dragend="dragEnd">
     <template #cover>
       <img :src="resource.image" :alt="resource.name" draggable="false" class="w-full h-full object-cover" />
     </template>
@@ -11,9 +11,11 @@
 </template>
 
 <script setup lang="ts">
+import {inject, nextTick} from "vue";
 import {useDragStore} from "@/store/modules/drag";
 import {screenToWorld} from "@/utils/common/scenes";
-import {instantiatePrefab} from "@/utils/common/prefab";
+import {instantiatePrefab, loadPrefabObject} from "@/utils/common/prefab";
+import {Utils} from "@astral3d/engine";
 
 const props = withDefaults(defineProps<{
   resource: {
@@ -32,6 +34,32 @@ const props = withDefaults(defineProps<{
 });
 
 const dragStore = useDragStore();
+const previewInfo = inject('previewInfo') as any;
+const previewRef = inject('previewRef') as any;
+
+async function handlePreview() {
+  try {
+    previewInfo.name = props.resource.name;
+    previewInfo.type = "Prefab";
+    previewInfo.fileOrUrl = "";
+    previewInfo.visible = true;
+
+    await nextTick();
+
+    const previewer = await previewRef.value?.getPreviewer();
+    if (!previewer) return;
+
+    previewer.clear();
+
+    const object = await loadPrefabObject(props.resource.path);
+    previewer.scene.add(object);
+    Utils.focusObject(object, previewer.modules.controls);
+    previewer.render();
+  } catch (error) {
+    console.error(error);
+    window.$message?.error("Prefab 预览失败");
+  }
+}
 
 async function addToScene() {
   try {

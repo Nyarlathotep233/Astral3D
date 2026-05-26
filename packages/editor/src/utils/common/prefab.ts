@@ -133,6 +133,14 @@ export async function createPrefabFile(object: THREE.Object3D) {
   return new File([blob], `${safeFilename(prefab.name)}.h3dprefab.zip`, { type: "application/zip" });
 }
 
+export async function loadPrefabObject(source: string | Blob): Promise<THREE.Object3D> {
+  const prefab = await loadPrefabPackage(source);
+  const object = await Loader.objectLoader.parseAsync(prefab.object) as THREE.Object3D;
+  object.name = object.name || prefab.name;
+
+  return object;
+}
+
 export async function instantiatePrefab(source: string | Blob, position?: THREE.Vector3) {
   const prefab = await loadPrefabPackage(source);
   const object = await Loader.objectLoader.parseAsync(prefab.object) as THREE.Object3D;
@@ -160,5 +168,6 @@ export async function instantiatePrefab(source: string | Blob, position?: THREE.
 
 export const Prefab = {
   createPrefabFile,
+  loadPrefabObject,
   instantiatePrefab,
 };
