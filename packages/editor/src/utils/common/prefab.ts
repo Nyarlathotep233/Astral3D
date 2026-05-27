@@ -15,6 +15,29 @@ export interface PrefabPackage {
   scripts: ISceneJson['scripts'];
 }
 
+export type Vector3Like = THREE.Vector3 | {
+  x?: number;
+  y?: number;
+  z?: number;
+};
+
+export type EulerLike = THREE.Euler | {
+  x?: number;
+  y?: number;
+  z?: number;
+  order?: THREE.EulerOrder;
+};
+
+export interface InstantiatePrefabOptions {
+  name?: string;
+  position?: Vector3Like;
+  rotation?: EulerLike;
+  scale?: Vector3Like;
+  userData?: Record<string, any>;
+  scriptParams?: Record<string, unknown>;
+  commandName?: string;
+}
+
 function cloneScript(script: ISceneScript): ISceneScript {
   return JSON.parse(JSON.stringify(script));
 }
@@ -92,6 +115,66 @@ function remapScripts(scripts: ISceneJson['scripts'], uuidMap: Map<string, strin
   return remappedScripts;
 }
 
+function mergeScriptParams(scripts: ISceneJson['scripts'], params?: Record<string, unknown>) {
+  if (!params || Object.keys(params).length === 0) return scripts;
+
+  Object.values(scripts || {}).forEach((scriptList) => {
+    scriptList?.forEach((script) => {
+      script.params = {
+        ...(script.params || {}),
+        ...params,
+      };
+    });
+  });
+
+  return scripts;
+}
+
+function toVector3(value: Vector3Like | undefined, fallback?: THREE.Vector3) {
+  if (!value) return fallback?.clone();
+  if (value instanceof THREE.Vector3) return value.clone();
+
+  return new THREE.Vector3(
+    Number.isFinite(value.x) ? Number(value.x) : fallback?.x ?? 0,
+    Number.isFinite(value.y) ? Number(value.y) : fallback?.y ?? 0,
+    Number.isFinite(value.z) ? Number(value.z) : fallback?.z ?? 0,
+  );
+}
+
+function toEuler(value: EulerLike | undefined, fallback?: THREE.Euler) {
+  if (!value) return fallback?.clone();
+  if (value instanceof THREE.Euler) return value.clone();
+
+  return new THREE.Euler(
+    Number.isFinite(value.x) ? Number(value.x) : fallback?.x ?? 0,
+    Number.isFinite(value.y) ? Number(value.y) : fallback?.y ?? 0,
+    Number.isFinite(value.z) ? Number(value.z) : fallback?.z ?? 0,
+    value.order || fallback?.order || "XYZ",
+  );
+}
+
+function applyPrefabOptions(object: THREE.Object3D, options: InstantiatePrefabOptions) {
+  if (options.name && options.name.trim()) {
+    object.name = options.name.trim();
+  }
+
+  const position = toVector3(options.position);
+  if (position) object.position.copy(position);
+
+  const rotation = toEuler(options.rotation);
+  if (rotation) object.rotation.copy(rotation);
+
+  const scale = toVector3(options.scale);
+  if (scale) object.scale.copy(scale);
+
+  if (options.userData) {
+    object.userData = {
+      ...object.userData,
+      ...options.userData,
+    };
+  }
+}
+
 async function loadPrefabPackage(source: string | Blob): Promise<PrefabPackage> {
   const blob = typeof source === "string" ? await fetch(source).then((res) => {
     if (!res.ok) throw new Error(`Prefab load failed: ${res.status}`);
@@ -141,11 +224,15 @@ export async function loadPrefabObject(source: string | Blob): Promise<THREE.Obj
   return object;
 }
 
-export async function instantiatePrefab(source: string | Blob, position?: THREE.Vector3) {
+export async function instantiatePrefab(source: string | Blob, positionOrOptions?: THREE.Vector3 | InstantiatePrefabOptions) {
+  const options: InstantiatePrefabOptions = positionOrOptions instanceof THREE.Vector3
+    ? { position: positionOrOptions }
+    : positionOrOptions || {};
+
   const prefab = await loadPrefabPackage(source);
   const object = await Loader.objectLoader.parseAsync(prefab.object) as THREE.Object3D;
   const uuidMap = remapObjectAndResourceUuids(object);
-  const scripts = remapScripts(prefab.scripts || {}, uuidMap);
+  const scripts = mergeScriptParams(remapScripts(prefab.scripts || {}, uuidMap), options.scriptParams);
 
   object.name = object.name || prefab.name;
   object.userData = {
@@ -157,11 +244,9 @@ export async function instantiatePrefab(source: string | Blob, position?: THREE.
     },
   };
 
-  if (position) {
-    object.position.copy(position);
-  }
+  applyPrefabOptions(object, options);
 
-  App.execute(new AddObjectWithScriptsCommand(object, scripts), `Add Prefab: ${prefab.name || object.name}`);
+  App.execute(new AddObjectWithScriptsCommand(object, scripts), options.commandName || `Add Prefab: ${prefab.name || object.name}`);
 
   return object;
 }

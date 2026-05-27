@@ -13,6 +13,11 @@ import { useEditorLayoutMode } from "@/hooks/useEditorLayoutMode";
 import {fetchGetOneScene} from "@/http/api/scenes";
 import {t} from "@/language";
 import {initializeConfig} from "@/utils/storage/config";
+import {
+  installEditorObjectsBridge,
+  setEditorObjectsBridgeReady,
+  uninstallEditorObjectsBridge,
+} from "@/utils/integration/editorObjectsBridge";
 import EsCubeLoading from "@/components/es/EsCubeLoading.vue";
 import EsPlugin from "@/components/es/EsPlugin.vue";
 import ObjectScript from "@/components/code/Script.vue";
@@ -57,6 +62,9 @@ let rightResizeStartX = 0;
 let rightResizeStartWidth = 0;
 
 onMounted(() => {
+  installEditorObjectsBridge();
+  setEditorObjectsBridgeReady(false);
+
   // 启动websocket连接
   connectWebSocket(import.meta.env.VITE_GLOB_SOCKET_URL);
   window.addEventListener("resize", handleWindowResize);
@@ -74,6 +82,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", handleWindowResize);
   Hooks.useRemoveSignal("sceneCleared", applyPersistedSceneVisibility);
   Hooks.useRemoveSignal("sceneLoadComplete", applyPersistedSceneVisibility);
+  uninstallEditorObjectsBridge();
 });
 
 function getSiderMaxWidth(minWidth:number) {
@@ -234,6 +243,7 @@ function getScene(sceneInfo) {
   if (!sceneInfo.zip) {
     window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";
     window.viewer.loadEnv(true);
+    setEditorObjectsBridgeReady(true);
 
     return;
   }
@@ -256,6 +266,7 @@ function getScene(sceneInfo) {
       window.$message?.success(t("scene['Loading completed!']"));
 
       Hooks.useDispatchSignal("sceneLoadComplete");
+      setEditorObjectsBridgeReady(true);
 
       notice.destroy();
 

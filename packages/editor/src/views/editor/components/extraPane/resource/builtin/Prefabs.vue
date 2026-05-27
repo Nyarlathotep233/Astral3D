@@ -21,6 +21,7 @@ import {
   filterItemsByKey,
   useInjectedEditorLayoutPreset,
 } from "@/views/editor/layoutPresets";
+import {BUILTIN_PREFAB_RESOURCES} from "./prefabRegistry";
 
 const searchText = inject('searchText') as Ref<string>;
 const layoutPreset = useInjectedEditorLayoutPreset();
@@ -28,24 +29,9 @@ const prefabItemsFilter = computed(
   () => layoutPreset.value.resource?.builtin?.prefabs?.items
 );
 
-const allList: Array<{
-  key: string;
-  name: string;
-  image: string;
-  path: string;
-}> = [
-  // 将编辑器导出的 .h3dprefab.zip 放到 public/static/prefabs 后，在这里配置为内置 Prefab 资源。
-  {
-    key: "tower-crane",
-    name: "塔吊",
-    image: "/static/images/resource/prefab/tower-crane.png",
-    path: "/static/prefabs/tower-crane.h3dprefab.zip",
-  },
-];
-
 const filteredList = computed(() => {
   const keyword = searchText.value.toLowerCase();
-  const byPreset = filterItemsByKey(allList, prefabItemsFilter.value);
+  const byPreset = filterItemsByKey(BUILTIN_PREFAB_RESOURCES, prefabItemsFilter.value);
   return byPreset.filter((item) => item.name.toLowerCase().includes(keyword));
 });
 </script>
