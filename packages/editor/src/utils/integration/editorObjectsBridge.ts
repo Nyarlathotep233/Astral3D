@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import {App} from "@astral3d/engine";
+import {App, AddObjectCommand, HtmlPanelConverter, MoveObjectCommand} from "@astral3d/engine";
 import {instantiatePrefab} from "@/utils/common/prefab";
 import {saveSceneToService} from "@/utils/common/saveSceneToService";
 import {getBuiltinPrefabResource} from "@/views/editor/components/extraPane/resource/builtin/prefabRegistry";
@@ -30,8 +30,14 @@ type RotationPayload = VectorPayload & {
 };
 
 type ObjectAddPayload = {
+  objectKind?: unknown;
   prefabKey?: unknown;
+  parentUuid?: unknown;
   name?: unknown;
+  html?: unknown;
+  htmlUrl?: unknown;
+  fileName?: unknown;
+  isSprite?: unknown;
   position?: VectorPayload;
   rotation?: RotationPayload;
   scale?: VectorPayload;
@@ -67,6 +73,18 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return fallback;
 }
 
 function finiteNumber(value: unknown) {
@@ -163,6 +181,7 @@ function getObjectPath(object: THREE.Object3D) {
 function serializeObject(object: THREE.Object3D) {
   return {
     uuid: object.uuid,
+    parentUuid: object.parent && object.parent !== App.scene ? object.parent.uuid : null,
     name: object.name,
     type: object.type,
     visible: object.visible,
@@ -192,7 +211,21 @@ function buildSceneQueryPayload() {
   };
 }
 
-function normalizeObjectAddPayload(payload: ObjectAddPayload | undefined) {
+function normalizeTransformPayload(payload: ObjectAddPayload) {
+  const transform = isPlainObject(payload.transform) ? payload.transform : {};
+
+  return {
+    name: stringValue(payload.name),
+    parentUuid: stringValue(payload.parentUuid),
+    position: parseVector3(payload.position ?? transform.position, "position"),
+    rotation: parseEuler(payload.rotation ?? transform.rotation),
+    scale: parseVector3(payload.scale ?? transform.scale, "scale"),
+    userData: isPlainObject(payload.userData) ? payload.userData : {},
+    commandName: stringValue(payload.commandName),
+  };
+}
+
+function normalizePrefabAddPayload(payload: ObjectAddPayload | undefined) {
   if (!isPlainObject(payload)) throw new Error("payload 必须是对象");
 
   const prefabKey = stringValue(payload.prefabKey);
@@ -201,23 +234,59 @@ function normalizeObjectAddPayload(payload: ObjectAddPayload | undefined) {
   const prefab = getBuiltinPrefabResource(prefabKey);
   if (!prefab) throw new Error(`不支持的 prefabKey: ${prefabKey}`);
 
-  const transform = isPlainObject(payload.transform) ? payload.transform : {};
-
   return {
+    ...normalizeTransformPayload(payload),
     prefab,
     prefabKey,
-    name: stringValue(payload.name),
-    position: parseVector3(payload.position ?? transform.position, "position"),
-    rotation: parseEuler(payload.rotation ?? transform.rotation),
-    scale: parseVector3(payload.scale ?? transform.scale, "scale"),
-    userData: isPlainObject(payload.userData) ? payload.userData : {},
     scriptParams: isPlainObject(payload.scriptParams) ? payload.scriptParams : {},
-    commandName: stringValue(payload.commandName),
   };
 }
 
-async function buildObjectAddPayload(payload: ObjectAddPayload | undefined) {
-  const item = normalizeObjectAddPayload(payload);
+function normalizeHtmlPanelAddPayload(payload: ObjectAddPayload | undefined) {
+  if (!isPlainObject(payload)) throw new Error("payload 必须是对象");
+
+  const html = stringValue(payload.html);
+  const htmlUrl = stringValue(payload.htmlUrl);
+
+  if (!html && !htmlUrl) {
+    throw new Error("htmlPanel 必须提供 html 或 htmlUrl");
+  }
+
+  return {
+    ...normalizeTransformPayload(payload),
+    html,
+    htmlUrl,
+    fileName: stringValue(payload.fileName) || "index.html",
+    isSprite: booleanValue(payload.isSprite, true),
+  };
+}
+
+function applyObjectOptions(object: THREE.Object3D, item: ReturnType<typeof normalizeTransformPayload>) {
+  if (item.name) object.name = item.name;
+  if (item.position) object.position.copy(item.position);
+  if (item.rotation) object.rotation.copy(item.rotation);
+  if (item.scale) object.scale.copy(item.scale);
+
+  object.userData = {
+    ...object.userData,
+    ...item.userData,
+  };
+}
+
+function anchorObjectToParent(object: THREE.Object3D, parentUuid: string, commandName?: string) {
+  if (!parentUuid) return;
+
+  const parent = App.scene.getObjectByProperty("uuid", parentUuid);
+  if (!parent) throw new Error(`parentUuid 不存在: ${parentUuid}`);
+
+  App.execute(
+    new MoveObjectCommand(object, parent, undefined),
+    commandName || `External Anchor: ${object.name || object.type}`,
+  );
+}
+
+async function buildPrefabObjectAddPayload(payload: ObjectAddPayload | undefined) {
+  const item = normalizePrefabAddPayload(payload);
   const object = await instantiatePrefab(item.prefab.path, {
     name: item.name,
     position: item.position,
@@ -227,6 +296,7 @@ async function buildObjectAddPayload(payload: ObjectAddPayload | undefined) {
     scriptParams: item.scriptParams,
     commandName: item.commandName || `External Add: ${item.name || item.prefab.name}`,
   });
+  anchorObjectToParent(object, item.parentUuid);
 
   return {
     ok: true,
@@ -234,6 +304,57 @@ async function buildObjectAddPayload(payload: ObjectAddPayload | undefined) {
     object: serializeObject(object),
     errors: [],
   };
+}
+
+async function createHtmlPanelObject(item: ReturnType<typeof normalizeHtmlPanelAddPayload>) {
+  if (item.htmlUrl) {
+    return HtmlPanelConverter.getInstance().loadAsync({
+      url: item.htmlUrl,
+      isSprite: item.isSprite,
+      fileName: item.fileName,
+    });
+  }
+
+  return HtmlPanelConverter.getInstance().parseToCSS3D({
+    isSprite: item.isSprite,
+    isSingleHtml: true,
+    codes: [
+      {
+        name: item.fileName,
+        content: item.html,
+        isIndex: true,
+      },
+    ],
+  });
+}
+
+async function buildHtmlPanelObjectAddPayload(payload: ObjectAddPayload | undefined) {
+  const item = normalizeHtmlPanelAddPayload(payload);
+  const object = await createHtmlPanelObject(item);
+
+  applyObjectOptions(object, item);
+  App.execute(
+    new AddObjectCommand(object),
+    item.commandName || `External Add HtmlPanel: ${item.name || object.name || object.type}`,
+  );
+  anchorObjectToParent(object, item.parentUuid);
+
+  return {
+    ok: true,
+    objectUuid: object.uuid,
+    object: serializeObject(object),
+    errors: [],
+  };
+}
+
+async function buildObjectAddPayload(payload: ObjectAddPayload | undefined) {
+  const objectKind = isPlainObject(payload) ? stringValue(payload.objectKind) : "";
+
+  if (objectKind === "htmlPanel") {
+    return buildHtmlPanelObjectAddPayload(payload);
+  }
+
+  return buildPrefabObjectAddPayload(payload);
 }
 
 async function buildSceneSavePayload() {
