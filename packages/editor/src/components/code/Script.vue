@@ -1,5 +1,22 @@
 <template>
-  <n-modal v-model:show="show" class="script-modal !w-95vw" preset="dialog" :title="title" :showIcon="false">
+  <n-modal v-model:show="show" class="script-modal !w-95vw" preset="dialog" :showIcon="false">
+    <template #header>
+      <div class="script-modal-header">
+        <span class="script-modal-title">{{ title }}</span>
+        <n-button
+          v-if="mode === 'javascript'"
+          tag="a"
+          size="tiny"
+          quaternary
+          :href="scriptDocDownloadUrl"
+          download="Astral3D-脚本.md"
+          @click.stop
+        >
+          下载文档
+        </n-button>
+      </div>
+    </template>
+
     <div class="script-modal-main" :class="{ 'with-ai-pane': mode === 'javascript' }">
       <div class="script-editor-pane">
         <div v-if="isAiDiffMode" class="script-diff-banner">
@@ -70,6 +87,9 @@ const script = reactive({
 const errors = ref<string[]>([]);
 const mode = ref("javascript");
 
+const SCRIPT_DOC_FILENAME = "editor-script.md";
+const scriptDocDownloadUrl = computed(() => `${normalizeBaseUrl(import.meta.env.BASE_URL)}docs/${SCRIPT_DOC_FILENAME}`);
+
 const aiBaseSource = ref("");
 const aiGeneratedSource = ref("");
 const aiDiffPending = ref(false);
@@ -86,6 +106,10 @@ const isAiDiffMode = computed(() => {
 
 let currentScript: IScript.IStruct | string | null = null;
 let currentObject: THREE.Mesh | null = null;
+
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+}
 
 onMounted(() => {
   Hooks.useAddSignal("sceneCleared", sceneCleared);
@@ -275,6 +299,20 @@ function submit(e: Event) {
 </script>
 
 <style scoped lang="less">
+.script-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.script-modal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .script-modal-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
