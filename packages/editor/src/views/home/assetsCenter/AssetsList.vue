@@ -136,7 +136,7 @@ defineExpose({
 
 <template>
   <!-- 搜索和筛选区域 -->
-  <div class="h-60px flex items-center justify-between">
+  <div class="asset-list-toolbar">
     <n-checkbox-group v-model:value="filterTags" @update:value="reload">
       <n-space item-style="display: flex;" align="center">
         <n-checkbox v-for="tag in tags" :key="tag" :value="tag" :label="tag" />
@@ -153,19 +153,21 @@ defineExpose({
 
   <!-- 资源网格展示 -->
   <n-infinite-scroll id="home-asset-cards-list" :distance="10" @load="handleLoad">
-    <n-card hoverable v-for="asset in assetsData" :key="asset.id">
+    <n-card hoverable v-for="asset in assetsData" :key="asset.id" :bordered="false" content-class="!p-0" class="asset-card">
       <template #cover>
-        <div class="absolute top-10px right-10px z-10">
-          <n-tag type="success" :bordered="false" class="ml-5px"
-                 v-for="tag in (asset.tags ? asset.tags.split(',') : [])" :key="tag">
-            {{ tag }}
-          </n-tag>
-        </div>
+        <div class="asset-cover">
+          <div class="asset-tags">
+            <n-tag type="success" :bordered="false"
+                   v-for="tag in (asset.tags ? asset.tags.split(',') : [])" :key="tag">
+              {{ tag }}
+            </n-tag>
+          </div>
 
-        <n-image preview-disabled object-fit="cover"
-                 :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/H3DEditor.svg'"
-                 class="w-full h-220px cursor-pointer hover:transform-scale-140 transition-all-200"
-                 @click="handlePreview(asset)"/>
+          <n-image preview-disabled object-fit="cover"
+                   :src="getServiceStaticFile(asset.thumbnail) || '/static/images/carousel/H3DEditor.svg'"
+                   class="asset-cover-image"
+                   @click="handlePreview(asset)"/>
+        </div>
       </template>
 
       <template #action>
@@ -195,18 +197,77 @@ defineExpose({
 </template>
 
 <style lang="less">
+.asset-list-toolbar {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  .n-input {
+    max-width: 500px;
+  }
+
+  .n-checkbox {
+    color: rgba(255, 255, 255, 0.70);
+  }
+}
+
 #home-asset-cards-list {
-  height: calc(100% - 60px);
+  height: calc(100% - 54px);
   width: 100%;
 
   .n-scrollbar-content {
     display: grid;
-    grid-gap: 1rem;
+    grid-gap: 18px;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     grid-auto-flow: row dense;
 
+    .asset-card {
+      display: block !important;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(18px);
+      transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+
+      &:hover {
+        transform: translateY(-5px);
+        background: rgba(255, 255, 255, 0.10);
+        box-shadow: 0 26px 64px rgba(0, 0, 0, 0.34);
+      }
+    }
+
     .n-card-cover {
-      height: 220px;
+      height: auto;
+      flex: none;
+    }
+
+    .n-card__action {
+      margin: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      color: rgba(255, 255, 255, 0.84);
+      background:
+        linear-gradient(135deg, rgba(var(--home-primary-rgb), 0.12), rgba(255, 255, 255, 0.04) 52%, transparent),
+        rgba(10, 16, 30, 0.54);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 12px 30px rgba(0, 0, 0, 0.20);
+      backdrop-filter: blur(16px);
+
+      h4 {
+        color: #ffffff;
+      }
+
+      .n-button {
+        color: rgba(255, 255, 255, 0.76);
+
+        &:hover {
+          color: var(--home-primary-hover);
+        }
+      }
     }
   }
 
@@ -214,4 +275,47 @@ defineExpose({
     right: -10px;
   }
 }
+
+.asset-cover {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.asset-tags {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+
+  .n-tag--success-type {
+    color: var(--home-on-primary);
+    background-color: var(--home-primary);
+  }
+}
+
+.asset-cover-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+  transition: transform 0.35s ease, filter 0.35s ease;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &:hover {
+    transform: scale(1.06);
+    filter: saturate(1.12) contrast(1.04);
+  }
+}
+
 </style>

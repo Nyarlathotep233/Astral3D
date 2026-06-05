@@ -56,11 +56,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <n-layout-content content-class="p-4 flex space-x-4">
+  <n-layout-content class="assets-center-container home-module-panel" content-class="assets-center-content">
     <!-- 左侧分类 -->
-    <n-card embedded class="assets-category-card w-40 h-full overflow-y-auto rounded-lg shadow-sm">
-      <div class="grid grid-cols-2 gap-2">
-        <n-button class="py-2 rounded-lg h-max"  :quaternary="category.key !== currentCategory" v-for="category in assetsStore.categories"
+    <n-card embedded :bordered="false" class="assets-category-card">
+      <div class="assets-category-grid">
+        <n-button class="assets-category-button"  :quaternary="category.key !== currentCategory" v-for="category in assetsStore.categories"
                   :key="category.key" :type="category.key === currentCategory ? 'primary' : 'default'"
                   @click="handleSelectCategory(category.key)">
           <div class="flex flex-col items-center">
@@ -72,13 +72,13 @@ onMounted(() => {
         </n-button>
       </div>
 
-      <n-button type="primary" class="w-full" @click="handleUploadAssetVisible">{{ t('home.assets.Upload asset') }}</n-button>
+      <n-button type="primary" class="assets-upload-button" @click="handleUploadAssetVisible">{{ t('home.assets.Upload asset') }}</n-button>
     </n-card>
 
     <!-- 右侧内容 -->
-    <div class="w-calc-10rem h-full flex-1 flex flex-col">
+    <div class="assets-main-panel">
       <!-- 子分类标签 -->
-      <div class="mb-1 flex flex-wrap items-center gap-2">
+      <div class="assets-subcategory-bar">
         <template v-for="subCategory in subCategories" :key="subCategory.key">
           <n-button v-if="!subCategory.children?.length" strong secondary round
                      :type="activeButtonKey === subCategory.key ? 'primary' : 'default'"
@@ -100,15 +100,122 @@ onMounted(() => {
 </template>
 
 <style scoped lang="less">
-.n-layout-content {
-  height: calc(100vh - var(--header-height));
+.assets-center-container {
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(var(--home-primary-rgb), 0.11), transparent 32%),
+    rgba(7, 11, 23, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 80px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(18px);
+
+  :deep(.assets-center-content) {
+    height: 100%;
+    min-height: 0;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+  }
+
+  :deep(.n-input) {
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+  }
+
+  :deep(.n-checkbox .n-checkbox-box) {
+    background: rgba(255, 255, 255, 0.05);
+  }
 
   .assets-category-card {
+    width: 270px;
+    height: 100%;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-radius: 24px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+      rgba(8, 13, 25, 0.76);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
     :deep(.n-card__content) {
-      padding: 0.6rem 0.7rem !important;
+      height: 100%;
+      padding: 16px !important;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+    }
+  }
+}
+
+.assets-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.assets-category-button {
+  height: 92px;
+  padding: 12px 8px;
+  border-radius: 18px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  :deep(.n-button__content) {
+    width: 100%;
+  }
+}
+
+:deep(.assets-category-button.n-button--primary-type) {
+  color: var(--home-on-primary);
+  box-shadow: 0 14px 30px rgba(var(--home-primary-rgb), 0.24);
+}
+
+.assets-upload-button {
+  width: 100%;
+  margin-top: 18px;
+  box-shadow: 0 14px 34px rgba(var(--home-primary-rgb), 0.24);
+}
+
+:deep(.assets-upload-button.n-button--primary-type) {
+  color: var(--home-on-primary);
+}
+
+.assets-main-panel {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.assets-subcategory-bar {
+  min-height: 42px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  :deep(.n-button) {
+    backdrop-filter: blur(12px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .assets-center-container {
+    :deep(.assets-center-content) {
+      flex-direction: column;
+    }
+
+    .assets-category-card {
+      width: 100%;
+      height: auto;
+      max-height: 220px;
     }
   }
 }
