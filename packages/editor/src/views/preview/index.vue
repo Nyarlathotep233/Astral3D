@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, provide, ref, computed } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, provide, ref, computed, watch } from "vue";
 import { useRoute } from 'vue-router';
 import { t } from "@/language";
 import { fetchGetOneScene } from "@/http/api/scenes";
@@ -15,12 +15,14 @@ import { MenuOperation } from "@/utils/preview/menuOperation";
 const route = useRoute();
 
 /**
- * 是否隐藏右侧/顶部操作工具栏
+ * 是否隐藏预览辅助 UI
  *
  * 使用方式：
- * https://vothing.haolink.cn:8070/#/editor/场景ID?hideToolbar=true
+ * https://vothing.haolink.cn:8070/#/preview/场景ID?hideToolbar=true&hideSceneTree=true&hideViewCube=true
  */
 const hideToolbar = computed(() => route.query.hideToolbar === "true");
+const hideSceneTree = computed(() => route.query.hideSceneTree === "true");
+const hideViewCube = computed(() => route.query.hideViewCube === "true");
 
 const globalStore = useGlobalConfigStore();
 const operationStore = usePreviewOperationStore();
@@ -34,6 +36,24 @@ provide("drawingInfo", drawingInfo);
 
 const viewportRef = ref();
 const initLoading = ref(true);
+
+function setViewCubeVisible() {
+  const viewHelper = window.viewer?.modules?.viewHelper;
+  if (viewHelper) {
+    viewHelper.hidden = !hideViewCube.value;
+  }
+
+  const dom = document.querySelector<HTMLElement>("#astral-viewer-helper");
+  if (dom) {
+    dom.style.display = hideViewCube.value ? "none" : "block";
+  }
+}
+
+function syncViewCubeVisible() {
+  setViewCubeVisible();
+  window.setTimeout(setViewCubeVisible, 0);
+  window.setTimeout(setViewCubeVisible, 100);
+}
 
 onMounted(async () => {
   App.setConfig({
@@ -54,10 +74,19 @@ onMounted(async () => {
     }
   });
 
+  Hooks.useAddSignal("rendererUpdated", syncViewCubeVisible);
+
   await nextTick();
+  syncViewCubeVisible();
 
   await init();
 });
+
+onBeforeUnmount(() => {
+  Hooks.useRemoveSignal("rendererUpdated", syncViewCubeVisible);
+});
+
+watch(hideViewCube, syncViewCubeVisible);
 
 async function init() {
   // 获取路由参数
@@ -174,11 +203,11 @@ function getScene(sceneInfo) {
       <template #2>
         <div ref="viewportRef" class="relative w-full h-full"></div>
 
-        <PreviewSceneTree />
+        <PreviewSceneTree v-if="!hideSceneTree" />
 
         <!-- 
           hideToolbar=true 时隐藏操作工具栏
-          示例：#/editor/场景ID?hideToolbar=true
+          示例：#/preview/场景ID?hideToolbar=true
         -->
         <PreviewOperations v-if="!hideToolbar" />
       </template>
