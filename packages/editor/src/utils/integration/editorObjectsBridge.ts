@@ -19,6 +19,19 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:8001",
 ]);
 
+export function isAllowedEditorParentOrigin(origin: string) {
+  return ALLOWED_ORIGINS.has(origin);
+}
+
+export function getAllowedEditorParentOrigin() {
+  try {
+    const origin = new URL(globalThis.document.referrer).origin;
+    return isAllowedEditorParentOrigin(origin) ? origin : "";
+  } catch {
+    return "";
+  }
+}
+
 type VectorPayload = {
   x?: unknown;
   y?: unknown;
@@ -381,12 +394,7 @@ function postResponse(message: PendingMessage, type: string, payload: Record<str
 }
 
 function getParentTargetOrigin() {
-  try {
-    const referrerOrigin = new URL(globalThis.document.referrer).origin;
-    return ALLOWED_ORIGINS.has(referrerOrigin) ? referrerOrigin : "*";
-  } catch {
-    return "*";
-  }
+  return getAllowedEditorParentOrigin() || "*";
 }
 
 function postBridgeReady() {

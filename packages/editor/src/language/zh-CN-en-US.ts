@@ -810,6 +810,20 @@ export default {
         'Explode scalar': "爆炸因子",
         "Please select initial position": "请选择初始位置",
     },
+    playMode: {
+        Run: "运行",
+        Stop: "停止",
+        Cancel: "取消",
+        Packing: "正在生成运行快照...",
+        Cancelling: "正在取消...",
+        Starting: "正在启动 Play Mode...",
+        "Restart hint": "运行中；编辑修改需停止并重新运行后生效",
+        "Start failed": "Play Mode 启动失败",
+        "First package missing": "运行快照缺少首包",
+        "Load timeout": "Play Mode 场景加载超时",
+        "Runtime error": "Play Mode 运行错误",
+        "Runtime error hint": "Play Mode 发生运行错误，请查看控制台",
+    },
     plugin: {
         "Optional plug-in": "可选插件",
         gltfHandler: {

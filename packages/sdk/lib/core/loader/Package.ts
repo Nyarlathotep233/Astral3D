@@ -255,7 +255,7 @@ export class Package {
      * @remarks 前面已打包的几何数据和材质贴图不会再次打包
      */
     async pack(packConfig: IPackConfig) {
-        packConfig.layer = packConfig.layer || 0;
+        const maxGroupLayer = packConfig.layer || 0;
 
         this.totalSize = 0;
 
@@ -280,6 +280,7 @@ export class Package {
 
         // 保存场景中需打包的group数组
         let groupArr: Group[] = [];
+        const groupLayers = new Map<string, number>();
 
         // 处理 scene 子级
         this.viewer.scene.children.forEach((child) => {
@@ -298,7 +299,7 @@ export class Package {
             if (child.type === "Group" || child.children?.length > 0) {
                 sceneJson.object.children?.push(child.uuid);
 
-                child.groupLayer = 1;
+                groupLayers.set(child.uuid, 1);
                 groupArr.push(child as Group);
 
                 child.traverseByCondition((c) => {
@@ -309,8 +310,9 @@ export class Package {
                     if (c.isTilesGroup || c.type === "TilesGroup") return;
 
                     if (c.type === "Group" || c.children?.length > 0) {
-                        c.groupLayer = c.parent.groupLayer + 1;
-                        if (c.groupLayer <= <number>packConfig.layer || packConfig.layer === 0) {
+                        const groupLayer = (groupLayers.get(c.parent?.uuid) || 0) + 1;
+                        groupLayers.set(c.uuid, groupLayer);
+                        if (groupLayer <= maxGroupLayer || maxGroupLayer === 0) {
                             groupArr.push(c);
                         }
                     }
@@ -333,7 +335,7 @@ export class Package {
         }
 
         const drawingInfo = App.project.getKey("drawing");
-        const sceneInfo = Object.assign(App.project.getKey("sceneInfo"),{
+        const sceneInfo = Object.assign({}, App.project.getKey("sceneInfo"),{
             // 覆盖原zip包位置
             zip:"",
             hasDrawing: drawingInfo.isUploaded ? 1 : 0,

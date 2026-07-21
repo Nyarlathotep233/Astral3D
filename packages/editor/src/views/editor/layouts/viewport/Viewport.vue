@@ -1,10 +1,12 @@
 <template>
-  <div class="w-full h-full">
+  <div class="relative w-full h-full">
     <Toolbar/>
 
     <div id="viewport" ref="viewportRef" class="absolute top-0 left-0 w-full h-full" @pointerdown="handleViewportPointerdown">
       <ViewportInfo/>
     </div>
+
+    <EditorPlayMode/>
 
     <!--  RVT BIM 构件信息悬浮框  -->
     <BIMProperties/>
@@ -23,6 +25,7 @@ import {usePluginStore} from "@/store/modules/plugin";
 import {installBuiltinPlugin} from "@/plugin";
 import { clearBuffer } from "@/utils/wasm/optimize";
 import ViewportInfo from "./ViewportInfo.vue";
+import EditorPlayMode from "./EditorPlayMode.vue";
 import BIMProperties from "./BIMProperties.vue";
 import IFCProperties from "./IFCProperties.vue";
 
@@ -39,6 +42,7 @@ onMounted(async () => {
 
   window.viewer = new Viewer({
     container: viewportRef.value,
+    enableScript: false,
     edit: {
       enabled: true
     },
