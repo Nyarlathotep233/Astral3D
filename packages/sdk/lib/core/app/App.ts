@@ -315,6 +315,7 @@ export class App {
             this.removeCamera(child);
             this.removeHelper(child);
             if (child.material !== undefined) this.removeMaterial(child.material);
+            if ((child.isHtmlPanel || child.isHtmlSprite) && child.element) child.element.remove();
         }, (child:THREE.Object3D) => !child.ignore);
 
         object.parent.remove(object);

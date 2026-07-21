@@ -213,7 +213,8 @@ export async function createPrefabFile(object: THREE.Object3D) {
   });
 
   const blob = await zip.generateAsync({ type: "blob" });
-  return new File([blob], `${safeFilename(prefab.name)}.h3dprefab.zip`, { type: "application/zip" });
+  const shortId = THREE.MathUtils.generateUUID().slice(0, 8);
+  return new File([blob], `${safeFilename(prefab.name)}-${shortId}.h3dprefab.zip`, { type: "application/zip" });
 }
 
 export async function loadPrefabObject(source: string | Blob): Promise<THREE.Object3D> {

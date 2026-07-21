@@ -27,7 +27,7 @@ import JSZip from "jszip";
 import {t} from "@/language";
 import {App, Export, Loader, Package} from "@astral3d/engine";
 import {useGlobalConfigStore} from "@/store/modules/globalConfig";
-import {createPrefabFile} from "@/utils/common/prefab";
+import {createPrefabFile, instantiatePrefab} from "@/utils/common/prefab";
 
 const exportClass = new Export();
 const globalConfigStore = useGlobalConfigStore();
@@ -894,6 +894,15 @@ function handleImport() {
     const target = files[0];
 
     try {
+      const prefabFiles = files.filter(file => /\.h3dprefab\.zip$/i.test(file.name));
+      if (prefabFiles.length > 0) {
+        if (files.length !== 1) throw new Error("Prefab 请单独导入");
+
+        await instantiatePrefab(target);
+        window.$message?.success("Prefab 导入成功");
+        return;
+      }
+
       // 单文件且为json时，优先尝试导入项目包；失败则回退到普通导入
       if (files.length === 1 && target && /\.json$/i.test(target.name)) {
         try {
