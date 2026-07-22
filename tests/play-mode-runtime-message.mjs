@@ -50,7 +50,12 @@ const context = vm.createContext({
 });
 vm.runInContext(towerScript, context);
 
-const root = {name: "TowerRoot", children: [], updateMatrixWorld() {}};
+const ring = {
+  name: "Ring",
+  children: [],
+  material: {color: {value: 0x00f7ff, getHex() { return this.value; }, set(value) { this.value = value; }}, opacity: 0.1},
+};
+const root = {name: "TowerRoot", children: [ring], updateMatrixWorld() {}};
 context.loaded.call(root);
 assert.deepEqual(outbound.map(({data}) => data.event), ["register", "ready"]);
 assert.equal(listeners.size, 1);
@@ -69,11 +74,22 @@ send({
   type: "h3d:runtime:event",
   channel: "tower-crane",
   event: "update",
-  payload: {id: "tower-1", rotationDeg: 45},
+  payload: {id: "tower-1", rotationDeg: 45, isAlarm: true},
 });
 assert.equal(outbound.length, 1);
 assert.equal(outbound[0].data.event, "ack");
 assert.equal(outbound[0].data.payload.ok, true);
+assert.equal(ring.material.color.value, 0xff0000);
+assert.equal(ring.material.opacity, 0.1);
+
+send({
+  type: "h3d:runtime:event",
+  channel: "tower-crane",
+  event: "update",
+  payload: {id: "tower-1", isAlarm: false},
+});
+assert.equal(ring.material.color.value, 0x00f7ff);
+assert.equal(ring.material.opacity, 0.1);
 
 outbound.length = 0;
 send({type: "h3d:runtime:event", channel: "tower-crane", event: "update", id: "tower-1", payload: {}});

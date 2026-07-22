@@ -1007,7 +1007,7 @@ export class Package {
                     group.uuid = uuid;
 
                     // requestIdleCallback(()=>{
-                    App.addObject(group, parent);
+                    App.addObject(group, parent, undefined, true);
 
                     // 管理3DTiles
                     group.traverseByCondition((c) => {

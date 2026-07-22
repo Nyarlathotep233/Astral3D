@@ -34,7 +34,7 @@ class RemoveObjectCommand extends Command {
 	}
 
 	undo() {
-		App.addObject( this.object, this.parent, this.index );
+		App.addObject( this.object, this.parent, this.index, true );
 		installObjectScripts(this.object, this.scripts);
 		App.select( this.object );
 	}

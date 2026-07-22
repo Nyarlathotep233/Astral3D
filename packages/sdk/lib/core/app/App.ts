@@ -197,7 +197,7 @@ export class App {
         useSetSignalActive('sceneGraphChanged', false);
 
         while (scene.children.length > 0) {
-            this.addObject(scene.children[0]);
+            this.addObject(scene.children[0], undefined, undefined, true);
         }
 
         useSetSignalActive('sceneGraphChanged', true);
@@ -242,8 +242,9 @@ export class App {
      * @param object
      * @param parent
      * @param index
+     * @param preserveShadow
      */
-    addObject(object:THREE.Object3D, parent?:THREE.Object3D, index?:number) {
+    addObject(object:THREE.Object3D, parent?:THREE.Object3D, index?:number, preserveShadow = false) {
         object.traverseByCondition((child) => {
             if (child.animations && child.animations.length > 0) this.clipAction(child);
             if (child.geometry !== undefined) this.addGeometry(child.geometry);
@@ -251,8 +252,8 @@ export class App {
             this.addCamera(child);
             this.addHelper(child);
 
-            // 20250325: 除灯光外默认全打开接收与投射阴影
-            if (child.isLight) return;
+            // 新增对象默认启用阴影；场景恢复、包加载和撤销删除时保留已保存的配置。
+            if (child.isLight || preserveShadow) return;
 
             child.castShadow = true;
             child.receiveShadow = true;

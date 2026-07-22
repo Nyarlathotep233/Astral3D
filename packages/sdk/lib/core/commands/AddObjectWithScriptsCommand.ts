@@ -22,7 +22,7 @@ class AddObjectWithScriptsCommand extends Command {
     }
 
     execute() {
-        App.addObject(this.object);
+        App.addObject(this.object, undefined, undefined, true);
         installObjectScripts(this.object, this.scripts);
         App.select(this.object);
     }
