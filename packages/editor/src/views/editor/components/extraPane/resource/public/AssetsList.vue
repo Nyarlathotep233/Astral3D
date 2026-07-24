@@ -7,7 +7,12 @@ import { t } from "@/language";
 import {fetchGetAssetCategoryTags, fetchGetAssetsList} from "@/http/api/assetsInfo";
 import AssetPreview from "@/components/preview/AssetPreview.vue";
 import {useDragStore} from "@/store/modules/drag";
-import {screenToWorld} from "@/utils/common/scenes";
+import {
+  addObjectAtScenePlacement,
+  type ScenePlacement,
+  screenToScenePlacement,
+  screenToWorld,
+} from "@/utils/common/scenes";
 
 const props = withDefaults(defineProps<{
   type: IAssets.SupportType,
@@ -98,14 +103,16 @@ function dragEnd(event:MouseEvent) {
       window.$message?.error(t("prompt['No object selected.']"))
     }
   }else{
-    const position = screenToWorld(dragStore.endPosition.x, dragStore.endPosition.y);
+    const position = props.type === "Model"
+      ? screenToScenePlacement(dragStore.endPosition.x, dragStore.endPosition.y)
+      : screenToWorld(dragStore.endPosition.x, dragStore.endPosition.y);
     addToScene(dragStore.getData,position)
   }
 
   dragStore.setActionTarget("");
 }
 
-function addToScene(asset: IAssets.Item,positionOrObject?: Vector3 | Object3D) {
+function addToScene(asset: IAssets.Item,positionOrObject?: Vector3 | Object3D | ScenePlacement | null) {
   let url = getServiceStaticFile(asset.file);
 
   switch (props.type) {
@@ -115,11 +122,8 @@ function addToScene(asset: IAssets.Item,positionOrObject?: Vector3 | Object3D) {
           .then(blob => {
             // const file = new File([blob],`${asset.name}.${asset.file.split('/').pop()?.split('.')[1]}`);
             const file = new File([blob],`${asset.name}${asset.file.substring(asset.file.lastIndexOf('.'))}`);
-            Loader.loadFiles([file], undefined).then((models:any) => {
-              if (positionOrObject) {
-                models[0].position.copy(positionOrObject);
-                Hooks.useDispatchSignal("sceneGraphChanged");
-              }
+            Loader.loadFiles([file], undefined, false).then((models:any) => {
+              addObjectAtScenePlacement(models[0], positionOrObject as ScenePlacement | null);
             });
           })
           .catch(() => {

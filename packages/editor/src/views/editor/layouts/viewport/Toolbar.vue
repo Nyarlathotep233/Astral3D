@@ -1,7 +1,7 @@
 <template>
   <div class="absolute top-0 left-0 w-full h-0 z-10 flex justify-between pt-1">
     <div class="pl-2">
-      <ViewportCamera/>
+      <ViewportCamera v-if="!isGisProject"/>
 
       <ViewportShading/>
     </div>
@@ -72,12 +72,13 @@
 <script lang="ts" setup>
 import {onMounted,onBeforeUnmount,ref} from "vue";
 import {Move, Renew, Minimize, Wikis, Chart3D,Tools} from '@vicons/carbon';
-import {Hooks,Utils} from '@astral3d/engine';
+import {App,Hooks,Utils} from '@astral3d/engine';
 import {t} from "@/language";
 import ViewportCamera from './ViewportCamera.vue';
 import ViewportShading from './ViewportShading.vue';
 
 const transform = ref("translate");
+const isGisProject = App.project.getKey("sceneInfo.projectType") === 1;
 function handlerRadioChange(value: string) {
   if(value === transform.value) return;
 

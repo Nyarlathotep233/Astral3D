@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import {Ref, inject, nextTick} from 'vue';
 import {useDragStore} from "@/store/modules/drag";
-import {screenToWorld} from "@/utils/common/scenes";
+import {addObjectAtScenePlacement, type ScenePlacement, screenToScenePlacement} from "@/utils/common/scenes";
 import * as Astral3D from '@astral3d/engine';
 
 const props = withDefaults(defineProps<{
@@ -61,19 +61,15 @@ async function handlePreview(){
 }
 
 // 加载模型
-function loadModel(position?: { x: number, y: number, z: number }) {
+function loadModel(position?: ScenePlacement | null) {
   if (!props.resource.path) return;
 
   fetch(props.resource.path)
       .then(res => res.blob())
       .then(blob => {
         const file = new File([blob], props.resource.path?.split('/').pop() as string || props.resource.name as string);
-        Astral3D.Loader.loadFiles([file], undefined).then((models:any) => {
-          if (position) {
-            models[0].position.copy(position);
-            Astral3D.Hooks.useDispatchSignal("sceneGraphChanged");
-          }
-        });
+        Astral3D.Loader.loadFiles([file], undefined, false)
+          .then((models:any) => addObjectAtScenePlacement(models[0], position));
       });
 }
 
@@ -82,7 +78,7 @@ function addToScene() {
   if (!props.resource.path) {
     const obj = Astral3D[props.resource.key]();
 
-    Astral3D.App.execute(new Astral3D.AddObjectCommand(obj));
+    addObjectAtScenePlacement(obj);
   } else {
     loadModel();
   }
@@ -94,11 +90,10 @@ const dragStore = useDragStore();
 function dragEnd() {
   if (dragStore.getActionTarget !== "addToScene" || dragStore.endArea !== "Scene") return;
 
-  const position = screenToWorld(dragStore.endPosition.x, dragStore.endPosition.y);
+  const position = screenToScenePlacement(dragStore.endPosition.x, dragStore.endPosition.y);
   if (!props.resource.path) {
     const obj = Astral3D[props.resource.key]();
-    obj.position.copy(position);
-    Astral3D.App.execute(new Astral3D.AddObjectCommand(obj));
+    addObjectAtScenePlacement(obj, position);
   } else {
     loadModel(position);
   }

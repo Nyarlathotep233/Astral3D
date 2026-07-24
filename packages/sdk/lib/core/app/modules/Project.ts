@@ -166,7 +166,7 @@ export const defaultProjectInfo = (): IAppProject.Info => ({
         sceneIntroduction: "",
         // 场景版本
         sceneVersion: 1,
-        // 项目类型。0：Web3D-THREE  1：WebGIS-Cesium
+        // 项目类型。0：Web3D  1：WebGIS
         projectType: 0,
         // 场景封面图
         coverPicture: "",
@@ -176,8 +176,8 @@ export const defaultProjectInfo = (): IAppProject.Info => ({
         zip: "",
         // 场景zip包大小
         zipSize: "0",
-        // WebGIS-Cesium 类型项目的基础Cesium配置
-        cesiumConfig: undefined
+        // WebGIS 项目配置
+        gisConfig: undefined
     },
     // 图纸
     drawing: {

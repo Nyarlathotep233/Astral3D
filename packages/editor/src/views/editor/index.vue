@@ -39,8 +39,6 @@ const leftSiderWidth = ref(readLeftSiderWidth());
 const rightSiderWidth = ref(readRightSiderWidth());
 const resizingLeftSider = ref(false);
 const resizingRightSider = ref(false);
-const isCesiumScene = ref(false);
-
 const route = useRoute();
 const layoutMode = useEditorLayoutMode();
 provide(editorLayoutModeKey, layoutMode);
@@ -214,16 +212,6 @@ async function init() {
       return;
     }
 
-    if (res.data.cesiumConfig) {
-      if (typeof res.data.cesiumConfig === 'string') {
-        res.data.cesiumConfig = JSON.parse(res.data.cesiumConfig);
-      }
-    } else {
-      res.data.cesiumConfig = undefined;
-    }
-
-    isCesiumScene.value = res.data.projectType === 1;
-
     App.project.setKey('sceneInfo',res.data);
     sceneInfo.value = res.data;
 
@@ -260,6 +248,10 @@ function getScene(sceneInfo) {
   p.unpack({
     url: sceneInfo.zip,
     onSceneLoad: () => {
+      if (sceneInfo.projectType === 1 && sceneInfo.gisConfig) {
+        window.viewer.modules.gisLayer.enable(sceneInfo.gisConfig, {applyInitialView: false});
+        window.viewer.modules.gisLayer.rehydrateAnchors(App.scene);
+      }
       drawingInfo.value = App.project.getKey("drawing");
     },
     onComplete: () => {
@@ -300,8 +292,7 @@ function getScene(sceneInfo) {
         />
 
         <n-layout-content>
-          <Layout.Scene v-if="!isCesiumScene"></Layout.Scene>
-<!--          <Layout.Cesium v-else></Layout.Cesium>-->
+          <Layout.Scene/>
         </n-layout-content>
         <div
           v-show="!rightCollapsed"

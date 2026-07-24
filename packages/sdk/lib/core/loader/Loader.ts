@@ -159,13 +159,15 @@ class Loader {
         this._exrLoader = value;
     }
 
-	loadItemList(items) {
-		LoaderUtils.getFilesFromItemList( items, ( files, filesMap )=>{
-			this.loadFiles( files, filesMap);
-		} );
+	loadItemList(items, addToScene = true): Promise<THREE.Object3D[]> {
+        return new Promise((resolve, reject) => {
+            LoaderUtils.getFilesFromItemList(items, (files, filesMap) => {
+                this.loadFiles(files, filesMap, addToScene).then(resolve, reject);
+            });
+        });
 	}
 
-	loadFiles(files, filesMap): Promise<THREE.Object3D[]> {
+	loadFiles(files, filesMap, addToScene = true): Promise<THREE.Object3D[]> {
         return new Promise((resolve, reject) => {
             const promises: Promise<THREE.Object3D>[] = [];
 
@@ -196,7 +198,7 @@ class Loader {
                         materials.preload();
                         mtlMaterials = materials;
                         for (let i = 0; i < files.length; i++) {
-                            promises.push(this.loadFile(files[i], manager, mtlMaterials));
+                            promises.push(this.loadFile(files[i], manager, mtlMaterials, addToScene));
                         }
                         Promise.all(promises).then((models) => {
                             resolve(models);
@@ -207,7 +209,7 @@ class Loader {
                     reader.readAsText(files[mtlIndex]);
                 } else {
                     for (let i = 0; i < files.length; i++) {
-                        promises.push(this.loadFile(files[i], manager));
+                        promises.push(this.loadFile(files[i], manager, null, addToScene));
                     }
                     Promise.all(promises).then((models) => {
                         resolve(models);

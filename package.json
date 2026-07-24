@@ -17,7 +17,8 @@
         "sdk:dev": "pnpm run -C packages/sdk dev",
         "sdk:build": "pnpm run -C packages/sdk build",
         "examples:dev": "pnpm run -C packages/examples dev",
-        "examples:build": "pnpm run -C packages/examples build"
+        "examples:build": "pnpm run -C packages/examples build",
+        "gis:self-check": "node tests/gis-layer-self-check.mjs"
     },
     "engines": {
         "node": ">=23.0.0"

@@ -5,7 +5,7 @@ import {t} from "@/language";
 import {fetchSceneExampleList} from "@/http/api/sceneExample";
 import ProjectInfoForm from "@/components/project/ProjectInfoForm.vue";
 import {App,defaultProjectInfo} from "@astral3d/engine";
-import CesiumConfig from "@/components/project/CesiumConfig.vue";
+import GisConfig from "@/components/project/GisConfig.vue";
 import {fetchAddScene} from "@/http/api/scenes";
 import EsTip from "@/components/es/EsTip.vue";
 import {getServiceStaticFile} from "@/utils/common/file";
@@ -18,7 +18,7 @@ withDefaults(defineProps<{
 const emits = defineEmits(['update:visible', "refresh"]);
 
 const projectInfoFormRef = ref();
-const cesiumConfigRef = ref();
+const gisConfigRef = ref();
 
 const spin = ref(false);
 
@@ -27,7 +27,7 @@ const currentType = ref<"Web3D" | "WebGIS">("Web3D");
 const currentExample = ref<ISceneFetchData | null>(null);
 const typeList: { name: string, type: "Web3D" | "WebGIS", img: string,isDev:boolean }[] = [
   {name: "Web3D", type: "Web3D", img: "/static/images/placeholder/Web3D.jpg",isDev:false},
-  // {name: "WebGIS", type: "WebGIS", img: "/static/images/placeholder/WebGIS.jpg",isDev:true},
+  {name: "WebGIS", type: "WebGIS", img: "/static/images/placeholder/WebGIS.jpg",isDev:true},
 ];
 const exampleList = reactive<{
   Web3D: ISceneFetchData[],
@@ -49,7 +49,7 @@ async function getExampleScene() {
         exampleList.Web3D.push(item);
         break;
       case 1:
-        exampleList.Web3D.push(item);
+        exampleList.WebGIS.push(item);
         break;
     }
   })
@@ -85,10 +85,12 @@ function handleSubmit() {
   projectInfoFormRef.value.validate().then(() => {
     const submit = async () => {
       const data: ISceneFetchData = projectInfoFormRef.value.getData();
-      let cesiumData;
+      let gisData;
       if (currentType.value === 'WebGIS') {
-        cesiumData = cesiumConfigRef.value.getData();
+        gisData = gisConfigRef.value.getData();
         data.projectType = 1;
+      } else {
+        data.projectType = 0;
       }
 
       spin.value = true;
@@ -99,7 +101,7 @@ function handleSubmit() {
         coverPicture:"",
         sceneVersion:1,
         exampleSceneId: data.id,
-        cesiumConfig: cesiumData ? JSON.stringify(cesiumData) : undefined
+        gisConfig: gisData
       })
 
       spin.value = false;
@@ -129,10 +131,10 @@ function handleSubmit() {
 
     // 如果是创建GIS项目，还得验证GIS表单
     if (currentType.value === 'WebGIS') {
-      cesiumConfigRef.value.validate().then(() => {
+      gisConfigRef.value.validate().then(() => {
         submit();
       }).catch(() => {
-        settingTabsValue.value = 'cesium'
+        settingTabsValue.value = 'gis'
       })
     } else {
       submit();
@@ -233,8 +235,8 @@ onMounted(() => {
                 <n-tab-pane name="project" :tab="t('home.Project')" display-directive="show">
                   <ProjectInfoForm :value="currentExample" ref="projectInfoFormRef" class="!p-15px"/>
                 </n-tab-pane>
-                <n-tab-pane name="cesium" tab="Cesium" v-if="currentType === 'WebGIS'" display-directive="show">
-                  <CesiumConfig ref="cesiumConfigRef" class="!p-15px"/>
+                <n-tab-pane name="gis" tab="GIS" v-if="currentType === 'WebGIS'" display-directive="show">
+                  <GisConfig ref="gisConfigRef" class="!p-15px"/>
                 </n-tab-pane>
               </n-tabs>
 

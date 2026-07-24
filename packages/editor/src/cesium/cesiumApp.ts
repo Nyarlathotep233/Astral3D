@@ -9,6 +9,8 @@ import {render, VNode} from "vue";
  * @Date 2023-03-07
  * @Author 二三
  * @Description: cesium核心
+ * @deprecated Cesium WebGIS 方案已计划弃用，不再新增功能。后续 WebGIS 统一使用 SDK
+ * GisLayer 与 @takram/three-geospatial；旧代码仅暂时保留，不应重新接回活动入口。
  */
 const onDownPosition = new THREE.Vector2();
 const onUpPosition = new THREE.Vector2();

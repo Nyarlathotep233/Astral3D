@@ -77,7 +77,7 @@ class Drag {
         e.e.preventDefault();
 
         // 拖拽时禁用其他控制器
-        this.viewer.modules.controls.enabled = false;
+        this.viewer.setNavigationEnabled(false);
         this.viewer.modules.transformControls && (this.viewer.modules.transformControls.enabled = false);
 
         this.isDragging = true;
@@ -103,7 +103,7 @@ class Drag {
         if(e.e.button === 2 || !e.object.visible || !App.sceneHelpers.visible) return;
 
         // 拖拽结束启用其他控制器
-        this.viewer.modules.controls.enabled = true;
+        this.viewer.setNavigationEnabled(true);
         this.viewer.modules.transformControls && (this.viewer.modules.transformControls.enabled = true);
 
         this.isDragging = false;

@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons';
-import { App, AddObjectWithScriptsCommand } from "@astral3d/engine";
+import {
+	App,
+	AddObjectCommand,
+	AddObjectWithScriptsCommand,
+	type GeoPosition,
+} from "@astral3d/engine";
 
 export interface IModel extends THREE.Object3D {
 	metadata: Object;
@@ -62,6 +67,46 @@ export function screenToWorld(x: number, y: number) {
 	const dir = vector.sub(App.camera.position).normalize();
 	const distance = -App.camera.position.z / dir.z;
 	return App.camera.position.clone().add(dir.multiplyScalar(distance));
+}
+
+export type ScenePlacement = THREE.Vector3 | GeoPosition;
+
+export function isGisProject() {
+	return App.project.getKey("sceneInfo.projectType") === 1;
+}
+
+export function screenToScenePlacement(x: number, y: number): ScenePlacement | null {
+	return isGisProject()
+		? window.viewer.modules.gisLayer.screenToGeodetic(x, y)
+		: screenToWorld(x, y);
+}
+
+export function getViewportCenterPlacement() {
+	const { offsetWidth, offsetHeight } = window.viewer.container;
+	return screenToScenePlacement(offsetWidth / 2, offsetHeight / 2);
+}
+
+export function addObjectAtScenePlacement(object: THREE.Object3D, placement?: ScenePlacement | null) {
+	if (isGisProject()) {
+		const geoPosition = placement && !(placement as THREE.Vector3).isVector3
+			? placement as GeoPosition
+			: getViewportCenterPlacement() as GeoPosition | null;
+
+		if (!geoPosition) {
+			window.$message?.error("当前视角未命中地球");
+			return null;
+		}
+
+		const anchor = window.viewer.modules.gisLayer.createGeoAnchor(object, geoPosition);
+		App.execute(new AddObjectCommand(anchor));
+		return anchor;
+	}
+
+	if ((placement as THREE.Vector3 | undefined)?.isVector3) {
+		object.position.copy(placement as THREE.Vector3);
+	}
+	App.execute(new AddObjectCommand(object));
+	return object;
 }
 
 export function reBufferGeometryUv(geometry: THREE.BufferGeometry) {

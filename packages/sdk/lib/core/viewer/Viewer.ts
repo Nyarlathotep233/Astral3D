@@ -16,6 +16,7 @@ import {
     ParticleSystem,
     Drag,
     TilesManage,
+    GisLayer,
 } from "./modules";
 import {ShaderMaterialManager} from "@/core/shaderMaterial/ShaderMaterialManager";
 import {deepAssign, deepEqual, getMousePosition, isEmptyObject, isNil, createDivContainer} from "@/utils";
@@ -108,6 +109,7 @@ export interface ViewerModules {
     particleSystem: ParticleSystem,
     dragControl: Drag,
     tilesManage:TilesManage,
+    gisLayer: GisLayer,
 }
 
 CameraControls.install({
@@ -296,7 +298,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                 objectRotationOnDown = object.rotation.clone();
                 objectScaleOnDown = object.scale.clone();
 
-                this.modules.controls.enabled = false;
+                this.setNavigationEnabled(false);
             })
             transformControls.addEventListener("mouseUp", () => {
                 const object = transformControls.object as THREE.Object3D;
@@ -320,7 +322,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                             break;
                     }
                 }
-                this.modules.controls.enabled = true;
+                this.setNavigationEnabled(true);
             })
             const gizmo = transformControls.getHelper();
             this.sceneHelpers.add(gizmo);
@@ -451,6 +453,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         }
 
         useDispatchSignal("rendererUpdated");
+
+        this.modules.gisLayer.rebindRenderer();
     }
 
     /**
@@ -503,7 +507,10 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
             dragControl: new Drag(this),
             // 3d tiles管理器
             tilesManage: new TilesManage(this.scene,this.camera,this.renderer),
+            // WebGIS 影像地球
+            gisLayer: undefined as unknown as GisLayer,
         }
+        modules.gisLayer = new GisLayer(this);
 
         if (this.edit?.enabled) {
             let objectPositionOnDown = new THREE.Vector3();
@@ -528,7 +535,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                 objectRotationOnDown = object.rotation.clone();
                 objectScaleOnDown = object.scale.clone();
 
-                this.modules.controls.enabled = false;
+                this.setNavigationEnabled(false);
             })
             transformControls.addEventListener("mouseUp", () => {
                 const object = transformControls.object as THREE.Object3D;
@@ -552,7 +559,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                             break;
                     }
                 }
-                this.modules.controls.enabled = true;
+                this.setNavigationEnabled(true);
             })
             const gizmo = transformControls.getHelper();
             this.sceneHelpers.add(gizmo);
@@ -561,6 +568,13 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         }
 
         return modules;
+    }
+
+    setNavigationEnabled(enabled: boolean) {
+        this.modules.controls.enabled = enabled && !this.modules.gisLayer.enabled;
+        if (this.modules.gisLayer.controls) {
+            this.modules.gisLayer.controls.enabled = enabled;
+        }
     }
 
     /**
@@ -1028,6 +1042,10 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
 
         if (this.modules.controls.enabled && !this.modules.viewHelper.animating) {
             needRender = this.modules.controls.update(timeStamp) || needRender;
+        }
+
+        if (this.modules.gisLayer.update(timeStamp)) {
+            needRender = true;
         }
 
         if (this.modules.weather.update(timeStamp)) {

@@ -1,7 +1,19 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted,onBeforeUnmount } from "vue";
 import * as THREE from "three";
-import { App,Hooks,Utils,SetUuidCommand,SetValueCommand,SetPositionCommand,SetRotationCommand,SetScaleCommand,SetColorCommand } from "@astral3d/engine";
+import {
+    App,
+    Hooks,
+    Utils,
+    SetUuidCommand,
+    SetValueCommand,
+    SetPositionCommand,
+    SetRotationCommand,
+    SetScaleCommand,
+    SetColorCommand,
+    SetGeoPositionCommand,
+    getGeoPosition,
+} from "@astral3d/engine";
 import { ReloadCircleOutline } from "@vicons/ionicons5";
 import EsInputNumber from '@/components/es/EsInputNumber.vue';
 import { t } from "@/language";
@@ -9,6 +21,7 @@ import UserData from "@/components/code/UserData.vue";
 import EsKeyFrame from "@/components/es/EsKeyFrame.vue";
 
 const isSelectObject3D = ref(false);
+const isGeoAnchor = ref(false);
 const objectData = reactive({
     type: "",
     uuid: "",
@@ -27,6 +40,11 @@ const objectData = reactive({
         x: 1,
         y: 1,
         z: 1
+    },
+    geoPosition: {
+        longitude: 0,
+        latitude: 0,
+        height: 0,
     },
     fov: 0,
     left: 0,
@@ -118,6 +136,14 @@ function updateRows(object) {
 }
 
 const updateUI = Utils.throttle(function(object) {
+    const geoPosition = getGeoPosition(object);
+    isGeoAnchor.value = geoPosition !== null;
+    if (geoPosition) {
+        objectData.geoPosition.longitude = Number(geoPosition.longitude.toFixed(8));
+        objectData.geoPosition.latitude = Number(geoPosition.latitude.toFixed(8));
+        objectData.geoPosition.height = Number(geoPosition.height.toFixed(3));
+    }
+
     objectData.type = object.type;
     objectData.uuid = object.uuid;
     objectData.name = object.name;
@@ -227,6 +253,20 @@ const update = (method: string) => {
             const newPosition = new THREE.Vector3(objectData.position.x, objectData.position.y, objectData.position.z);
             if (object.position.distanceTo(newPosition) >= 0.01) {
                 App.execute(new SetPositionCommand(object, newPosition));
+            }
+        },
+        geoPosition: () => {
+            const oldPosition = getGeoPosition(object);
+            const newPosition = { ...objectData.geoPosition };
+            if (
+                oldPosition &&
+                (
+                    oldPosition.longitude !== newPosition.longitude ||
+                    oldPosition.latitude !== newPosition.latitude ||
+                    oldPosition.height !== newPosition.height
+                )
+            ) {
+                App.execute(new SetGeoPositionCommand(object, newPosition));
             }
         },
         rotation: () => {
@@ -430,7 +470,7 @@ const handleUserDataClick = () => {
             </div>
         </div>
         <!-- position -->
-        <div class="sider-scene-attr-item">
+        <div class="sider-scene-attr-item" v-if="!isGeoAnchor">
             <EsKeyFrame :label="t('layout.sider.object.position')" attr="position" />
             <div class="flex">
                 <EsInputNumber v-model:value="objectData.position.x" size="tiny" :show-button="false" :decimal="3" :step="1"
@@ -441,8 +481,31 @@ const handleUserDataClick = () => {
                     @change="update('position')" />
             </div>
         </div>
+        <template v-else>
+            <div class="sider-scene-attr-item">
+                <span>经度</span>
+                <div>
+                    <EsInputNumber v-model:value="objectData.geoPosition.longitude" size="tiny" :min="-180" :max="180"
+                        :decimal="8" :show-button="false" @change="update('geoPosition')" unit="°" />
+                </div>
+            </div>
+            <div class="sider-scene-attr-item">
+                <span>纬度</span>
+                <div>
+                    <EsInputNumber v-model:value="objectData.geoPosition.latitude" size="tiny" :min="-90" :max="90"
+                        :decimal="8" :show-button="false" @change="update('geoPosition')" unit="°" />
+                </div>
+            </div>
+            <div class="sider-scene-attr-item">
+                <span>高度</span>
+                <div>
+                    <EsInputNumber v-model:value="objectData.geoPosition.height" size="tiny"
+                        :decimal="3" :show-button="false" @change="update('geoPosition')" unit="m" />
+                </div>
+            </div>
+        </template>
         <!-- rotation -->
-        <div class="sider-scene-attr-item" v-if="transformRowsVisible.rotation">
+        <div class="sider-scene-attr-item" v-if="!isGeoAnchor && transformRowsVisible.rotation">
             <EsKeyFrame :label="t('layout.sider.object.rotation')" attr="quaternion" />
             <div class="flex">
                 <EsInputNumber v-model:value="objectData.rotation.x" size="tiny" :decimal="2" :step="1" :show-button="false"
@@ -454,7 +517,7 @@ const handleUserDataClick = () => {
             </div>
         </div>
         <!-- scale -->
-        <div class="sider-scene-attr-item" v-if="transformRowsVisible.scale">
+        <div class="sider-scene-attr-item" v-if="!isGeoAnchor && transformRowsVisible.scale">
             <EsKeyFrame :label="t('layout.sider.object.scale')" attr="scale" />
             <div class="flex">
                 <EsInputNumber v-model:value="objectData.scale.x" size="tiny" :decimal="3" :step="1" :show-button="false"
@@ -649,7 +712,7 @@ const handleUserDataClick = () => {
             </div>
         </div>
         <!-- userdata -->
-        <div class="sider-scene-attr-item">
+        <div class="sider-scene-attr-item" v-if="!isGeoAnchor">
             <span>{{ t("layout.sider.object.userdata") }}</span>
             <div>
                 <n-input type="textarea" :value="objectData.userData" round :rows="5" readonly :status="userDataStatus"
@@ -657,7 +720,7 @@ const handleUserDataClick = () => {
             </div>
         </div>
 
-        <UserData v-model:show="userDataEditorShow" @update:show="(s) => userDataEditorShow = s"
+        <UserData v-if="!isGeoAnchor" v-model:show="userDataEditorShow" @update:show="(s) => userDataEditorShow = s"
             v-model:value="objectData.userData" @update:value="update('userData')" />
     </div>
     <n-result v-else class="mt-6" status="418" title="Empty" :description="t('prompt[\'No object selected.\']')" />

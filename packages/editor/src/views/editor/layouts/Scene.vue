@@ -8,6 +8,7 @@ import Config from "@/utils/storage/config";
 import Drawing from "@/components/drawing/Drawing.vue";
 import Viewport from "./viewport/Viewport.vue";
 import ExtraPane from "@/views/editor/components/extraPane/ExtraPane.vue";
+import {addObjectAtScenePlacement, isGisProject, screenToScenePlacement} from "@/utils/common/scenes";
 
 const globalConfigStore = useGlobalConfigStore();
 
@@ -43,7 +44,23 @@ function sceneDrop(event) {
   //拖拽大纲视图
   if (dt.types[0] === 'text/plain') return;
 
-  if (dt.items) {
+  if (isGisProject()) {
+    const placement = screenToScenePlacement(event.layerX, event.layerY);
+    if (!placement) {
+      window.$message?.error("当前视角未命中地球");
+      return;
+    }
+
+    const loading = dt.items
+      ? Loader.loadItemList(dt.items, false)
+      : Loader.loadFiles(dt.files, undefined, false);
+    loading
+      .then((models) => models.forEach((model) => addObjectAtScenePlacement(model, placement)))
+      .catch((error) => {
+        console.error(error);
+        window.$message?.error("模型加载失败");
+      });
+  } else if (dt.items) {
     //支持文件夹
     Loader.loadItemList(dt.items);
   } else {

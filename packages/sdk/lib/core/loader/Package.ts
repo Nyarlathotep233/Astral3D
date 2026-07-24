@@ -384,9 +384,9 @@ export class Package {
                 camera: this.viewer.camera.toJSON(),
                 scene: sceneJson,
                 scripts: App.scripts,
-                controls: {
-                    state: this.viewer.modules.controls.toJSON(),
-                },
+                controls: App.project.getKey("sceneInfo.projectType") === 1
+                    ? { type: "globe" }
+                    : { type: "camera-controls", state: this.viewer.modules.controls.toJSON() },
                 totalZipNumber: totalNum,
                 sceneInfo: sceneInfo,
             })
@@ -675,7 +675,7 @@ export class Package {
         const loadScene = (sceneJson: ISceneJson,drawingInfo:IDrawingInfo | null, configJson: IAppProject.Config) => {
             App.fromJSON(sceneJson).then(async (scene) => {
                 // 还原控制器
-                if (sceneJson.controls?.state) {
+                if (sceneJson.controls?.type !== "globe" && sceneJson.controls?.state) {
                     this.viewer.modules.controls.fromJSON(sceneJson.controls.state, true);
                 }
 

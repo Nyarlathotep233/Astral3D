@@ -87,7 +87,10 @@ declare interface ISceneJson {
         [uuid: string]: ISceneScript[]
     },
     controls: {
+        type?: "camera-controls",
         state: string
+    } | {
+        type: "globe"
     },
     totalZipNumber: number,
     sceneInfo: IAppProject.SceneInfo,

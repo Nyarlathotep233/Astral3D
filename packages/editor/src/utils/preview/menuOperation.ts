@@ -116,6 +116,17 @@ export class MenuOperation {
    * 还原视角
    */
   static toHome() {
+    const gisLayer = window.viewer.modules.gisLayer;
+    const gisConfig = App.project.getKey("sceneInfo.gisConfig");
+    if (gisLayer.enabled && gisConfig) {
+      gisLayer.flyTo({
+        longitude: gisConfig.initialView.longitude,
+        latitude: gisConfig.initialView.latitude,
+        height: 0,
+      }, gisConfig.initialView.altitude);
+      return;
+    }
+
     if (MenuOperation.InitControlsState === "{}") {
       window.$message?.warning("缺失初始视角信息")
       return;

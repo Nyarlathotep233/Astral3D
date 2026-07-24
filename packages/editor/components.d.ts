@@ -36,6 +36,7 @@ declare module 'vue' {
     EsTexture: typeof import('./src/components/es/EsTexture.vue')['default']
     EsTip: typeof import('./src/components/es/EsTip.vue')['default']
     Fullscreen: typeof import('./src/components/header/navigation/Fullscreen.vue')['default']
+    GisConfig: typeof import('./src/components/project/GisConfig.vue')['default']
     GLTFHandler: typeof import('./src/components/es/plugin/builtin/GLTFHandler.vue')['default']
     GLTFHandlerForm: typeof import('./src/components/es/plugin/builtin/glTFHandler/GLTFHandlerForm.vue')['default']
     HtmlPanelCode: typeof import('./src/components/code/HtmlPanelCode.vue')['default']

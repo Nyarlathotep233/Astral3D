@@ -51,6 +51,11 @@ onMounted(async () => {
     }
   });
 
+  const sceneInfo = App.project.getKey("sceneInfo");
+  if (sceneInfo.projectType === 1 && sceneInfo.gisConfig && !sceneInfo.zip) {
+    window.viewer.modules.gisLayer.enable(sceneInfo.gisConfig);
+  }
+
   await nextTick();
 
   // 添加astral engine内置插件并监听插件注册
@@ -68,6 +73,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   Hooks.useRemoveSignal("pluginInstall",pluginStore.addPlugin);
   Hooks.useRemoveSignal("pluginUninstall",pluginStore.removePlugin);
+  window.viewer?.dispose();
 })
 
 function handleViewportPointerdown(){

@@ -282,7 +282,7 @@ export class Signals {
         }
 
         // 设置用户Camera时禁用EditorControls
-        this.viewer.modules.controls.enabled = (viewportCamera === App.camera);
+        this.viewer.setNavigationEnabled(viewportCamera === App.camera);
 
         // 替换控制器相机
         // this.viewer.modules.controls.camera = viewportCamera;
@@ -335,7 +335,9 @@ export class Signals {
                     this.viewer.selectionBox.visible = true;
                 }
             }
-            this.viewer.modules.transformControls?.attach(object);
+            if (object.userData?.gis?.type !== "geo-anchor") {
+                this.viewer.modules.transformControls?.attach(object);
+            }
         }
         this.render();
     }
@@ -345,6 +347,20 @@ export class Signals {
      * @param object
      */
     objectFocused(object){
+        if (this.viewer.modules.gisLayer.enabled) {
+            let anchor = object;
+            while (anchor && anchor.userData?.gis?.type !== "geo-anchor") {
+                anchor = anchor.parent;
+            }
+
+            if (anchor?.userData?.gis?.type === "geo-anchor") {
+                const box = new THREE.Box3().setFromObject(anchor, true);
+                const size = box.getSize(new THREE.Vector3()).length();
+                this.viewer.modules.gisLayer.flyTo(anchor.userData.gis, Math.max(size * 2, 100));
+                return;
+            }
+        }
+
         focusObject(object,this.viewer.modules.controls);
     }
 
@@ -382,7 +398,7 @@ export class Signals {
      * @param object
      */
     objectRemoved(object){
-        this.viewer.modules.controls.enabled = true;
+        this.viewer.setNavigationEnabled(true);
         if (this.viewer.modules.transformControls && object === this.viewer.modules.transformControls.object) {
             this.viewer.modules.transformControls.detach();
         }

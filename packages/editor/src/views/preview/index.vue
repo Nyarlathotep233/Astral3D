@@ -52,14 +52,30 @@ let playLoadStarted = false;
 
 function setViewCubeVisible() {
   const viewHelper = window.viewer?.modules?.viewHelper;
+  const hidden = hideViewCube.value || sceneInfo.value.projectType === 1;
   if (viewHelper) {
-    viewHelper.hidden = !hideViewCube.value;
+    viewHelper.hidden = hidden;
   }
 
   const dom = document.querySelector<HTMLElement>("#astral-viewer-helper");
   if (dom) {
-    dom.style.display = hideViewCube.value ? "none" : "block";
+    dom.style.display = hidden ? "none" : "block";
   }
+}
+
+function configureProjectMode(info: ISceneInfo, applyInitialView: boolean) {
+  const gis = info.projectType === 1 && info.gisConfig;
+  const hiddenOperations = ["autoRotate", "measure", "roaming", "miniMap"];
+  hiddenOperations.forEach((key) => {
+    operationStore.menuList[key].show = !gis;
+    operationStore.menuList[key].active = false;
+  });
+
+  if (gis) {
+    window.viewer.modules.gisLayer.enable(info.gisConfig!, {applyInitialView});
+    window.viewer.modules.gisLayer.rehydrateAnchors(App.scene);
+  }
+  syncViewCubeVisible();
 }
 
 function syncViewCubeVisible() {
@@ -204,10 +220,11 @@ async function loadPlaySnapshot(message: import("@/utils/playMode").PlayLoadMess
           if (playSceneInfo) {
             App.project.setKey("sceneInfo", playSceneInfo);
             sceneInfo.value = playSceneInfo;
+            configureProjectMode(playSceneInfo, false);
           }
           drawingInfo.value = App.project.getKey("drawing");
 
-          if (sceneJson.controls?.state) {
+          if (sceneJson.controls?.type !== "globe" && sceneJson.controls?.state) {
             MenuOperation.InitControlsState = sceneJson.controls.state;
           }
           Hooks.useDispatchSignal("sceneResize");
@@ -243,19 +260,14 @@ async function init() {
     return;
   }
 
-  if (res.data.cesiumConfig) {
-    if (typeof res.data.cesiumConfig === 'string') {
-      res.data.cesiumConfig = JSON.parse(res.data.cesiumConfig);
-    }
-  } else {
-    res.data.cesiumConfig = undefined;
-  }
-
   App.project.setKey('sceneInfo', res.data);
   sceneInfo.value = res.data;
 
   initLoading.value = false;
 
+  if (!res.data.zip) {
+    configureProjectMode(res.data, true);
+  }
   getScene(res.data);
 }
 
@@ -282,7 +294,8 @@ function getScene(sceneInfo) {
     url: sceneInfo.zip,
 
     onSceneLoad: (sceneJson: ISceneJson) => {
-      if (sceneJson.controls?.state) {
+      configureProjectMode(sceneInfo, false);
+      if (sceneJson.controls?.type !== "globe" && sceneJson.controls?.state) {
         MenuOperation.InitControlsState = sceneJson.controls.state;
       }
 
@@ -302,6 +315,12 @@ function getScene(sceneInfo) {
 }
 
 function finishSceneLoad() {
+  if (sceneInfo.value.projectType === 1) {
+    window.$message?.success(t("scene['Loading completed!']"));
+    Hooks.useDispatchSignal("sceneLoadComplete");
+    return;
+  }
+
   // 加载完成后，生成 Collider 环境
   MenuOperation.Roaming.generateColliderEnvironment()
     .then(() => {

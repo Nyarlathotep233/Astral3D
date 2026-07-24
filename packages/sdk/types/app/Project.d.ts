@@ -112,20 +112,12 @@ declare namespace IAppProject {
         sceneName: string;
         sceneIntroduction: string;
         sceneVersion: number;
-        projectType: number;
+        projectType: 0 | 1;
         coverPicture: string;
         hasDrawing: boolean;
         zip: string,
         zipSize: string,
-        cesiumConfig?: {
-            token: "",
-            mapType: 'satellite' | 'vector',
-            map: "Amap" | "Tianditu",
-            // 是否需要标记图
-            markMap: boolean,
-            // 底图是天地图时的天地图密匙
-            tiandituTk: string
-        };
+        gisConfig?: import("../../lib/core/viewer/modules/GisLayer").GisConfig;
     }
 
     interface DrawingMark {

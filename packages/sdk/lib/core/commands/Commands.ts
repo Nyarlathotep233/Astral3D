@@ -7,6 +7,7 @@ export { RemoveScriptCommand } from './RemoveScriptCommand';
 export { SetColorCommand } from './SetColorCommand';
 export { SetGeometryCommand } from './SetGeometryCommand';
 export { SetGeometryValueCommand } from './SetGeometryValueCommand';
+export { SetGeoPositionCommand } from './SetGeoPositionCommand';
 export { SetMaterialColorCommand } from './SetMaterialColorCommand';
 export { SetMaterialCommand } from './SetMaterialCommand';
 export { SetMaterialMapCommand } from './SetMaterialMapCommand';

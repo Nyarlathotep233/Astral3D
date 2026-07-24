@@ -13,9 +13,13 @@
 <script setup lang="ts">
 import {inject, nextTick} from "vue";
 import {useDragStore} from "@/store/modules/drag";
-import {screenToWorld} from "@/utils/common/scenes";
+import {
+  getViewportCenterPlacement,
+  isGisProject,
+  screenToScenePlacement,
+} from "@/utils/common/scenes";
 import {instantiatePrefab, loadPrefabObject} from "@/utils/common/prefab";
-import {Utils} from "@astral3d/engine";
+import {Utils, type GeoPosition} from "@astral3d/engine";
 
 const props = withDefaults(defineProps<{
   resource: {
@@ -63,7 +67,16 @@ async function handlePreview() {
 
 async function addToScene() {
   try {
-    await instantiatePrefab(props.resource.path);
+    if (isGisProject()) {
+      const position = getViewportCenterPlacement() as GeoPosition | null;
+      if (!position) {
+        window.$message?.error("当前视角未命中地球");
+        return;
+      }
+      await instantiatePrefab(props.resource.path, { geoPosition: position });
+    } else {
+      await instantiatePrefab(props.resource.path);
+    }
   } catch (error) {
     window.$message?.error(error instanceof Error ? error.message : "Prefab 加载失败");
   }
@@ -73,8 +86,15 @@ async function dragEnd() {
   if (dragStore.getActionTarget !== "addToScene" || dragStore.endArea !== "Scene") return;
 
   try {
-    const position = screenToWorld(dragStore.endPosition.x, dragStore.endPosition.y);
-    await instantiatePrefab(props.resource.path, position);
+    const position = screenToScenePlacement(dragStore.endPosition.x, dragStore.endPosition.y);
+    if (!position) {
+      window.$message?.error("当前视角未命中地球");
+      return;
+    }
+    await instantiatePrefab(
+      props.resource.path,
+      "isVector3" in position ? position : { geoPosition: position },
+    );
   } catch (error) {
     window.$message?.error(error instanceof Error ? error.message : "Prefab 加载失败");
   } finally {

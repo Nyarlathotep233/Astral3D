@@ -1,6 +1,11 @@
 import JSZip from "jszip";
 import * as THREE from "three";
-import { App, Loader, AddObjectWithScriptsCommand } from "@astral3d/engine";
+import {
+  App,
+  Loader,
+  AddObjectWithScriptsCommand,
+  type GeoPosition,
+} from "@astral3d/engine";
 
 const PREFAB_SIGNATURE = "h3d-prefab-package";
 const PREFAB_VERSION = 1;
@@ -36,6 +41,7 @@ export interface InstantiatePrefabOptions {
   userData?: Record<string, any>;
   scriptParams?: Record<string, unknown>;
   commandName?: string;
+  geoPosition?: GeoPosition;
 }
 
 function cloneScript(script: ISceneScript): ISceneScript {
@@ -247,9 +253,12 @@ export async function instantiatePrefab(source: string | Blob, positionOrOptions
 
   applyPrefabOptions(object, options);
 
-  App.execute(new AddObjectWithScriptsCommand(object, scripts), options.commandName || `Add Prefab: ${prefab.name || object.name}`);
+  const commandObject = options.geoPosition
+    ? window.viewer.modules.gisLayer.createGeoAnchor(object, options.geoPosition)
+    : object;
+  App.execute(new AddObjectWithScriptsCommand(commandObject, scripts), options.commandName || `Add Prefab: ${prefab.name || object.name}`);
 
-  return object;
+  return commandObject;
 }
 
 export const Prefab = {

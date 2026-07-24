@@ -6,3 +6,15 @@ export {Signals} from "./Signals";
 export {ParticleSystem} from "./ParticleSystem";
 export {Drag} from "./Drag";
 export {TilesManage} from "./TilesManage";
+export {
+    GisLayer,
+    DEFAULT_GIS_CONFIG,
+    applyGeoAnchorTransform,
+    getGeoPosition,
+} from "./GisLayer";
+export type {
+    ProjectType,
+    GeoPosition,
+    GisInitialView,
+    GisConfig,
+} from "./GisLayer";
