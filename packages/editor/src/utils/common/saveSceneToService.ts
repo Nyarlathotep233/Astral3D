@@ -20,6 +20,8 @@ export function saveSceneToService() {
 }
 
 async function runSaveSceneToService() {
+  await window.viewer.ready;
+  window.viewer.assertRenderable();
   const globalConfigStore = useGlobalConfigStore();
   const sceneInfo = App.project.getKey("sceneInfo");
 

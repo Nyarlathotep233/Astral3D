@@ -31,7 +31,7 @@
 import type {ComputedRef} from "vue";
 import {ref, markRaw, onMounted, onBeforeUnmount} from "vue";
 import {
-  WindowBlackSaturation, UvIndexAlt, Wikis, Contrast
+  UvIndexAlt, Wikis, Contrast
 } from '@vicons/carbon';
 import {App, Hooks} from '@astral3d/engine';
 import {cpt} from "@/language";
@@ -44,12 +44,6 @@ interface IOption {
 }
 
 const options = ref<IOption[]>([
-  {
-    key: "realistic",
-    label: cpt('layout.scene.toolbar.Realistic'),
-    icon: markRaw(WindowBlackSaturation),
-    shortcuts: "ALT+1"
-  },
   {
     key: "solid",
     label: cpt("layout.scene.toolbar.Solid"),
@@ -70,7 +64,7 @@ const options = ref<IOption[]>([
   }
 ])
 
-const current = ref<IOption>(options.value[1]);
+const current = ref<IOption>(options.value[0]);
 
 function handlerChange(value: IOption) {
   // @ts-ignore
@@ -79,7 +73,7 @@ function handlerChange(value: IOption) {
 }
 
 function sceneCleared() {
-  current.value = options.value[1];
+  current.value = options.value[0];
   App.setViewportShading(current.value.key);
 }
 

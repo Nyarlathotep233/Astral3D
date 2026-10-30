@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><title>H3D WebGPU verification</title></head>
+<body style="margin:0"><script>
+// Installed before any Three import. Counts actual API requests, not class names.
+window.__contextRequests = [];
+window.__renderErrors = [];
+for (const type of [HTMLCanvasElement, window.OffscreenCanvas].filter(Boolean)) {
+  const original = type.prototype.getContext;
+  type.prototype.getContext = function(kind, ...args) {
+    window.__contextRequests.push(kind);
+    return original.call(this, kind, ...args);
+  };
+}
+addEventListener('error', e => window.__renderErrors.push(e.message));
+addEventListener('unhandledrejection', e => window.__renderErrors.push(String(e.reason)));
+// Explicit test-only failure injection. The application does not monkey-patch APIs.
+const failure = new URLSearchParams(location.search).get('failure');
+if (failure === 'adapter') navigator.gpu.requestAdapter = async () => null;
+if (failure === 'device') {
+  const request = navigator.gpu.requestAdapter.bind(navigator.gpu);
+  navigator.gpu.requestAdapter = async (...args) => {
+    const adapter = await request(...args);
+    adapter.requestDevice = async () => { throw new Error('Injected device creation failure'); };
+    return adapter;
+  };
+}
+</script><script type="module">
+import * as T from 'three/webgpu';
+import {createRenderer, initializeRenderer, getRenderingAPI, captureViewport, assertSupportedMaterials} from '../../packages/sdk/lib/core/rendering/renderer.ts';
+import {createFixture} from './fixture.mjs';
+const {scene, camera} = createFixture(T);
+const renderer = createRenderer({antialias: true, alpha: true});
+renderer.setSize(960, 640);
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFShadowMap;
+renderer.toneMapping = T.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1;
+const errors = [];
+await initializeRenderer(renderer, error => errors.push(error.message));
+document.body.appendChild(renderer.domElement);
+const render = () => { assertSupportedMaterials(scene); renderer.render(scene, camera); };
+render();
+window.__renderFixture = {
+  scene, camera, renderer, revision: T.REVISION, api: getRenderingAPI(renderer), errors,
+  capture: () => captureViewport(renderer, render),
+  testUnsupported() {
+    const material = new T.ShaderMaterial({vertexShader: 'void main() {}', fragmentShader: 'void main() {}'});
+    const mesh = new T.Mesh(new T.BoxGeometry(), material);
+    mesh.name = 'unsupported-test';
+    scene.add(mesh);
+    const before = JSON.stringify(mesh.toJSON());
+    let message;
+    try { render(); } catch (error) { message = error.message; }
+    const preserved = before === JSON.stringify(mesh.toJSON()) && mesh.material === material;
+    scene.remove(mesh); mesh.geometry.dispose(); material.dispose();
+    return {message, preserved};
+  },
+  async testCapture(transparent = false) {
+    const background = scene.background;
+    if (transparent) scene.background = null;
+    const image = await captureViewport(renderer, render);
+    scene.background = background;
+    render();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const uploadedBlob = await (await fetch(image.src)).blob();
+    URL.revokeObjectURL(image.src);
+    return {width: image.width, height: image.height, reusableSource: uploadedBlob.size > 0,
+      center: [...context.getImageData(480, 320, 1, 1).data],
+      corner: [...context.getImageData(0, 0, 1, 1).data]};
+  },
+  async testLifecycle() {
+    for (let i = 0; i < 3; i++) {
+      const temporary = createRenderer();
+      await initializeRenderer(temporary, error => errors.push(error.message));
+      temporary.setSize(64, 64);
+      document.body.appendChild(temporary.domElement);
+      temporary.render(scene, camera);
+      await temporary.dispose();
+      temporary.domElement.remove();
+    }
+    return {canvases: document.querySelectorAll('canvas').length, errors: [...errors]};
+  },
+  testDeviceLoss() {
+    renderer.onDeviceLost({api: 'WebGPU', message: 'Injected device loss', reason: 'unknown', originalEvent: null});
+    return {errors: [...errors]};
+  },
+  dispose() {
+    renderer.setAnimationLoop(null); renderer.dispose(); renderer.domElement.remove();
+    scene.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); });
+  }
+};
+</script></body></html>

@@ -86,7 +86,6 @@ const appSignals: SignalRegister = {
 
   intersectionsDetected: new Signal(),
 
-  pathTracerUpdated: new Signal(),
 
   // 实例化ShaderMaterial类型内置材质
   instantiateShaderMaterial: new Signal(),

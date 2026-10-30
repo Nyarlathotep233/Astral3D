@@ -1,7 +1,7 @@
 import {TilesRenderer} from "3d-tiles-renderer";
 import {GLTFExtensionsPlugin,GLTFMeshFeaturesExtension,GLTFStructuralMetadataExtension,TilesFadePlugin,DebugTilesPlugin,UnloadTilesPlugin} from "3d-tiles-renderer/plugins";
 import Loader from "@/core/loader/Loader.ts";
-import {PerspectiveCamera, WebGLRenderer, Group, JSONMeta} from "three";
+import {PerspectiveCamera, WebGPURenderer, Group, JSONMeta, Vector2} from "three/webgpu";
 import {deepAssign} from "@/utils";
 import {TILES_DEBUG_COLOR_MODE} from "@/constant";
 import {useDispatchSignal} from "@/hooks";
@@ -118,9 +118,9 @@ export default class Tiles extends Group{
     /**
      * 设置相机和渲染器
      */
-    setCameraAndRenderer(camera:PerspectiveCamera,renderer:WebGLRenderer){
+    setCameraAndRenderer(camera:PerspectiveCamera,renderer:WebGPURenderer){
         this.renderer.setCamera(camera);
-        this.renderer.setResolutionFromRenderer(camera, renderer);
+        this.renderer.setResolution(camera, renderer.getSize(new Vector2()));
     }
 
     /**

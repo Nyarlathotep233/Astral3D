@@ -164,6 +164,7 @@ export default defineConfig(async ({mode, command}) => {
             ...plugins
         ],
         resolve: {
+            dedupe: ['three'],
             alias: {
                 '~': path.resolve(__dirname, './types'),
                 '@': path.resolve(__dirname, './src'),
@@ -171,6 +172,7 @@ export default defineConfig(async ({mode, command}) => {
             extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue']
         },
         optimizeDeps: {
+            include: ['three', 'three/webgpu', 'three/tsl'],
             exclude: ['keyframe-resample','draco3dgltf'],
         },
         server: {

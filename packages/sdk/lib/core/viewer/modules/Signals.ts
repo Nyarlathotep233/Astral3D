@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import {RoomEnvironment} from "three/examples/jsm/environments/RoomEnvironment.js";
 import {ShaderPass} from "three/examples/jsm/postprocessing/ShaderPass.js";
 import {Effect} from "./Effect";
@@ -67,7 +67,6 @@ export class Signals {
      */
     sceneCleared() {
         this.viewer.modules.controls.setTarget(0, 0, 0,true);
-        this.viewer.pathtracer?.reset();
 
         const rendererConfig = App.project.getKey("renderer");
         App.FPS = rendererConfig.fps;
@@ -80,7 +79,6 @@ export class Signals {
             this.viewer.loadEnv(true);
         }
 
-        this.viewer.initPT();
         this.viewer.render();
     }
 
@@ -150,12 +148,12 @@ export class Signals {
      * 渲染器创建完成后调用
      * @param newRenderer
      */
-    rendererCreated(newRenderer: THREE.WebGLRenderer) {
+    rendererCreated(newRenderer: THREE.WebGPURenderer) {
         this.viewer.engineCreated(newRenderer);
     }
 
     rendererConfigUpdate(){
-        this.viewer.createEngine();
+        void this.viewer.createEngine().catch(error => this.viewer.failRendering(error));
     }
 
     rendererDetectKTX2Support( ktx2Loader ) {
@@ -203,7 +201,6 @@ export class Signals {
 
         this.viewer.dispatchEvent({type:"onSceneBackgroundChange",backgroundType:backgroundType,background:this.viewer.scene.background})
 
-        this.viewer.updatePTBackground();
         this.render();
     }
 
@@ -234,7 +231,6 @@ export class Signals {
                 if(!this.viewer.pmremGenerator){
                     // 创建一个PMREMGenerator，从立方体映射环境纹理生成预过滤的 Mipmap 辐射环境贴图
                     this.viewer.pmremGenerator = new THREE.PMREMGenerator(this.viewer.renderer);
-                    this.viewer.pmremGenerator.compileEquirectangularShader();
                 }
 
                 this.viewer.scene.environment = this.viewer.pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -244,7 +240,6 @@ export class Signals {
 
         this.viewer.dispatchEvent({type:"onSceneEnvironmentChange",environmentType:environmentType,environment:this.viewer.scene.environment})
 
-        this.viewer.updatePTEnvironment();
 
         this.render();
     }
@@ -253,7 +248,6 @@ export class Signals {
      * 手动场景渲染
      */
     sceneGraphChanged(){
-        this.viewer.initPT();
         this.render();
     }
 
@@ -261,7 +255,6 @@ export class Signals {
      * 切换主相机
      */
     cameraChanged(){
-        this.viewer.pathtracer?.reset();
         this.render();
     }
 
@@ -287,7 +280,6 @@ export class Signals {
         // 替换控制器相机
         // this.viewer.modules.controls.camera = viewportCamera;
 
-        this.viewer.initPT();
         this.render();
     }
 
@@ -300,9 +292,6 @@ export class Signals {
         const viewportShading = App.viewportShading;
 
         switch (viewportShading) {
-            case 'realistic':
-                this.viewer.pathtracer?.init(this.viewer.scene, this.viewer.camera);
-                break;
             case 'solid':
                 this.viewer.scene.overrideMaterial = null;
                 break;
@@ -373,7 +362,6 @@ export class Signals {
             helper.update();
         }
 
-        this.viewer.initPT();
         this.render();
     }
 
@@ -399,7 +387,6 @@ export class Signals {
             this.viewer.box.setFromObject(object, true);
         }
 
-        this.viewer.initPT();
         this.render();
     }
 
@@ -407,7 +394,6 @@ export class Signals {
      * material 变更
      */
     materialChanged(){
-        this.viewer.updatePTMaterials();
         this.render();
     }
 
@@ -426,7 +412,6 @@ export class Signals {
                 FXAA.material.uniforms[ 'resolution' ].value.y = 1 / (this.viewer.container.offsetHeight * pixelRatio);
             }
         }
-        this.viewer.pathtracer?.setSize();
 
         this.viewer.css3DRenderer.setSize(this.viewer.container.offsetWidth,this.viewer.container.offsetHeight);
         

@@ -571,6 +571,7 @@ export class App {
      * @param value
      */
     setViewportShading(value: string) {
+        if (value === 'realistic') throw new Error('路径追踪模式已移除，不能加载 realistic 渲染模式。');
         this.viewportShading = value;
         useDispatchSignal("viewportShadingChanged");
     }

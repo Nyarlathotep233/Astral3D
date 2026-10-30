@@ -9,6 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // @ts-ignore
 export default defineConfig(async ({mode, command}) => {
+    const format = process.env.H3D_SDK_FORMAT === 'umd' ? 'umd' : 'es';
     const root = process.cwd();
     const env = loadEnv(mode, root);
     //LoadEnv读取的布尔类型是一个字符串。此函数可以转换为布尔类型
@@ -41,9 +42,14 @@ export default defineConfig(async ({mode, command}) => {
                 entry: resolve(__dirname, 'lib/index.ts'),
                 name: 'Astral3D', // 打包后全局变量的名称
                 fileName: (format) => `astral3d.${format}.js`,
-                formats: ['es', 'umd']
+                formats: [format]
             },
             outDir: "dist",
+            emptyOutDir: format === 'es',
+            rollupOptions: {
+                // The editor/ESM host owns Three. Only the standalone UMD bundles it.
+                external: format === 'es' ? (id: string) => id === 'three' || id.startsWith('three/') : [],
+            },
             sourcemap: false,
             // 规定触发警告的 chunk 大小。（以 kbs 为单位）
             chunkSizeWarningLimit: 1024 * 6,
@@ -65,6 +71,7 @@ export default defineConfig(async ({mode, command}) => {
         ],
         // 路径别名
         resolve: {
+            dedupe: ['three'],
             alias: {
                 '@': resolve(__dirname, './lib')
             },

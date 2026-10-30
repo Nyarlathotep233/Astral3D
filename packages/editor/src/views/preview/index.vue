@@ -90,6 +90,8 @@ onMounted(async () => {
 
   Hooks.useAddSignal("rendererUpdated", syncViewCubeVisible);
 
+  try { await window.viewer.ready; }
+  catch { return; } // Viewer reports the actual initialization error.
   await nextTick();
   syncViewCubeVisible();
 

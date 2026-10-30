@@ -10,8 +10,8 @@ catalogs:
       specifier: ^24.6.0
       version: 24.7.0
     '@types/three':
-      specifier: 0.176.0
-      version: 0.176.0
+      specifier: 0.186.0
+      version: 0.186.0
     '@vitejs/plugin-vue':
       specifier: ^6.0.1
       version: 6.0.1
@@ -22,8 +22,8 @@ catalogs:
       specifier: ^6.0.1
       version: 6.0.1
     three:
-      specifier: 0.176.0
-      version: 0.176.0
+      specifier: 0.186.1
+      version: 0.186.1
     typescript:
       specifier: ^5.4.5
       version: 5.8.3
@@ -161,7 +161,7 @@ importers:
         version: 2.3.1(typescript@5.8.3)(vue@3.5.22(typescript@5.8.3))
       three:
         specifier: 'catalog:'
-        version: 0.176.0
+        version: 0.186.1
       vite-plugin-static-copy:
         specifier: 'catalog:'
         version: 3.1.0(vite@6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0))
@@ -183,7 +183,7 @@ importers:
         version: 1.70.4
       '@types/three':
         specifier: 'catalog:'
-        version: 0.176.0
+        version: 0.186.0
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
         version: 6.0.1(vite@6.3.2(@types/node@24.7.0)(jiti@2.4.2)(less@4.3.0)(sass-embedded@1.86.3)(sass@1.86.3)(stylus@0.64.0)(terser@5.39.0))(vue@3.5.22(typescript@5.8.3))
@@ -219,7 +219,7 @@ importers:
     dependencies:
       3d-tiles-renderer:
         specifier: ^0.4.16
-        version: 0.4.16(@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0)
+        version: 0.4.16(@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1)
       '@babel/runtime':
         specifier: 7.27.0
         version: 7.27.0
@@ -228,10 +228,10 @@ importers:
         version: 0.3.2
       '@needle-tools/three-animation-pointer':
         specifier: ^1.0.7
-        version: 1.0.7(three@0.176.0)
+        version: 1.0.7(three@0.186.1)
       camera-controls:
         specifier: ^2.9.0
-        version: 2.10.1(three@0.176.0)
+        version: 2.10.1(three@0.186.1)
       js-base64:
         specifier: ^3.7.7
         version: 3.7.7
@@ -249,19 +249,16 @@ importers:
         version: 1.0.0
       three:
         specifier: 'catalog:'
-        version: 0.176.0
-      three-gpu-pathtracer:
-        specifier: ^0.0.22
-        version: 0.0.22(three-mesh-bvh@0.9.0(three@0.176.0))(three@0.176.0)(xatlas-web@0.1.0)
+        version: 0.186.1
       three-mesh-bvh:
         specifier: ^0.9.0
-        version: 0.9.0(three@0.176.0)
+        version: 0.9.0(three@0.186.1)
       three-viewport-gizmo:
         specifier: ^2.0.2
-        version: 2.2.0(three@0.176.0)
+        version: 2.2.0(three@0.186.1)
       web-ifc-three:
         specifier: ^0.0.126
-        version: 0.0.126(three@0.176.0)
+        version: 0.0.126(three@0.186.1)
     devDependencies:
       '@astral3d/build-vite-plugins':
         specifier: workspace:^
@@ -271,7 +268,7 @@ importers:
         version: 24.7.0
       '@types/three':
         specifier: 'catalog:'
-        version: 0.176.0
+        version: 0.186.0
       rollup-plugin-visualizer:
         specifier: 'catalog:'
         version: 6.0.1(rollup@4.44.2)
@@ -2247,8 +2244,8 @@ packages:
   '@types/stats.js@0.17.3':
     resolution: {integrity: sha512-pXNfAD3KHOdif9EQXZ9deK82HVNaXP5ZIF5RP2QG6OQFNTaY2YIetfrE9t528vEreGQvEPRDDc8muaoYeK0SxQ==}
 
-  '@types/three@0.176.0':
-    resolution: {integrity: sha512-FwfPXxCqOtP7EdYMagCFePNKoG1AGBDUEVKtluv2BTVRpSt7b+X27xNsirPCTCqY1pGYsPUzaM3jgWP7dXSxlw==}
+  '@types/three@0.186.0':
+    resolution: {integrity: sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -2723,9 +2720,6 @@ packages:
     resolution: {integrity: sha512-e89uuTLMh0U5cZ9iDpEI2senqPGfbPRTHM/0AaQkcxnpqjkZqDYP8rpfm7edOz8s+pOCOROEy1PIveSW8+fL5g==}
     peerDependencies:
       vue: ^3.5.0
-
-  '@webgpu/types@0.1.60':
-    resolution: {integrity: sha512-8B/tdfRFKdrnejqmvq95ogp8tf52oZ51p3f4QD5m5Paey/qlX4Rhhy5Y8tgFMi7Ms70HzcMMw3EQjH/jdhTwlA==}
 
   '@zip.js/zip.js@2.7.60':
     resolution: {integrity: sha512-vA3rLyqdxBrVo1FWSsbyoecaqWTV+vgPRf0QKeM7kVDG0r+lHUqd7zQDv1TO9k4BcAoNzNDSNrrel24Mk6addA==}
@@ -3416,6 +3410,9 @@ packages:
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   filelist@1.0.4:
     resolution: {integrity: sha512-w1cEuf3S+DrLCQL7ET6kz+gmlJdbq9J7yXCSjK/OZCPA+qEN1WyF4ZAf0YYJa4/shHJra2t/d/r8SV4Ji+x+8Q==}
@@ -4136,11 +4133,11 @@ packages:
   mersenne-twister@1.1.0:
     resolution: {integrity: sha512-mUYWsMKNrm4lfygPkL3OfGzOPTR2DBlTkBNHM//F6hGp8cLThY897crAlk3/Jo17LEOOjQUrNAx6DvgO77QJkA==}
 
-  meshoptimizer@0.18.1:
-    resolution: {integrity: sha512-ZhoIoL7TNV4s5B6+rx5mC//fw8/POGyNxS/DZyCJeiZ12ScLfVwRE/GfsxwiTkMYYD5DmK2/JXnEVXqL4rF+Sw==}
-
   meshoptimizer@0.23.0:
     resolution: {integrity: sha512-zAZcfhHE3wBbwEN8MfCMI9PKRyOpz8491wcR2dxkv3IlNwDZrq2hEs5JZVtzfBrmjWhBZZtZZUO0OBSNFq5iUQ==}
+
+  meshoptimizer@1.1.1:
+    resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
 
   micromark-util-character@2.1.1:
     resolution: {integrity: sha512-wv8tdUTJ3thSFFFJKtpYKOYiGP2+v96Hvk4Tu8KpCAsTMs6yi+nVmGh1syvSCsaxz45J6Jbw+9DD6g97+NV67Q==}
@@ -5146,13 +5143,6 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  three-gpu-pathtracer@0.0.22:
-    resolution: {integrity: sha512-blKolyzKGmhcIYPVv+I6IRndXLBri7i6U0/ZRIApwFoyPWaRVHuEIECH0UPYOO5CYGdnKL49EUScScUOQ/XagQ==}
-    peerDependencies:
-      three: '>=0.151.0'
-      three-mesh-bvh: '>=0.7.4'
-      xatlas-web: ^0.1.0
-
   three-mesh-bvh@0.5.21:
     resolution: {integrity: sha512-TGXPk7YwtlU5rgQJYA25OT6yAdBMeekfC4BTkGNtTWA5glb2rmEpjxvhZncRQSl73QZir2LFOQT0FjfzgG55xw==}
     peerDependencies:
@@ -5168,8 +5158,8 @@ packages:
     peerDependencies:
       three: '>=0.162.0 <1.0.0'
 
-  three@0.176.0:
-    resolution: {integrity: sha512-PWRKYWQo23ojf9oZSlRGH8K09q7nRSWx6LY/HF/UUrMdYgN9i1e2OwJYHoQjwc6HF/4lvvYLC5YC1X8UJL2ZpA==}
+  three@0.186.1:
+    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
 
   tinyexec@0.3.2:
     resolution: {integrity: sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA==}
@@ -5759,6 +5749,7 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
@@ -5864,9 +5855,6 @@ packages:
       utf-8-validate:
         optional: true
 
-  xatlas-web@0.1.0:
-    resolution: {integrity: sha512-PprVfuXbaIskxLTLBUQRaWfgSy9xUQqAMIRooOw0P6NYqwgh6T0voeer6+Z5M7AFt5SGXUybuww/uDGs1yw8vQ==}
-
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -5906,11 +5894,11 @@ packages:
 
 snapshots:
 
-  3d-tiles-renderer@0.4.16(@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0):
+  3d-tiles-renderer@0.4.16(@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1):
     dependencies:
-      three: 0.176.0
+      three: 0.186.1
     optionalDependencies:
-      '@react-three/fiber': 8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0)
+      '@react-three/fiber': 8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
@@ -6068,7 +6056,7 @@ snapshots:
 
   '@babel/code-frame@7.26.2':
     dependencies:
-      '@babel/helper-validator-identifier': 7.25.9
+      '@babel/helper-validator-identifier': 7.27.1
       js-tokens: 4.0.0
       picocolors: 1.1.1
 
@@ -6096,8 +6084,8 @@ snapshots:
 
   '@babel/generator@7.27.0':
     dependencies:
-      '@babel/parser': 7.27.0
-      '@babel/types': 7.27.0
+      '@babel/parser': 7.28.4
+      '@babel/types': 7.28.4
       '@jridgewell/gen-mapping': 0.3.8
       '@jridgewell/trace-mapping': 0.3.25
       jsesc: 3.1.0
@@ -6715,8 +6703,8 @@ snapshots:
   '@babel/template@7.27.0':
     dependencies:
       '@babel/code-frame': 7.26.2
-      '@babel/parser': 7.27.0
-      '@babel/types': 7.27.0
+      '@babel/parser': 7.28.4
+      '@babel/types': 7.28.4
 
   '@babel/traverse@7.21.4':
     dependencies:
@@ -7100,7 +7088,7 @@ snapshots:
   '@jridgewell/gen-mapping@0.3.8':
     dependencies:
       '@jridgewell/set-array': 1.2.1
-      '@jridgewell/sourcemap-codec': 1.5.0
+      '@jridgewell/sourcemap-codec': 1.5.5
       '@jridgewell/trace-mapping': 0.3.25
 
   '@jridgewell/remapping@2.3.5':
@@ -7124,7 +7112,7 @@ snapshots:
   '@jridgewell/trace-mapping@0.3.25':
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.5.0
+      '@jridgewell/sourcemap-codec': 1.5.5
 
   '@juggle/resize-observer@3.4.0': {}
 
@@ -7397,9 +7385,9 @@ snapshots:
 
   '@microsoft/tsdoc@0.15.1': {}
 
-  '@needle-tools/three-animation-pointer@1.0.7(three@0.176.0)':
+  '@needle-tools/three-animation-pointer@1.0.7(three@0.186.1)':
     dependencies:
-      three: 0.176.0
+      three: 0.186.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -7510,7 +7498,7 @@ snapshots:
     dependencies:
       quansync: 0.2.10
 
-  '@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.176.0)':
+  '@react-three/fiber@8.18.0(@types/react@19.1.13)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.186.1)':
     dependencies:
       '@babel/runtime': 7.27.0
       '@types/react-reconciler': 0.26.7
@@ -7523,7 +7511,7 @@ snapshots:
       react-use-measure: 2.1.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       scheduler: 0.21.0
       suspend-react: 0.1.3(react@18.3.1)
-      three: 0.176.0
+      three: 0.186.1
       zustand: 3.7.2(react@18.3.1)
     optionalDependencies:
       react-dom: 18.3.1(react@18.3.1)
@@ -7890,15 +7878,14 @@ snapshots:
 
   '@types/stats.js@0.17.3': {}
 
-  '@types/three@0.176.0':
+  '@types/three@0.186.0':
     dependencies:
       '@dimforge/rapier3d-compat': 0.12.0
       '@tweenjs/tween.js': 23.1.3
       '@types/stats.js': 0.17.3
       '@types/webxr': 0.5.22
-      '@webgpu/types': 0.1.60
-      fflate: 0.8.2
-      meshoptimizer: 0.18.1
+      fflate: 0.8.3
+      meshoptimizer: 1.1.1
 
   '@types/trusted-types@2.0.7': {}
 
@@ -8681,8 +8668,6 @@ snapshots:
     dependencies:
       vue: 3.5.22(typescript@5.8.3)
 
-  '@webgpu/types@0.1.60': {}
-
   '@zip.js/zip.js@2.7.60': {}
 
   acorn@8.14.1: {}
@@ -8909,9 +8894,9 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
 
-  camera-controls@2.10.1(three@0.176.0):
+  camera-controls@2.10.1(three@0.186.1):
     dependencies:
-      three: 0.176.0
+      three: 0.186.1
 
   caniuse-lite@1.0.30001715: {}
 
@@ -9407,6 +9392,8 @@ snapshots:
       picomatch: 4.0.3
 
   fflate@0.8.2: {}
+
+  fflate@0.8.3: {}
 
   filelist@1.0.4:
     dependencies:
@@ -10210,9 +10197,9 @@ snapshots:
 
   mersenne-twister@1.1.0: {}
 
-  meshoptimizer@0.18.1: {}
-
   meshoptimizer@0.23.0: {}
+
+  meshoptimizer@1.1.1: {}
 
   micromark-util-character@2.1.1:
     dependencies:
@@ -11310,25 +11297,19 @@ snapshots:
       commander: 2.20.3
       source-map-support: 0.5.21
 
-  three-gpu-pathtracer@0.0.22(three-mesh-bvh@0.9.0(three@0.176.0))(three@0.176.0)(xatlas-web@0.1.0):
+  three-mesh-bvh@0.5.21(three@0.186.1):
     dependencies:
-      three: 0.176.0
-      three-mesh-bvh: 0.9.0(three@0.176.0)
-      xatlas-web: 0.1.0
+      three: 0.186.1
 
-  three-mesh-bvh@0.5.21(three@0.176.0):
+  three-mesh-bvh@0.9.0(three@0.186.1):
     dependencies:
-      three: 0.176.0
+      three: 0.186.1
 
-  three-mesh-bvh@0.9.0(three@0.176.0):
+  three-viewport-gizmo@2.2.0(three@0.186.1):
     dependencies:
-      three: 0.176.0
+      three: 0.186.1
 
-  three-viewport-gizmo@2.2.0(three@0.176.0):
-    dependencies:
-      three: 0.176.0
-
-  three@0.176.0: {}
+  three@0.186.1: {}
 
   tinyexec@0.3.2: {}
 
@@ -11963,10 +11944,10 @@ snapshots:
 
   watermark-js-plus@1.6.3: {}
 
-  web-ifc-three@0.0.126(three@0.176.0):
+  web-ifc-three@0.0.126(three@0.186.1):
     dependencies:
-      three: 0.176.0
-      three-mesh-bvh: 0.5.21(three@0.176.0)
+      three: 0.186.1
+      three-mesh-bvh: 0.5.21(three@0.186.1)
       web-ifc: 0.0.39
 
   web-ifc@0.0.39: {}
@@ -12175,8 +12156,6 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.18.1: {}
-
-  xatlas-web@0.1.0: {}
 
   xml-name-validator@5.0.0: {}
 

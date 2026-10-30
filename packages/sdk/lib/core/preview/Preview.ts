@@ -4,9 +4,10 @@
  * @date   2025/7/30 18:49
  * @description 资源预览类
  */
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {createRenderer, initializeRenderer, assertSupportedMaterials, captureViewport} from '../rendering/renderer';
 import CameraControls from 'camera-controls';
-import { Timer } from 'three/examples/jsm/misc/Timer.js';
+import { Timer } from 'three/webgpu';
 import {CSS3DRenderer} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import {PreviewOptions} from "@/core/preview/PreviewOptions.ts";
 import Loader from "@/core/loader/Loader.ts";
@@ -51,15 +52,20 @@ CameraControls.install({
 export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
     public _container: HTMLElement;
     public options: IPreviewSetting;
-    public renderer: THREE.WebGLRenderer;
-    public camera: THREE.PerspectiveCamera;
-    public scene: THREE.Scene;
-    public modules: PreviewerModules;
-    public css3DRenderer: CSS3DRenderer;
+    public renderer!: THREE.WebGPURenderer;
+    public readonly ready: Promise<void>;
+    public renderError: Error | null = null;
+    private initialized = false;
+    private destroyed = false;
+    public camera!: THREE.PerspectiveCamera;
+    public scene!: THREE.Scene;
+    public modules!: PreviewerModules;
+    public css3DRenderer!: CSS3DRenderer;
 
     public timer = new Timer();
     private resizeObserver: ResizeObserver | null = null;
-    private resize: () => void;
+    private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    private resize!: () => void;
 
     constructor(options: IPreviewSetting) {
         super();
@@ -69,7 +75,13 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         this.options = PreviewOptions();
         deepAssign(this.options, options);
 
-        const {camera, scene, renderer,css3DRenderer} = this.basicCreation();
+        this.ready = this.initialize().catch(error => { this.failRendering(error); throw error; });
+        void this.ready.catch(() => {});
+    }
+
+    private async initialize() {
+        const {camera, scene, renderer,css3DRenderer} = await this.basicCreation();
+        if (this.destroyed) { await renderer.dispose(); throw new Error('Preview is disposed'); }
         this.camera = camera;
         this.scene = scene;
         this.renderer = renderer;
@@ -81,6 +93,7 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
 
         this.loadEnv({setBg:true});
 
+        this.initialized = true;
         this.renderer.setAnimationLoop(this.animate.bind(this));
 
         this.resize = this.onResize();
@@ -92,21 +105,17 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
     }
 
     set container(container: HTMLElement) {
-        this._container.removeChild(this.renderer.domElement);
-
-        if(this.resizeObserver){
-            this.resizeObserver.unobserve(this._container);
-            this.resizeObserver.disconnect();
-        }
-
+        if (this.destroyed) throw new Error('Preview is disposed');
+        this.resizeObserver?.disconnect();
         this._container = container;
-
+        if (!this.initialized) return;
         this._container.appendChild(this.renderer.domElement);
-
+        this._container.appendChild(this.css3DRenderer.domElement);
         this.resize = this.onResize();
+        this.resize();
     }
 
-    basicCreation(){
+    async basicCreation(){
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100 * 1000);
         camera.name = "Camera";
         camera.position.set(0, 5, 10);
@@ -115,10 +124,9 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         const scene = new THREE.Scene();
         scene.name = "Scene";
 
-        const renderer = new THREE.WebGLRenderer({
+        const renderer = createRenderer({
             antialias: true,
             alpha: true,
-            preserveDrawingBuffer: false,
             powerPreference: "high-performance",
         });
         renderer.autoClear = false;
@@ -126,7 +134,6 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1;
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.autoUpdate = false;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.xr.enabled = false;
         renderer.setClearColor(0x272727, 1);
@@ -140,6 +147,7 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         css3DRenderer.domElement.style.top = '0px';
         css3DRenderer.domElement.style.pointerEvents = 'none';
 
+        await initializeRenderer(renderer, error => this.failRendering(error));
         return { camera,scene,renderer,css3DRenderer };
     }
 
@@ -178,6 +186,11 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         },options)
 
         Loader.loadUrlTexture(params.extension, this.options.hdr, (texture: THREE.Texture) => {
+            if (this.destroyed) {
+                texture.dispose();
+                params.onError?.(new Error('Preview is disposed'));
+                return;
+            }
             texture.mapping = THREE.EquirectangularReflectionMapping;
             this.scene.environment = texture;
             params.setBg && (this.scene.background = texture);
@@ -191,16 +204,15 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
     /**
      * 加载预览项
      */
-    load(fileOrUrl:string | File,type:string = "Model") {
-        return new Promise(async (resolve, reject) => {
-            this.clear();
-
-            let file = fileOrUrl;
+    async load(fileOrUrl:string | File,type:string = "Model") {
+        await this.ready;
+        if (this.destroyed) throw new Error("Preview is disposed");
+        if (this.renderError) throw this.renderError;
+        let file = fileOrUrl;
             if(!(fileOrUrl instanceof File) && !["Texture","Billboard","HDR","Tiles"].includes(type)) {
                 const response = await fetch(fileOrUrl);
                 if (!response.ok) {
-                    reject('The network is responding abnormally');
-                    return;
+                    throw new Error(`Preview resource request failed: ${response.status}`);
                 }
 
                 const filename = fileOrUrl.substring(fileOrUrl.lastIndexOf("/") + 1);
@@ -208,10 +220,13 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
                 const blob = await response.blob();
                 file = new File([blob], filename,{ type: blob.type });
             }
-
+        if (this.destroyed) throw new Error('Preview is disposed');
+        return new Promise((resolve, reject) => {
+            this.clear();
             switch (type) {
                 case "Model":
                     Loader.loadFile(file, new THREE.LoadingManager(),null,false).then((model) => {
+                        if (this.destroyed) throw new Error('Preview is disposed');
                         this.scene.add(model);
                         focusObject(model,this.modules.controls);
 
@@ -223,6 +238,7 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
                 case "Material":
                     parseMaterialZip(file as File)
                         .then((material) => {
+                            if (this.destroyed) { material.dispose(); throw new Error('Preview is disposed'); }
                             const geometry = new THREE.SphereGeometry(1, 32, 32, 0, Math.PI * 2, 0, Math.PI);
                             const mesh = new THREE.Mesh(geometry, material);
                             this.scene.add(mesh);
@@ -245,6 +261,12 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
                     const material = new THREE.MeshStandardMaterial({
                         side: THREE.DoubleSide,
                         map: new THREE.TextureLoader().load(mapPath as string,(texture) => {
+                            if (this.destroyed) {
+                                texture.dispose(); geometry.dispose(); material.dispose();
+                                if (file instanceof File) URL.revokeObjectURL(mapPath as string);
+                                reject(new Error('Preview is disposed'));
+                                return;
+                            }
                             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                             texture.repeat.set(1, 1);
                             if(file instanceof File){
@@ -351,18 +373,19 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
      */
     onResize(){
         const resize = () => {
+            if (this.destroyed) return;
             this.camera.aspect = this._container.offsetWidth / this._container.offsetHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(this._container.offsetWidth, this._container.offsetHeight);
+            this.css3DRenderer.setSize(this._container.offsetWidth, this._container.offsetHeight);
         }
 
-        let timer: NodeJS.Timeout | null = null;
         this.resizeObserver = new ResizeObserver(() => {
-            if (timer) return;
-            timer = setTimeout(() => {
+            if (this.resizeTimer) return;
+            this.resizeTimer = setTimeout(() => {
                 resize();
 
-                timer = null;
+                this.resizeTimer = null;
             }, 16)
         });
         this.resizeObserver.observe(this._container);
@@ -374,6 +397,7 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
      * 清空场景
      */
     clear(){
+        if (!this.scene) return;
         for(let i = this.scene.children.length - 1; i >= 0; i--){
             const child = this.scene.children[i];
             if(!child.parent || child.ignore) continue;
@@ -385,6 +409,7 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
     }
 
     animate(){
+        if (!this.initialized || this.destroyed || this.renderError) return;
         this.timer.update();
 
         const delta = this.timer.getDelta();
@@ -408,9 +433,12 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
     }
 
     render(){
+        if (!this.initialized || this.destroyed || this.renderError) return;
+        try {
         this.dispatchEvent({type: 'beforeRender'});
+        assertSupportedMaterials(this.scene);
 
-        this.renderer.autoClear = false;
+        this.renderer.autoClear = true;
 
         this.renderer.render(this.scene, this.camera);
 
@@ -419,12 +447,28 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         this.renderer.autoClear = true;
 
         this.dispatchEvent({type: 'afterRender'});
+        } catch (error) { this.failRendering(error); }
+    }
+
+    failRendering(error: unknown) {
+        if (this.renderError || this.destroyed) return;
+        this.renderError = error instanceof Error ? error : new Error(String(error));
+        this.renderer?.setAnimationLoop(null);
+        console.error('[H3D] Preview stopped', this.renderError);
+        (window as any).$message?.error(this.renderError.message);
     }
 
     /**
      * 销毁
      */
     dispose() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        this.initialized = false;
+        if (this.resizeTimer) clearTimeout(this.resizeTimer);
+        this.resizeObserver?.disconnect();
+        this.timer.dispose();
+        if (!this.modules) return;
         this.resizeObserver?.unobserve(this._container);
         this.resizeObserver?.disconnect();
 
@@ -440,7 +484,8 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
         this.scene.background = null;
         this.scene.environment = null;
 
-        this._container.removeChild(this.renderer.domElement);
+        this.renderer.domElement.remove();
+        this.css3DRenderer.domElement.remove();
 
         this.renderer.setAnimationLoop(null);
         this.renderer.dispose();
@@ -508,29 +553,13 @@ export default class Preview extends THREE.EventDispatcher<PreviewerEventMap>  {
      * 获取画布的截屏图片
      * @returns Promise<HTMLImageElement> 截屏的图片对象
      */
-    getViewportImage() {
-        return new Promise<HTMLImageElement>((resolve, rejcet) => {
-            // @ts-ignore
-            const _preserveDrawingBuffer = this.renderer.getContext().preserveDrawingBuffer;
-            // @ts-ignore
-            this.renderer.getContext().preserveDrawingBuffer = true;
+    async getViewportImage() {
+        await this.ready;
+        if (this.destroyed) throw new Error('Preview is disposed');
+        if (this.renderError) throw this.renderError;
+        return captureViewport(this.renderer, () => {
             this.render();
-
-            this.renderer.domElement.toBlob((blob) => {
-                if (blob === null) {
-                    rejcet('Screenshots fail');
-                    return;
-                }
-
-                const image = new Image();
-                image.src = URL.createObjectURL(blob);
-
-                // @ts-ignore
-                this.renderer.getContext().preserveDrawingBuffer = _preserveDrawingBuffer;
-                this.render();
-
-                resolve(image);
-            });
+            if (this.renderError) throw this.renderError;
         });
     }
 }

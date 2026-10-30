@@ -54,3 +54,4 @@ export {
     Preview,
     Loader
 }
+export {createRenderer, initializeRenderer, getRenderingAPI, captureViewport, assertSupportedMaterials} from './core/rendering/renderer';

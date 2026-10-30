@@ -51,6 +51,8 @@ onMounted(async () => {
     }
   });
 
+  try { await window.viewer.ready; }
+  catch { return; } // Viewer reports the actual initialization error.
   await nextTick();
 
   // 添加astral engine内置插件并监听插件注册

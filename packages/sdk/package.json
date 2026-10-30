@@ -18,7 +18,7 @@
     },
     "scripts": {
         "dev": "vite",
-        "build": "tsc && vite build"
+        "build": "tsc && node scripts/build.mjs"
     },
     "dependencies": {
         "3d-tiles-renderer": "^0.4.16",
@@ -32,7 +32,6 @@
         "pako": "^2.1.0",
         "signals": "^1.0.0",
         "three": "catalog:",
-        "three-gpu-pathtracer": "^0.0.22",
         "three-mesh-bvh": "^0.9.0",
         "three-viewport-gizmo": "^2.0.2",
         "web-ifc-three": "^0.0.126"

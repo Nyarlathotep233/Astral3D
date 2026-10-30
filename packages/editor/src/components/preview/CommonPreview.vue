@@ -92,6 +92,7 @@ defineExpose({
   getPreviewer: async () => {
     await nextTick();
 
+    await previewer?.ready;
     return previewer;
   },
 })

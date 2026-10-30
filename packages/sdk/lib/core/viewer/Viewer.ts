@@ -1,6 +1,7 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {createRenderer, initializeRenderer, assertSupportedMaterials, captureViewport} from '../rendering/renderer';
 import CameraControls from 'camera-controls';
-import {Timer} from 'three/examples/jsm/misc/Timer.js';
+import {Timer} from 'three/webgpu';
 import {CSS2DRenderer} from "three/examples/jsm/renderers/CSS2DRenderer";
 import {CSS3DRenderer} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import {TransformControls} from "three/examples/jsm/controls/TransformControls.js";
@@ -29,7 +30,6 @@ import {
 } from "@/core/commands/Commands";
 import {Emitter} from '@/core/libs/three-nebula';
 import ParticleEmitter from "@/core/objects/ParticleEmitter.ts";
-import {ViewerPathTracer} from "@/core/viewer/ViewerPathTracer.ts";
 import {Helper as ScriptHelper, syncScriptParamsFromSource} from "../script";
 import Tiles from "../objects/Tile.ts";
 
@@ -177,17 +177,22 @@ interface InstallScriptsOptions {
 export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     public container: HTMLElement;
     public options: IViewerSetting;
-    public renderer: THREE.WebGLRenderer;
+    public renderer!: THREE.WebGPURenderer;
+    public readonly ready: Promise<void>;
+    public renderError: Error | null = null;
+    private initialized = false;
+    private destroyed = false;
+    private resizeObserver: ResizeObserver | null = null;
+    private resizeTimer: ReturnType<typeof setTimeout> | null = null;
     public camera: THREE.PerspectiveCamera;
     public scene: THREE.Scene;
     public sceneHelpers: THREE.Scene;
     public grid: THREE.Group | undefined;
     public box: THREE.Box3 = new THREE.Box3();
-    public selectionBox: THREE.Box3Helper;
-    public raycaster: THREE.Raycaster;
+    public selectionBox!: THREE.Box3Helper;
+    public raycaster!: THREE.Raycaster;
     public pmremGenerator: THREE.PMREMGenerator | null = null;
-    public pathtracer: ViewerPathTracer | undefined;
-    public modules: ViewerModules;
+    public modules!: ViewerModules;
 
     public css2DRenderer: CSS2DRenderer = new CSS2DRenderer();
     public css3DRenderer: CSS3DRenderer = new CSS3DRenderer();
@@ -209,7 +214,18 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.scene = App.scene;
         this.sceneHelpers = App.sceneHelpers;
 
-        this.renderer = this.createEngine();
+        this.ready = this.initialize().catch(error => {
+            this.failRendering(error);
+            throw error;
+        });
+        // Consumers still receive a rejecting ready promise; this handler avoids an
+        // unhandled rejection when a view is closed before it can await readiness.
+        void this.ready.catch(() => {});
+    }
+
+    private async initialize() {
+        this.renderer = await this.createEngine();
+        if (this.destroyed) { await this.renderer.dispose(); throw new Error('Viewer is disposed'); }
 
         this.modules = this.initModules();
 
@@ -234,21 +250,22 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.raycaster.firstHitOnly = true;
 
         this.engineCreated(this.renderer)
+        this.initialized = true;
+        this.renderer.setAnimationLoop(this.animate.bind(this));
 
         this.loadEnv(true);
 
         this.initEvent();
 
         //监听视窗变化（节流）
-        let timer: NodeJS.Timeout | null = null;
-        const resizeObserver = new ResizeObserver(() => {
-            if (timer) return;
-            timer = setTimeout(() => {
+        this.resizeObserver = new ResizeObserver(() => {
+            if (this.resizeTimer) return;
+            this.resizeTimer = setTimeout(() => {
                 useDispatchSignal("sceneResize", this.container.offsetWidth, this.container.offsetHeight);
-                timer = null;
+                this.resizeTimer = null;
             }, 16)
         });
-        resizeObserver.observe(this.container);
+        this.resizeObserver.observe(this.container);
 
         useDispatchSignal("viewerInitCompleted", this);
     }
@@ -365,12 +382,11 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     /**
      * 创建默认渲染引擎
      */
-    createEngine() {
+    async createEngine() {
         const renderConfig = App.project.getKey("renderer");
-        const renderer = new THREE.WebGLRenderer({
+        const renderer = createRenderer({
             antialias: renderConfig.antialias,
             alpha: true,
-            preserveDrawingBuffer: false,
             powerPreference: "high-performance",
         });
 
@@ -383,7 +399,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         renderer.shadowMap.type = renderConfig.shadow.type;
         renderer.xr.enabled = App.project.getKey("xr");
 
-        this.modules && this.engineCreated(renderer);
+        await initializeRenderer(renderer, error => this.failRendering(error));
+        if (this.destroyed) { await renderer.dispose(); throw new Error('Viewer is disposed'); }
+        if (this.modules) {
+            this.engineCreated(renderer);
+            renderer.setAnimationLoop(this.animate.bind(this));
+        }
 
         return renderer;
     }
@@ -392,7 +413,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 创建渲染引擎后
      * @param newRenderer
      */
-    engineCreated(newRenderer: THREE.WebGLRenderer) {
+    engineCreated(newRenderer: THREE.WebGPURenderer) {
         if (this.renderer && this.renderer !== newRenderer) {
             this.renderer.setAnimationLoop(null);
             this.renderer.dispose();
@@ -408,7 +429,6 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
 
         this.renderer = newRenderer;
 
-        this.renderer.setAnimationLoop(this.animate.bind(this));
         this.renderer.setPixelRatio(Math.max(Math.ceil(window.devicePixelRatio), 1));
         this.renderer.setSize(this.container.offsetWidth, this.container.offsetHeight);
 
@@ -417,7 +437,6 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
             useDispatchSignal("sceneGraphChanged");
         }
 
-        this.pathtracer = new ViewerPathTracer(newRenderer);
 
         // 在container中最前面插入渲染器的dom元素
         this.container.insertBefore(newRenderer.domElement, this.container.firstChild);
@@ -1003,6 +1022,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 循环动画
      */
     animate() {
+        if (!this.initialized || this.destroyed || this.renderError) return;
         this.timer.update();
 
         const delta = this.timer.getDelta();
@@ -1064,7 +1084,6 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
 
         if (needRender) this.render(timeStamp);
 
-        this.updatePT();
 
         // console.log(`调用.animate时间间隔${timeStamp*1000}毫秒,delta:${delta}`);
         // 剩余的时间合并进入下次的判断计算
@@ -1072,45 +1091,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     }
 
     /**
-     * 初始化光线路径追踪模拟
-     */
-    initPT() {
-        if (App.viewportShading === 'realistic') {
-            this.pathtracer?.init(this.scene, this.camera);
-        }
-    }
-
-    updatePTBackground() {
-        if (App.viewportShading === 'realistic') {
-            this.pathtracer?.setBackground();
-        }
-    }
-
-    updatePTEnvironment() {
-        if (App.viewportShading === 'realistic') {
-            this.pathtracer?.setEnvironment();
-        }
-    }
-
-    updatePTMaterials() {
-        if (App.viewportShading === 'realistic') {
-            this.pathtracer?.updateMaterials();
-        }
-    }
-
-    updatePT() {
-        if (App.viewportShading === 'realistic') {
-            this.pathtracer?.update();
-            useDispatchSignal("pathTracerUpdated", this.pathtracer?.getSamples())
-        }
-    }
-
-    /**
      * 渲染场景帧
      */
     render(delta?: number) {
-        if (!this.renderer) return;
+        if (!this.initialized || this.destroyed || this.renderError) return;
 
+        try {
         if (isNil(delta)) {
             delta = this.timer.getDelta();
         }
@@ -1118,8 +1104,10 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         const startTime = performance.now();
 
         this.dispatchEvent({type: 'beforeRender', delta: <number>delta});
+        assertSupportedMaterials(this.scene);
+        assertSupportedMaterials(this.sceneHelpers);
 
-        this.renderer.clearDepth();
+        this.renderer.clear();
 
         App.csm.update();
 
@@ -1145,12 +1133,35 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         // 计算帧时
         const fs = endTime - startTime;
         useDispatchSignal("sceneRendered", fs);
+        } catch (error) { this.failRendering(error); }
+    }
+
+    failRendering(error: unknown) {
+        if (this.renderError || this.destroyed) return;
+        this.renderError = error instanceof Error ? error : new Error(String(error));
+        this.renderer?.setAnimationLoop(null);
+        console.error('[H3D] Rendering stopped', this.renderError);
+        (window as any).$message?.error(this.renderError.message);
+    }
+
+    assertRenderable() {
+        if (this.destroyed) throw new Error('Viewer is disposed');
+        if (this.renderError) throw this.renderError;
+        assertSupportedMaterials(this.scene);
     }
 
     /**
      * 销毁
      */
     dispose() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        this.initialized = false;
+        this.resizeObserver?.disconnect();
+        if (this.resizeTimer) clearTimeout(this.resizeTimer);
+        this.timer.dispose();
+        if (!this.modules) return;
+        this.renderer.setAnimationLoop(null);
         this.dispatchEvent({type: "beforeDestroy"});
 
         this.container.removeEventListener('mousedown', Fn.mousedown);
@@ -1171,6 +1182,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.dispatchEvent({type: "afterDestroy"});
 
         this.unInstallScripts();
+        this.pmremGenerator?.dispose();
+        this.renderer.dispose();
+        this.renderer.domElement.remove();
+        this.css2DRenderer.domElement.remove();
+        this.css3DRenderer.domElement.remove();
+        this.selectionBox.removeFromParent();
     }
 
     /* -----------------暂时放在Viewer下的工具方法-------------------- */
@@ -1225,31 +1242,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 获取画布的截屏图片
      * @returns Promise<HTMLImageElement> 截屏的图片对象
      */
-    getViewportImage() {
-        return new Promise<HTMLImageElement>((resolve, rejcet) => {
-            // @ts-ignore
-            const _preserveDrawingBuffer = this.renderer.getContext().preserveDrawingBuffer;
-            // @ts-ignore
-            this.renderer.getContext().preserveDrawingBuffer = true;
-            this.modules.viewHelper.hidden = false;
+    async getViewportImage() {
+        await this.ready;
+        this.assertRenderable();
+        return captureViewport(this.renderer, () => {
             this.render();
-
-            this.renderer.domElement.toBlob((blob) => {
-                if (blob === null) {
-                    rejcet('Screenshots fail');
-                    return;
-                }
-
-                const image = new Image();
-                image.src = URL.createObjectURL(blob);
-
-                // @ts-ignore
-                this.renderer.getContext().preserveDrawingBuffer = _preserveDrawingBuffer;
-                this.modules.viewHelper.hidden = true;
-                this.render();
-
-                resolve(image);
-            });
+            this.assertRenderable();
         });
     }
 }
