@@ -15,3 +15,6 @@ catalog:
   'naive-ui': ^2.43.1
 
 autoInstallPeers: true
+
+patchedDependencies:
+  '@takram/three-atmosphere@0.19.1': patches/@takram__three-atmosphere@0.19.1.patch

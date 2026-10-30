@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import type { FormInst } from "naive-ui";
 import { DEFAULT_GIS_CONFIG, type GisConfig } from "@astral3d/engine";
 
 const formRef = ref<FormInst | null>(null);
 const form = reactive<GisConfig>(structuredClone(DEFAULT_GIS_CONFIG));
+const atmosphereTimestamp = computed({
+  get: () => new Date(form.atmosphereDateTime).getTime(),
+  set: (value: number) => {
+    form.atmosphereDateTime = new Date(value).toISOString();
+  },
+});
 const rules = {
   tiandituToken: {
     required: true,
@@ -63,6 +69,15 @@ defineExpose({ getData, validate });
       >
         <template #suffix>米</template>
       </n-input-number>
+    </n-form-item>
+    <n-form-item label="大气时间">
+      <n-date-picker
+        v-model:value="atmosphereTimestamp"
+        type="datetime"
+        :clearable="false"
+        format="yyyy-MM-dd HH:mm:ss"
+        class="w-full"
+      />
     </n-form-item>
   </n-form>
 </template>

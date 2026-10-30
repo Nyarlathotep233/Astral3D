@@ -1,0 +1,28 @@
+diff --git a/build/shared.js b/build/shared.js
+index 684ea9030c6abff3b2f29c2bfbbaefcb6e7203c5..24d4704a653e85bff3316f3296585cbbee904d30 100644
+--- a/build/shared.js
++++ b/build/shared.js
+@@ -3063,7 +3063,7 @@ function C0(n, e, t, r) {
+     type: n,
+     format: Rt
+   }), a = i.texture;
+-  return a.minFilter = D0, a.magFilter = D0, a.wrapS = U0, a.wrapT = U0, a.wrapR = U0, a.colorSpace = _t, i;
++  return a.type = n, a.format = Rt, a.minFilter = D0, a.magFilter = D0, a.wrapS = U0, a.wrapT = U0, a.wrapR = U0, a.colorSpace = _t, i;
+ }
+ function ui(n) {
+   const e = n[Symbol.iterator]();
+diff --git a/src/PrecomputedTexturesGenerator.ts b/src/PrecomputedTexturesGenerator.ts
+index fe4c875435840217c4aeb3875e11eb4260ff0215..00e372bef170eeb693e8efbf57db58f7feea6baa 100644
+--- a/src/PrecomputedTexturesGenerator.ts
++++ b/src/PrecomputedTexturesGenerator.ts
+@@ -98,6 +98,10 @@ function create3DRenderTarget(
+     format: RGBAFormat
+   })
+   const texture = renderTarget.texture
++  // Three.js before r184 did not copy constructor options to the replacement
++  // Data3DTexture created by WebGL3DRenderTarget.
++  texture.type = type
++  texture.format = RGBAFormat
+   texture.minFilter = LinearFilter
+   texture.magFilter = LinearFilter
+   texture.wrapS = ClampToEdgeWrapping

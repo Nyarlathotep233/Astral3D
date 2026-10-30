@@ -9,10 +9,13 @@ process.on("unhandledRejection", (error) => {
 });
 
 const {
+  DEFAULT_GIS_CONFIG,
   SetGeoPositionCommand,
   applyGeoAnchorTransform,
   getGeoPosition,
 } = await import("../packages/sdk/dist/astral3d.es.js");
+
+assert.ok(Number.isFinite(Date.parse(DEFAULT_GIS_CONFIG.atmosphereDateTime)));
 
 const source = {
   longitude: 104.12345678,

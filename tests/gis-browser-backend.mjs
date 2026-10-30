@@ -18,6 +18,7 @@ const scene = {
       latitude: 35,
       altitude: 20_000_000,
     },
+    atmosphereDateTime: "2026-07-24T04:00:00.000Z",
   }),
 };
 

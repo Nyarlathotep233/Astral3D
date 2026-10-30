@@ -1,32 +1,44 @@
 <template>
   <n-form label-placement="left" :label-width="90" label-align="left" size="small">
     <!-- background -->
-    <n-form-item :label="t('layout.sider.sceneConfig.Background')">
-      <template class="w-full flex items-center justify-between">
-        <n-select v-model:value="backgroundType" @update:value="onBackgroundChanged"
-                  :options="[{ label: '', value: 'None' }, { label: 'Color', value: 'Color' }, { label: 'Texture', value: 'Texture' }, { label: 'Equirect', value: 'Equirectangular' }]"/>
+    <template v-if="!isGisProject">
+      <n-form-item :label="t('layout.sider.sceneConfig.Background')">
+        <template class="w-full flex items-center justify-between">
+          <n-select v-model:value="backgroundType" @update:value="onBackgroundChanged"
+                    :options="[{ label: '', value: 'None' }, { label: 'Color', value: 'Color' }, { label: 'Texture', value: 'Texture' }, { label: 'Equirect', value: 'Equirectangular' }]"/>
 
-        <n-color-picker v-if="backgroundType === 'Color'" v-model:value="backgroundColor" :show-alpha="false" :render-label="() => ''"
-                        :modes="['hex']" @update:value="onBackgroundChanged" size="small"  class="ml-5px w-36px"/>
+          <n-color-picker v-if="backgroundType === 'Color'" v-model:value="backgroundColor" :show-alpha="false" :render-label="() => ''"
+                          :modes="['hex']" @update:value="onBackgroundChanged" size="small"  class="ml-5px w-36px"/>
 
-        <EsTexture v-else-if="backgroundType === 'Texture'" v-model:texture="backgroundTexture"
-                   @change="onBackgroundChanged" width="26px" height="26px" class="ml-5px"/>
+          <EsTexture v-else-if="backgroundType === 'Texture'" v-model:texture="backgroundTexture"
+                     @change="onBackgroundChanged" width="26px" height="26px" class="ml-5px"/>
 
-        <EsTexture v-else-if="backgroundType === 'Equirectangular'" v-model:texture="backgroundEquirectangularTexture"
-                   @change="onBackgroundChanged" width="26px" height="26px" class="ml-5px" />
-      </template>
+          <EsTexture v-else-if="backgroundType === 'Equirectangular'" v-model:texture="backgroundEquirectangularTexture"
+                     @change="onBackgroundChanged" width="26px" height="26px" class="ml-5px" />
+        </template>
+      </n-form-item>
+      <div v-if="backgroundType === 'Equirectangular'" class="flex justify-start items-center pl-90px pb-1">
+        <EsInputNumber v-model:value="backgroundBlurriness" class="w-30% ml-5px"
+                       size="tiny" :show-button="false" :min="0" :max="1" :decimal="2"
+                       @change="onBackgroundChanged" />
+        <EsInputNumber v-model:value="backgroundIntensity" class="w-30% ml-5px"
+                       size="tiny" :show-button="false" :min="0" :max="Infinity" :decimal="2"
+                       @change="onBackgroundChanged" />
+        <EsInputNumber v-model:value="backgroundRotation" class="w-30% ml-5px"
+                       size="tiny" :show-button="false" :min="-180" :max="180" :decimal="1" unit="°"
+                       @change="onBackgroundChanged" />
+      </div>
+    </template>
+    <n-form-item v-else label="大气时间">
+      <n-date-picker
+        v-model:value="atmosphereTimestamp"
+        type="datetime"
+        :clearable="false"
+        format="yyyy-MM-dd HH:mm:ss"
+        class="w-full"
+        @update:value="onAtmosphereDateTimeChanged"
+      />
     </n-form-item>
-    <div v-if="backgroundType === 'Equirectangular'" class="flex justify-start items-center pl-90px pb-1">
-      <EsInputNumber v-model:value="backgroundBlurriness" class="w-30% ml-5px"
-                     size="tiny" :show-button="false" :min="0" :max="1" :decimal="2"
-                     @change="onBackgroundChanged" />
-      <EsInputNumber v-model:value="backgroundIntensity" class="w-30% ml-5px"
-                     size="tiny" :show-button="false" :min="0" :max="Infinity" :decimal="2"
-                     @change="onBackgroundChanged" />
-      <EsInputNumber v-model:value="backgroundRotation" class="w-30% ml-5px"
-                     size="tiny" :show-button="false" :min="-180" :max="180" :decimal="1" unit="°"
-                     @change="onBackgroundChanged" />
-    </div>
 
     <!-- environment -->
     <n-form-item :label="t('layout.sider.sceneConfig.Environment')">
@@ -72,6 +84,8 @@ const backgroundEquirectangularTexture = ref();
 const backgroundBlurriness = ref(0);
 const backgroundIntensity = ref(1);
 const backgroundRotation = ref(0);
+const isGisProject = App.project.getKey("sceneInfo.projectType") === 1;
+const atmosphereTimestamp = ref(Date.now());
 //环境
 const environmentSelect = ref("None");
 const environmentTexture = ref()
@@ -97,6 +111,11 @@ onBeforeUnmount(()=>{
 // 更新树及背景/环境
 function refreshUI() {
   const scene = App.scene;
+  const dateTime = App.project.getKey("sceneInfo.gisConfig.atmosphereDateTime");
+  const timestamp = new Date(dateTime).getTime();
+  if (!Number.isNaN(timestamp)) {
+    atmosphereTimestamp.value = timestamp;
+  }
 
   //背景
   if (scene.background) {
@@ -145,6 +164,14 @@ function onBackgroundChanged() {
       toRaw(backgroundIntensity.value),
       toRaw(backgroundRotation.value),
   );
+}
+
+function onAtmosphereDateTimeChanged(value: number | null) {
+  if (value === null) return;
+
+  const dateTime = new Date(value).toISOString();
+  App.project.setKey("sceneInfo.gisConfig.atmosphereDateTime", dateTime);
+  window.viewer.modules.gisLayer.setAtmosphereDateTime(dateTime);
 }
 
 //environment Change Event

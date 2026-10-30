@@ -10,6 +10,15 @@ import {
     Geodetic,
     PointOfView,
 } from "@takram/three-geospatial";
+import {
+    getECIToECEFRotationMatrix,
+    getMoonDirectionECI,
+    getSunDirectionECI,
+    PrecomputedTexturesGenerator,
+    SkyMaterial,
+    StarsGeometry,
+    StarsMaterial,
+} from "@takram/three-atmosphere";
 import { useDispatchSignal } from "@/hooks";
 import type Viewer from "../Viewer";
 
@@ -30,7 +39,11 @@ export interface GisInitialView {
 export interface GisConfig {
     tiandituToken: string;
     initialView: GisInitialView;
+    atmosphereDateTime: string;
 }
+
+const defaultAtmosphereDate = new Date();
+defaultAtmosphereDate.setHours(12, 0, 0, 0);
 
 export const DEFAULT_GIS_CONFIG: GisConfig = {
     tiandituToken: "",
@@ -39,7 +52,15 @@ export const DEFAULT_GIS_CONFIG: GisConfig = {
         latitude: 35,
         altitude: 20_000_000,
     },
+    atmosphereDateTime: defaultAtmosphereDate.toISOString(),
 };
+
+const STARS_DATA_URL = new URL(
+    `${import.meta.env.BASE_URL}resource/gis/stars.bin`,
+    import.meta.url,
+).href;
+
+const ATMOSPHERE_EXPOSURE = 10;
 
 const LOCAL_TO_ENU = new THREE.Matrix4().set(
     1, 0, 0, 0,
@@ -60,6 +81,26 @@ function assertGeoPosition(position: GeoPosition) {
     ) {
         throw new RangeError("Invalid WGS84 position");
     }
+}
+
+function parseAtmosphereDateTime(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        throw new RangeError("Invalid GIS atmosphere date time");
+    }
+    return date;
+}
+
+function applyAtmosphereExposure(material: SkyMaterial | StarsMaterial) {
+    // The Vanilla example applies exposure 10 in its tone-mapping pass. Keep the
+    // adjustment local to GIS atmosphere materials instead of changing Astral's renderer.
+    const uniforms = material.uniforms;
+    uniforms.SUN_SPECTRAL_RADIANCE_TO_LUMINANCE.value = uniforms
+        .SUN_SPECTRAL_RADIANCE_TO_LUMINANCE.value.clone()
+        .multiplyScalar(ATMOSPHERE_EXPOSURE);
+    uniforms.SKY_SPECTRAL_RADIANCE_TO_LUMINANCE.value = uniforms
+        .SKY_SPECTRAL_RADIANCE_TO_LUMINANCE.value.clone()
+        .multiplyScalar(ATMOSPHERE_EXPOSURE);
 }
 
 function toECEF(position: GeoPosition) {
@@ -106,10 +147,21 @@ export class GisLayer {
     public enabled = false;
     public controls: GlobeControls | null = null;
     public tiles: TilesRenderer | null = null;
+    public atmosphereGroup: THREE.Group | null = null;
 
     private viewer: Viewer;
     private config: GisConfig | null = null;
     private loadErrorShown = false;
+    private atmosphereErrorShown = false;
+    private atmosphereGeneration = 0;
+    private atmosphereGenerator: PrecomputedTexturesGenerator | null = null;
+    private sky: THREE.Mesh | null = null;
+    private skyMaterial: SkyMaterial | null = null;
+    private stars: THREE.Points | null = null;
+    private starsMaterial: StarsMaterial | null = null;
+    private readonly atmosphereRotation = new THREE.Matrix4();
+    private readonly sunDirection = new THREE.Vector3();
+    private readonly moonDirection = new THREE.Vector3();
 
     constructor(viewer: Viewer) {
         this.viewer = viewer;
@@ -121,6 +173,8 @@ export class GisLayer {
         }
 
         this.disable();
+        config.atmosphereDateTime ||= DEFAULT_GIS_CONFIG.atmosphereDateTime;
+        parseAtmosphereDateTime(config.atmosphereDateTime);
         this.config = config;
 
         const tiles = new TilesRenderer();
@@ -167,6 +221,8 @@ export class GisLayer {
         tiles.setResolutionFromRenderer(this.viewer.camera, this.viewer.renderer);
         tiles.group.name = "GIS Base Map";
         tiles.group.ignore = true;
+        // XYZ image tiles use transparent materials, so render them before business overlays.
+        tiles.group.renderOrder = -1;
         tiles.addEventListener("load-error", (event) => {
             this.notifyLoadError(event.error);
         });
@@ -190,6 +246,7 @@ export class GisLayer {
         this.controls = controls;
         this.enabled = true;
         this.viewer.scene.add(tiles.group);
+        this.createAtmosphere();
         this.viewer.modules.controls.enabled = false;
         this.viewer.modules.viewHelper.hidden = true;
 
@@ -209,8 +266,113 @@ export class GisLayer {
         (window as any).$message?.error("天地图影像或注记加载失败，请检查 Token 或网络");
     }
 
+    private createAtmosphere() {
+        if (!this.config) return;
+
+        const generation = ++this.atmosphereGeneration;
+        const group = new THREE.Group();
+        group.name = "GIS Atmosphere";
+        group.ignore = true;
+
+        const generator = new PrecomputedTexturesGenerator(this.viewer.renderer);
+        const skyMaterial = new SkyMaterial();
+        applyAtmosphereExposure(skyMaterial);
+        Object.assign(skyMaterial, generator.textures);
+        const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), skyMaterial);
+        sky.frustumCulled = false;
+        group.add(sky);
+
+        this.atmosphereGroup = group;
+        this.atmosphereGenerator = generator;
+        this.sky = sky;
+        this.skyMaterial = skyMaterial;
+        this.viewer.scene.add(group);
+        this.applyAtmosphereDateTime(this.config.atmosphereDateTime);
+
+        generator.update().then(() => {
+            if (generation === this.atmosphereGeneration) {
+                this.viewer.render();
+            }
+        }).catch((error: unknown) => {
+            if (generation !== this.atmosphereGeneration) return;
+            this.notifyAtmosphereError(error);
+            this.clearAtmosphere();
+        });
+
+        void fetch(STARS_DATA_URL).then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.arrayBuffer();
+        }).then((data) => {
+            if (generation !== this.atmosphereGeneration || !this.atmosphereGenerator) return;
+
+            const starsMaterial = new StarsMaterial({
+                intensity: 10 * ATMOSPHERE_EXPOSURE,
+            });
+            applyAtmosphereExposure(starsMaterial);
+            Object.assign(starsMaterial, this.atmosphereGenerator.textures);
+            const stars = new THREE.Points(new StarsGeometry(data), starsMaterial);
+            stars.frustumCulled = false;
+
+            this.starsMaterial = starsMaterial;
+            this.stars = stars;
+            group.add(stars);
+            this.applyAtmosphereDateTime(this.config!.atmosphereDateTime);
+            this.viewer.render();
+        }).catch((error: unknown) => {
+            if (generation === this.atmosphereGeneration) {
+                this.notifyAtmosphereError(error);
+            }
+        });
+    }
+
+    private notifyAtmosphereError(error: unknown) {
+        if (this.atmosphereErrorShown) return;
+        this.atmosphereErrorShown = true;
+        console.error("[GIS] Atmosphere initialization failed", error);
+        (window as any).$message?.warning("GIS 大气初始化失败，已保留场景背景");
+    }
+
+    private applyAtmosphereDateTime(value: string) {
+        const date = parseAtmosphereDateTime(value);
+        getECIToECEFRotationMatrix(date, this.atmosphereRotation);
+        getSunDirectionECI(date, this.sunDirection).applyMatrix4(this.atmosphereRotation);
+        getMoonDirectionECI(date, this.moonDirection).applyMatrix4(this.atmosphereRotation);
+
+        this.skyMaterial?.sunDirection.copy(this.sunDirection);
+        this.skyMaterial?.moonDirection.copy(this.moonDirection);
+        this.starsMaterial?.sunDirection.copy(this.sunDirection);
+        this.stars?.setRotationFromMatrix(this.atmosphereRotation);
+    }
+
+    setAtmosphereDateTime(value: string) {
+        parseAtmosphereDateTime(value);
+        if (!this.config) return;
+
+        this.config.atmosphereDateTime = value;
+        this.applyAtmosphereDateTime(value);
+        this.viewer.render();
+    }
+
+    private clearAtmosphere() {
+        ++this.atmosphereGeneration;
+        this.atmosphereGroup?.removeFromParent();
+        this.sky?.geometry.dispose();
+        this.skyMaterial?.dispose();
+        this.stars?.geometry.dispose();
+        this.starsMaterial?.dispose();
+        this.atmosphereGenerator?.dispose();
+
+        this.atmosphereGroup = null;
+        this.atmosphereGenerator = null;
+        this.sky = null;
+        this.skyMaterial = null;
+        this.stars = null;
+        this.starsMaterial = null;
+    }
+
     disable() {
         this.enabled = false;
+        this.clearAtmosphere();
         this.controls?.dispose();
         this.controls = null;
 
@@ -221,6 +383,7 @@ export class GisLayer {
         this.tiles = null;
         this.config = null;
         this.loadErrorShown = false;
+        this.atmosphereErrorShown = false;
 
         if (this.viewer.modules) {
             this.viewer.modules.controls.enabled = true;

@@ -19,6 +19,7 @@ source = r"""
   </svg>`;
 
   window.__gisTileUrls = [];
+  window.__allFetchUrls = [];
   window.__gisErrors = [];
   const originalConsoleError = console.error.bind(console);
   console.error = (...args) => {
@@ -34,6 +35,7 @@ source = r"""
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(typeof input === "string" ? input : input.url);
+    window.__allFetchUrls.push(url);
     if (url.includes("tianditu.gov.cn")) {
       window.__gisTileUrls.push(url);
       const canvas = new OffscreenCanvas(256, 256);
@@ -100,6 +102,27 @@ state = js("""
   globeControlsEnabled: window.viewer?.modules?.gisLayer?.controls?.enabled,
   tileGroupInScene:
     window.viewer?.modules?.gisLayer?.tiles?.group?.parent === window.viewer?.scene,
+  tileGroupRenderOrder:
+    window.viewer?.modules?.gisLayer?.tiles?.group?.renderOrder,
+  atmosphereInScene:
+    window.viewer?.modules?.gisLayer?.atmosphereGroup?.parent === window.viewer?.scene,
+  atmosphereChildren:
+    window.viewer?.modules?.gisLayer?.atmosphereGroup?.children.map(child =>
+      child.material?.name
+    ),
+  atmosphereLutsUseGeneratorType: (() => {
+    const generator = window.viewer?.modules?.gisLayer?.atmosphereGenerator;
+    return [
+      generator?.textures?.scatteringTexture,
+      generator?.textures?.higherOrderScatteringTexture
+    ].every(texture => texture?.type === generator?.type);
+  })(),
+  localStarsUrl: window.__allFetchUrls.find(url =>
+    url.includes("/resource/gis/stars.bin")
+  ),
+  forbiddenRuntimeRequests: window.__allFetchUrls.filter(url =>
+    /media[.]githubusercontent[.]com|google|cesium/i.test(url)
+  ),
   tileUrlCount: window.__gisTileUrls.length,
   tileHosts: [...new Set(window.__gisTileUrls.map(url => new URL(url).hostname))],
   tileLayers: [...new Set(window.__gisTileUrls.map(url =>
@@ -123,6 +146,15 @@ state = js("""
 })
 """)
 print(state)
+assert state["tileGroupRenderOrder"] == -1
+assert state["atmosphereInScene"] is True
+assert "SkyMaterial" in state["atmosphereChildren"]
+assert "StarsMaterial" in state["atmosphereChildren"]
+assert state["atmosphereLutsUseGeneratorType"] is True
+assert state["localStarsUrl"].startswith("https://localhost:8090/")
+assert state["forbiddenRuntimeRequests"] == []
+assert not any("media.githubusercontent.com" in url for url in state["resources"])
+assert state["errorCount"] == 0
 
 canvas = js("""
 (() => {
