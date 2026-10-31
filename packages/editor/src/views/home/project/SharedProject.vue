@@ -124,6 +124,9 @@ onMounted(() => {
               <template v-else>
                 <div class="project-cover">
                   <div class="project-tags">
+                    <n-tag :bordered="false" size="small" class="renderer-version-tag">
+                      {{ project.rendererVersion === 'webgpu' ? 'WebGPU' : project.rendererVersion === 'webgl' ? 'WebGL' : '未标记' }}
+                    </n-tag>
                     <n-tag v-if="project.sceneSource === 'EXTERNAL'" type="warning" :bordered="false" size="small">
                       EXTERNAL
                     </n-tag>

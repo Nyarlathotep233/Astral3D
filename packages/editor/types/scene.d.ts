@@ -4,6 +4,8 @@ declare interface ISceneInfo {
     sceneName: string;
     sceneIntroduction: string;
     sceneVersion: number;
+    /** 创建或最后成功保存的前端版本，不表示当前实际渲染 API。 */
+    rendererVersion?: "webgl" | "webgpu" | null;
     projectType: number;
     coverPicture: string;
     hasDrawing: boolean;
