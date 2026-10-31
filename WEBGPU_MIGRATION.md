@@ -25,8 +25,9 @@ Base: `dev` (`eddfcd4`). Branch: `refactor/webgpu-renderer`.
 - [x] Current-build standalone runtime, independent localhost smoke test
 - [x] SDK/editor TypeScript and Vue SFC checks (see pinned checker below)
 - [x] WebGPU-capable source integration: zero WebGL contexts, visible scene pixels, no runtime errors
-- [ ] Complete production-editor interaction matrix with a working test business service
-- [ ] Matched r176 baseline visual acceptance, representative-scene GPU performance and long-run resource measurements
+- [x] Isolated service-backed save/reload and production-editor core interaction checks
+- [x] Matched r176 baseline visual differences accepted by the user (2026-10-31)
+- [x] Representative-scene GPU/resource measurements (completed 30-minute run; future default 15 minutes)
 - [ ] Developer manual acceptance (required before merge)
 
 Implementation checks are not a declaration of final migration acceptance.
@@ -207,7 +208,7 @@ instead of rebuilding the editor fixed this: three JS/GLSL switches retained the
 correct read-only state and produced no runtime errors. No exception filter was added.
 The final editor checks remained WebGPU with zero WebGL context requests.
 
-### Still required before acceptance
+### Remaining at the preceding checkpoint (superseded by the follow-up below)
 
 - Developer approval of same-camera r176/WebGPU visual differences; the original darker
   solid-background difference is not resolved by changing exposure or resolution.
@@ -216,6 +217,129 @@ The final editor checks remained WebGPU with zero WebGL context requests.
   preview/scene switching with GPU resource/performance measurements.
 - No GPU performance improvement is claimed; the editor's CPU submission counter is not
   GPU time. No production project was written, and nothing was merged, deployed or pushed.
+
+## Follow-up: 2026-10-31 — service-backed acceptance
+
+### Service isolation and data integrity
+
+Port 8080 had no listener/Java process. MySQL was available; development paths referred to
+an old drive. Redis was absent but no active startup path required it. The current backend
+was built and started on loopback with **command-line overrides only**, using database
+`astral_webgpu_acceptance_20261031` and the copied asset root under ignored
+`.codex-logs/service-acceptance-20261031/static`. No backend source/configuration was changed;
+the user's existing application-dev.yml edit was retained. No schema migration was applied.
+The unrelated Revit WebSocket at 8081 remained unavailable; no conversion job was triggered.
+
+The copied scene `9600ea7d95189faa4acfa697c0a93d68` was renamed
+`WebGPU验收副本-20261031`. Actual editor Save/confirmation uploaded ZIPs and a captured cover:
+V3→V4, then V4→V5 after the identity fix below. Reloading V5 yielded zero differences across
+323 persistent objects (including Scene), hierarchy/order, UUIDs, transforms, material
+parameters/references, textures, scripts, effect/renderer settings, background/environment
+identities and rotations. Shared built-in/standard-material texture references remain shared.
+Animation time is excluded from live snapshots; the separate frozen package fixture checks
+exact time values. Scripts were retained but not enabled; no external business action ran.
+
+Read-only re-dump/hash checks confirm original database `astral3d_new` and all 383 original
+asset files are unchanged. The test copy is retained. `tests/rendering/service-roundtrip.mjs`
+provides snapshot/comparison helpers: verify **both** database and asset-directory isolation
+before using them, not merely a scene ID.
+
+### Defects exposed and fixed
+
+1. **HDR background black across renderers/recreation.** r186 CubeMapNode caches GPU-only
+   conversions by texture identity across renderers. The factory now owns an equirectangular
+   input identity per renderer and restores the source after rendering. Nested passes do not
+   release textures in use. Source UUID/data, serialization and exposure are unchanged.
+   Six checks cover two renderers, disposal, replacement, visible pixels and source identity.
+2. **Background/environment UUID drift.** Scene.copy/clone creates fresh texture UUIDs.
+   App.setScene and Package's shallow serialization shell retain original references;
+   actual V5 save/reload checks these identities, not just material textures.
+3. **Particle preview listener leak.** Module-global bound callbacks were overwritten by
+   other instances and two signals were never removed. Callbacks are now instance-owned;
+   all registered listeners are removed. Particle simulation is unchanged.
+4. **Pixelation rebuild resource growth.** Fresh MRT identities retained additional r186
+   render contexts/draw bindings. The initial prolonged run exposed this and was rejected.
+   Reuse the identical output layout per renderer through public getMRT/setMRT APIs; retain
+   normal pass-target disposal. No scene-resource flush or private renderer API in app code.
+   A 24-rebuild regression stays at 58 uniform buffers / 22,764,441 tracked bytes after warm-up.
+5. **Built-in effects plus pixelation failed GPU validation.** r186's fragmentNode path skips
+   MRT composition. BuiltinMaterial now preserves its RGBA and supplies the pass's additional
+   outputs through setupOutput. All six built-ins are tested with pixelation, and the final
+   soak includes an animated StreamerWall material as well as standard materials.
+6. **Combined-effect intermediates were not all owned.** FXAA/Afterimage's implicit RTT
+   inputs are now explicitly registered for disposal. Outline's uninitialized empty-selection
+   output and Afterimage's first-frame history texture are also released (target disposal
+   alone had no listener in those cases; the latter uses the pinned r186 target member).
+   Repeated single and combined pipelines are checked separately, including empty selection.
+7. **Editor Play Mode transport no longer matched Package's response contract.** Its local
+   ZIP adapter returned only a blob method, without Response.ok/status. It now returns an
+   actual Response for the in-memory ZIP; this is not a substituted business API response.
+   Package errors also reject the startup promise immediately instead of waiting 180 seconds.
+
+### Browser and build evidence
+
+- SDK/editor TypeScript, pinned Vue SFC checker, SDK ESM/UMD and production editor builds pass.
+- Source suite: 56 checks; split-package roundtrip: 10; HDR: 6; pipeline lifecycle: 72 rebuilds plus
+  six built-in material combinations.
+  Factory failure injection retains permitted official WebGL2 fallback. Hardware WebGPU
+  success cases request zero WebGL contexts; fallback cases are not counted as WebGPU passes.
+- Production renderer fixture uses the built chunk, restores shared materials and LUT,
+  and has 10,118 visible bright pixels. Independent standalone uses current UMD/resources,
+  requests nothing from the editor origin and reports WebGPU without runtime errors.
+- Full built editor runs on Vite **preview**, not source dev, at
+  `https://localhost:8096/#/editor/9600ea7d95189faa4acfa697c0a93d68` with a test-only proxy to
+  the isolated 8080 service. The unrelated remote WebSocket is blocked in the test browser.
+  V5 loads; UI selection, transform attachment, move/undo/redo, material edit/undo, box
+  clipping identity, Bloom and 2052×960 cover capture pass. One main canvas, actual WebGPU,
+  no WebGL contexts/runtime errors. Production interaction changes were not saved over V5.
+- Ten clear/load cycles retain one canvas, 7 geometries, 36 uniform buffers and 21,042,827
+  tracked resource bytes on every cycle.
+- Copied real 3D Tiles content loads 7 models, 2 active visible tiles, zero failed loads,
+  node-material rendering and no runtime/WebGL errors. Not an audit of all external formats.
+- Short follow-up checks: orthographic rendering/shadows, Bokeh+Pixelate and 960×640 capture;
+  actual resource-center sphere and StreamerWall preview dialogs (825×775), their WebGPU
+  implementations and disposal, all without runtime errors or WebGL requests.
+- Actual editor Run/Stop passes in development and production, including two production
+  starts. A controlled local JS script receives Three r186 and the WebGPU renderer, animates
+  only the preview copy, and leaves the editor object's transform unchanged. Existing business
+  scripts were temporarily replaced **in memory only** for this test, then restored; no external
+  actions or saves were performed. Closing Play Mode removes its iframe and leaves one main canvas.
+- `prepare-production.mjs` also emits `verify-play.html`, exercising the real built preview
+  route and message protocol with fixture ZIPs. The normal case reports started (~300 ms);
+  `?missing=1` intentionally omits child ZIPs and reports the exact missing-file error (~65 ms),
+  rather than false success or a 180-second hang. These timings are fixture observations.
+
+### Visual approval and measurement scope
+
+Matched r176-WebGL / r186-WebGL / r186-WebGPU captures use 960×640, DPR 1, ACES exposure 1
+and identical geometry/camera/lights. The user explicitly accepted solid background RGB
+39→21 and small transparency/shadow-edge differences on 2026-10-31, deferring unified quality
+tuning. No exposure compensation, omitted objects or reduced quality was introduced.
+
+On NVIDIA Lovelace (`isFallbackAdapter=false`), a fresh renderer measured 36.3 ms initialization,
+51.5 ms compileAsync, and 12.1 ms first submission plus queue completion for the fixed fixture.
+These are wall-clock API measurements, not cold-driver benchmarks or pure GPU timings.
+
+The 30-minute soak includes real particles, 300 instances, skeletal animation, HDR background/
+environment, shadows, clipping, eight effects, alternating viewport sizes and preview/minimap
+disposal cycles. CDP focus emulation keeps animation active. CPU submission, frame intervals
+and hardware timestamp queries are recorded separately. Other acceptance tabs/builds share
+the machine: this is a stability/resource test, not an isolated performance comparison.
+The completed post-fix run lasted 1,800.03 seconds: 74,715 visible render calls, 120 preview
+and 120 minimap cycles, zero runtime errors, zero WebGL requests, unchanged signal-listener
+counts and one canvas. After warm-up, render contexts stay at 21 and geometries at 37.
+The same 960×640 combined-effect phase measures 84.169 MB at 1,341 s and 84.173 MB at
+1,612 s; the particle pool rises slightly from 2,243 to 2,279. Tracked resource bytes vary
+with effect/size (24.94–90.18 MB in the final ten minutes), rather than growing per rebuild.
+This is not a proof that no untested workload can leak.
+
+Measured p50/p95: CPU submission 13.7/21.9 ms; render-call interval 17.1/30.9 ms;
+hardware timestamp-query result 2.03/4.19 ms. These are separate quantities. The r186 query
+reports the last resolved renderer frame, not end-to-end application latency. Recompiles,
+view creation and concurrent verification affect timing; no speed improvement is claimed.
+
+Per the user's subsequent instruction, **future soak runs default to 15 minutes**.
+The completed 30-minute evidence is retained; no additional prolonged run is requested now.
 
 ## Manual acceptance
 
