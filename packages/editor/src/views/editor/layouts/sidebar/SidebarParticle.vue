@@ -34,7 +34,7 @@ function update(method: string) {
 
   if (!Utils.isParticleObject(object)) return;
 
-  const emitter = object.emitter as Particle.Emitter;
+  const emitter = object.emitter as InstanceType<typeof Particle.Emitter>;
   const call = {
     // attribute
     totalEmitTimes: () => {
@@ -135,7 +135,7 @@ function update(method: string) {
       }
     },
     zone: () => {
-      const initializer = emitter.initializers.find((item) => item.type === "Position") as Particle.Position;
+      const initializer = emitter.initializers.find((item) => item.type === "Position") as InstanceType<typeof Particle.Position>;
       if (!initializer || initializer.zones[0].type !== particleData.init.position.zone?.type) {
         let position = new Particle.Position();
         if (!initializer) {

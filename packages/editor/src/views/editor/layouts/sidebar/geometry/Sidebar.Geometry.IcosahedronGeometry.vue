@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {IcosahedronGeometry} from 'three';
 import {SetGeometryCommand,App,Hooks} from '@astral3d/engine';
@@ -21,7 +22,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new IcosahedronGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new IcosahedronGeometry(
       objectData.radius,
       objectData.detail
   )))

@@ -19,8 +19,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, inject, computed, watch } from "vue";
-import type { Ref } from "vue";
+import { ref, inject, computed, watch, unref } from "vue";
+import type { Ref, ComputedRef } from "vue";
 import { cpt } from "@/language";
 import Card from "./components/ModelCard.vue";
 import {
@@ -71,7 +71,7 @@ function ensureValidSubCategory() {
 
 watch(subCategories, ensureValidSubCategory, { immediate: true });
 
-const allList = {
+const allList: Record<ModelSubCategoryKey, Array<{key: string; name: string | ComputedRef<string>; image: string; path?: string}>> = {
     // 形状
     "shape": [
         { key: "Group", image: "/static/images/resource/model/shape/group.jpg", name: cpt("extra.resource.model.Group") },
@@ -146,7 +146,7 @@ function getItemsForSubCategory(subKey: ModelSubCategoryKey) {
 
 const filteredList = computed(() => {
     return getItemsForSubCategory(activeSubCategory.value).filter((item) =>
-      (item.name.value || item.name).toLowerCase().includes(searchText.value.toLowerCase())
+      unref(item.name).toLowerCase().includes(searchText.value.toLowerCase())
     );
 });
 

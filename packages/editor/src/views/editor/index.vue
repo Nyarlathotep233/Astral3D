@@ -238,7 +238,8 @@ async function init() {
 }
 
 //拉取场景
-function getScene(sceneInfo) {
+async function getScene(sceneInfo) {
+  try { await window.viewer.ready; } catch { return; }
   // 如果创建的是空场景则无场景包
   if (!sceneInfo.zip) {
     window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";

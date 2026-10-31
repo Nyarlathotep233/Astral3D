@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {TetrahedronGeometry} from "three";
 import {SetGeometryCommand,Hooks,App} from '@astral3d/engine';
@@ -21,7 +22,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new TetrahedronGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new TetrahedronGeometry(
       objectData.radius,
       objectData.detail
   )))

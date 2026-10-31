@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, markRaw, reactive, ref, provide, useTemplateRef, watch, inject} from "vue";
+import {computed, markRaw, reactive, ref, provide, useTemplateRef, watch} from "vue";
 import {cpt} from "@/language";
 import {Buoy, CameraAction, HeatMap, LocationCompany, LocationHeart,ChoroplethMap, ModelAlt, Opacity} from "@vicons/carbon";
 import CommonPreview from "@/components/preview/CommonPreview.vue";

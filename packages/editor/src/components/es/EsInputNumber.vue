@@ -1,5 +1,5 @@
 <template>
-  <n-input-number ref="inRef" v-model:value="esNumber" :step="step" :min="min" :max="max" v-bind="attrs"
+  <n-input-number v-model:value="esNumber" :step="step" :min="min" :max="max" v-bind="attrs"
     @update:value="handlerChange" @mousedown.stop="onMouseDown">
     <template #prefix v-if="label">
       <n-text>
@@ -42,7 +42,6 @@ let props = withDefaults(defineProps<{
 })
 const emits = defineEmits(["update:value", "change"])
 
-const inRef = ref();
 const step = ref(props.step);
 const esNumber = ref(0);
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {CapsuleGeometry} from "three";
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -23,7 +24,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new CapsuleGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new CapsuleGeometry(
       objectData.radius,
       objectData.length,
       objectData.capSegments,

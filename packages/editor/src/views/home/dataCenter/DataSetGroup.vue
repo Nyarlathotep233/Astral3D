@@ -119,7 +119,7 @@ const x = ref(0)
 const y = ref(0)
 
 // 绑定节点属性以实现右键菜单
-function handleNodeProps({ option }: { option: TreeOption }) {
+function handleNodeProps(_props: { option: TreeOption }) {
     return {
         onClick() { },
         onContextmenu(e: MouseEvent): void {

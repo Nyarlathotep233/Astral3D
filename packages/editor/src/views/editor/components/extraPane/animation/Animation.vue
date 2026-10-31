@@ -78,7 +78,7 @@ const trackRef = ref();
 const outlineRef = ref();
 
 /* 右键菜单 */
-const treeContextMenuRef = ref();
+
 const contextMenuRef = ref();
 const options = [
   {
@@ -162,7 +162,7 @@ function handleChangeExpanded(keys, meta, action) {
 // 新增动画
 function handleAddAnimation() {
   const v = ref("");
-  const status = ref("");
+  const status = ref<"error" | undefined>();
 
   window.$dialog.info({
     title: t("extra.New animation"),
@@ -176,10 +176,10 @@ function handleAddAnimation() {
           status: status.value,
           onUpdateValue: (n: string) => {
             v.value = n;
-            status.value = !v.value ? "error" : "";
+            status.value = !v.value ? "error" : undefined;
           },
           onBlur: () => {
-            status.value = !v.value ? "error" : "";
+            status.value = !v.value ? "error" : undefined;
           }
         }
     ),

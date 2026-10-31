@@ -27,6 +27,7 @@
           ref="scriptCodeRef"
           v-model:source="script.source"
           :mode="mode"
+          :config="editorConfig"
           :diff="isAiDiffMode"
           :original-source="aiBaseSource"
           :modified-source="aiGeneratedSource"
@@ -72,7 +73,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import * as THREE from "three";
-import { App, Hooks, SetScriptValueCommand, SetMaterialValueCommand } from "@astral3d/engine";
+import { App, Hooks, SetScriptValueCommand } from "@astral3d/engine";
 import { t } from "@/language";
 import CodeEditor from "@/components/code/CodeEditor.vue";
 import ScriptAiAgentPanel from "@/components/code/ScriptAiAgentPanel.vue";
@@ -86,6 +87,7 @@ const script = reactive({
 });
 const errors = ref<string[]>([]);
 const mode = ref("javascript");
+const editorConfig = computed(() => ({readOnly: mode.value !== "javascript"}));
 
 const SCRIPT_DOC_FILENAME = "editor-script.md";
 const scriptDocDownloadUrl = computed(() => `${normalizeBaseUrl(import.meta.env.BASE_URL)}docs/${SCRIPT_DOC_FILENAME}`);
@@ -236,6 +238,7 @@ function undoAiApply(payload: { beforeSource: string; afterSource: string }) {
 
 function submit(e: Event) {
   e.stopPropagation();
+  if (mode.value !== "javascript") { show.value = false; return; }
 
   if (isAiDiffMode.value) {
     window.$message?.warning("当前处于 AI 预览模式，请先应用或放弃预览。取舍后仍需点击确定保存脚本。");
@@ -254,44 +257,6 @@ function submit(e: Event) {
     }
     show.value = false;
     return;
-  }
-
-  if (mode.value === "glsl" && currentObject.material) {
-    // @ts-ignore
-    currentObject.material[currentScript] = value;
-    (currentObject.material as THREE.Material).needsUpdate = true;
-    Hooks.useDispatchSignal("materialChanged", currentObject, 0);
-    show.value = false;
-    return;
-  }
-
-  if (currentScript !== "programInfo") {
-    show.value = false;
-    return;
-  }
-
-  if (!currentObject.material) return;
-
-  const json = JSON.parse(value);
-
-  if (JSON.stringify((currentObject.material as THREE.Material).defines) !== JSON.stringify(json.defines)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "defines", json.defines);
-    cmd.updatable = false;
-    App.execute(cmd);
-  }
-
-  // @ts-ignore
-  if (JSON.stringify(currentObject.material.uniforms) !== JSON.stringify(json.uniforms)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "uniforms", json.uniforms);
-    cmd.updatable = false;
-    App.execute(cmd);
-  }
-
-  // @ts-ignore
-  if (JSON.stringify(currentObject.material.attributes) !== JSON.stringify(json.attributes)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "attributes", json.attributes);
-    cmd.updatable = false;
-    App.execute(cmd);
   }
 
   show.value = false;

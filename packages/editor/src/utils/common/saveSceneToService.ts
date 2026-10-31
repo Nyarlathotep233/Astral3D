@@ -92,7 +92,7 @@ async function runSaveSceneToService() {
 
     const updateRes = await fetchUpdateScene(sceneInfo.id, params);
     if (updateRes.error !== null) {
-      throw new Error(updateRes.error.message || window.$t("scene['Failed to save project!']"));
+      throw new Error(updateRes.error.msg || window.$t("scene['Failed to save project!']"));
     }
 
     globalConfigStore.loadingText = window.$t("prompt.Saved successfully!");

@@ -387,7 +387,7 @@ function postResponse(message: PendingMessage, type: string, payload: Record<str
     payload,
   };
 
-  const target = message.source || (globalThis.parent === globalThis ? null : globalThis.parent);
+  const target = message.source || (window.parent === window ? null : globalThis.parent);
   if (!target) return;
 
   target.postMessage(response, { targetOrigin: message.origin });
@@ -398,7 +398,7 @@ function getParentTargetOrigin() {
 }
 
 function postBridgeReady() {
-  if (globalThis.parent === globalThis) return;
+  if (window.parent === window) return;
 
   globalThis.parent.postMessage(
     {

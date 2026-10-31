@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {CylinderGeometry} from "three";
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -25,7 +26,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new CylinderGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new CylinderGeometry(
       objectData.radiusTop,
       objectData.radiusBottom,
       objectData.height,

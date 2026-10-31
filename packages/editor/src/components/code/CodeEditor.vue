@@ -317,7 +317,12 @@ watch(() => props.diff, () => {
 
 watch(() => props.mode, async () => {
   await ensureSqlProvider();
-  createEditor();
+  // Switching source language/read-only mode does not require a new editor.
+  // Disposing it here also cancels Monaco's pending word-highlighter work.
+  for (const target of [model, originalModel, modifiedModel]) {
+    if (target) monaco.editor.setModelLanguage(target, props.mode);
+  }
+  editor?.updateOptions({ minimap: { enabled: props.mode !== 'sql' } });
 });
 
 watch(() => props.source, (value) => {
@@ -340,8 +345,9 @@ watch(() => props.modifiedSource, (value) => {
   syncModelValue(modifiedModel, value || "");
 });
 
-watch(() => props.config, () => {
-  createEditor();
+watch(() => props.config, (config) => {
+  editor?.updateOptions(config);
+  diffEditor?.updateOptions(config);
 }, { deep: true });
 
 watch(monacoTheme, (theme) => {

@@ -53,7 +53,7 @@ function update(method: string){
       if(data.type === 'panel' && object.isHtmlPanel) return;
       if(data.type === 'sprite' && object.isHtmlSprite) return;
 
-      const _json = object.toJSON();
+      const _json = (object as import("@astral3d/engine").HtmlPanel | import("@astral3d/engine").HtmlSprite).toJSON();
       _json.object.type = data.type === 'panel' ? 'HtmlSprite' : 'HtmlPanel';
       _json.object.options.isSprite = !_json.object.options.isSprite;
 
@@ -137,7 +137,7 @@ function updateFileList(fList: UploadFileInfo[]) {
   }).then(htmlPlaneObj => {
     data.codes = htmlPlaneObj.options.codes;
 
-    const _json = object.toJSON();
+    const _json = (object as import("@astral3d/engine").HtmlPanel | import("@astral3d/engine").HtmlSprite).toJSON();
     Loader.objectLoader.copyAttrByData(htmlPlaneObj, _json.object)
 
     object.parent?.add(htmlPlaneObj);

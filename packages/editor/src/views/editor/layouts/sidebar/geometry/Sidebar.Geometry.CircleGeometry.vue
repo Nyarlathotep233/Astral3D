@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {MathUtils,CircleGeometry} from "three";
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -25,7 +26,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new CircleGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new CircleGeometry(
       objectData.radius,
       objectData.segments,
       objectData.thetaStart * MathUtils.DEG2RAD,

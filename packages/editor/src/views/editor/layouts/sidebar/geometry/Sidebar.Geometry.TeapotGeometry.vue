@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {t} from "@/language";
 import {SetGeometryCommand,App,Hooks,TeapotGeometry} from '@astral3d/engine';
@@ -28,7 +29,7 @@ function update() {
   const geometry = App.selected.geometry;
   geometry.dispose();
 
-  App.execute(new SetGeometryCommand(App.selected, new TeapotGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new TeapotGeometry(
       objectData.size,
       objectData.segments,
       objectData.bottom,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {ref,reactive, onMounted} from "vue";
 import {TubeGeometry,CatmullRomCurve3,CurveType} from 'three';
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -34,7 +35,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new TubeGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new TubeGeometry(
       new CatmullRomCurve3(objectData.path.points, objectData.closed, objectData.path.curveType as CurveType, objectData.path.tension),
       objectData.tubularSegments,
       objectData.radius,

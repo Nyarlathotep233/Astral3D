@@ -36,17 +36,10 @@ const materialClasses = {
   'MeshToonMaterial': THREE.MeshToonMaterial,
   'MeshStandardMaterial': THREE.MeshStandardMaterial,
   'MeshPhysicalMaterial': THREE.MeshPhysicalMaterial,
-  'RawShaderMaterial': THREE.RawShaderMaterial,
-  'ShaderMaterial': THREE.ShaderMaterial,
   'ShadowMaterial': THREE.ShadowMaterial,
   'SpriteMaterial': THREE.SpriteMaterial,
   'PointsMaterial': THREE.PointsMaterial
 };
-const vertexShaderVariables = [
-  'uniform mat4 projectionMatrix;',
-  'uniform mat4 modelViewMatrix;\n',
-  'attribute vec3 position;\n\n',
-].join('\n');
 const meshMaterialOptions = [
   {label: "MeshBasicMaterial", value: "MeshBasicMaterial"},
   {label: "MeshDepthMaterial", value: "MeshDepthMaterial"},
@@ -57,25 +50,17 @@ const meshMaterialOptions = [
   {label: "MeshToonMaterial", value: "MeshToonMaterial"},
   {label: "MeshStandardMaterial", value: "MeshStandardMaterial"},
   {label: "MeshPhysicalMaterial", value: "MeshPhysicalMaterial"},
-  {label: "RawShaderMaterial", value: "RawShaderMaterial"},
-  {label: "ShaderMaterial", value: "ShaderMaterial"},
   {label: "ShadowMaterial", value: "ShadowMaterial"}
 ];
 const lineMaterialOptions = [
   {label: "LineBasicMaterial", value: "LineBasicMaterial"},
   {label: "LineDashedMaterial", value: "LineDashedMaterial"},
-  {label: "RawShaderMaterial", value: "RawShaderMaterial"},
-  {label: "ShaderMaterial", value: "ShaderMaterial"}
 ];
 const spriteMaterialOptions = [
   {label: "SpriteMaterial", value: "SpriteMaterial"},
-  {label: "RawShaderMaterial", value: "RawShaderMaterial"},
-  {label: "ShaderMaterial", value: "ShaderMaterial"}
 ];
 const pointsMaterialOptions = [
   {label: "PointsMaterial", value: "PointsMaterial"},
-  {label: "RawShaderMaterial", value: "RawShaderMaterial"},
-  {label: "ShaderMaterial", value: "ShaderMaterial"}
 ];
 
 let currentObject;
@@ -124,9 +109,6 @@ const update = () => {
     if (material.type !== objectData.type) {
       material = new materialClasses[objectData.type]();
 
-      if (material.type === 'RawShaderMaterial') {
-        material.vertexShader = vertexShaderVariables + material.vertexShader;
-      }
 
       if (Array.isArray(currentObject.material)) {
         // 不要移除多个材质。仅移除所选的材质

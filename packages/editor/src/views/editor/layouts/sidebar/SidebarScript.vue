@@ -269,7 +269,7 @@
 
 	function handleNew() {
 		const v = ref("");
-		const status = ref("");
+		const status = ref<"error" | undefined>();
 
 		window.$dialog.warning({
 			title: t("layout.sider.script['Please enter the script name']"),
@@ -282,10 +282,10 @@
 					status: status.value,
 					onUpdateValue: (n: string) => {
 						v.value = n;
-						status.value = !v.value ? "error" : "";
+						status.value = !v.value ? "error" : undefined;
 					},
 					onBlur: () => {
-						status.value = !v.value ? "error" : "";
+						status.value = !v.value ? "error" : undefined;
 					},
 				}),
 			positiveText: t("other.Ok"),

@@ -29,17 +29,17 @@
 </template>
 
 <script lang="ts" setup>
-import {ref, inject, computed, nextTick} from "vue";
+import {ref, inject, computed} from "vue";
 import type {Ref} from "vue";
 import {Vector3} from "three";
-import {Preview,Tiles} from "@astral3d/engine";
+import {Tiles} from "@astral3d/engine";
 import {cpt} from "@/language";
 import {useDragStore} from "@/store/modules/drag";
 import {screenToWorld} from "@/utils/common/scenes";
 
 const searchText = inject('searchText') as Ref<string>;
 const previewInfo = inject('previewInfo') as any;
-const previewRef = inject('previewRef') as any;
+
 
 const activeSubCategory = ref('building');
 const subCategories = ref([

@@ -20,7 +20,7 @@
 </template>
 
 <script lang="ts" setup>
-import { useTemplateRef,computed } from "vue";
+import { useTemplateRef } from "vue";
 import type { FormInst } from 'naive-ui'
 import { t } from "@/language";
 

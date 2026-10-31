@@ -65,7 +65,7 @@ const rules = {
     trigger: ['input', 'blur']
   }
 };
-const tagOptions = ref([]);
+const tagOptions = ref<Array<{label: string; value: string}> | undefined>([]);
 const fileSize = computed(() => filterSize(model.size));
 const renderTypeLabel = (option: IAssets.MainCategory): VNodeChild => {
   return [
@@ -372,7 +372,7 @@ watch(() => props.visible,() => {
     }
 
     fetchGetAssetCategoryTags(model.type,model.category).then(res => {
-      tagOptions.value = res.data.map((tag) => ({
+      tagOptions.value = res.data?.map((tag) => ({
         label: tag,
         value: tag,
       }));

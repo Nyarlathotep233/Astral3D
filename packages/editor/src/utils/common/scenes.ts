@@ -1,6 +1,6 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/Addons';
-import { App, AddObjectWithScriptsCommand } from "@astral3d/engine";
+import { App, AddObjectWithScriptsCommand, createRenderer, initializeRenderer, assertSupportedMaterials } from "@astral3d/engine";
 
 export interface IModel extends THREE.Object3D {
 	metadata: Object;
@@ -141,18 +141,20 @@ export function setMetaData(object: IModel, key: string, value: any) {
 /**
  * 创建基础场景（会用于轻量展示）
  */
-export function createBasicScene(container: HTMLElement) {
+export async function createBasicScene(container: HTMLElement, signal?: AbortSignal) {
 	let scene = new THREE.Scene();
 
 	let camera = new THREE.PerspectiveCamera(60, container.offsetWidth / container.offsetHeight, 0.1, 1000);
 	camera.position.set(0, 2, 8);
 	camera.lookAt(0, 0, 0);
 
-	let renderer = new THREE.WebGLRenderer({
+	let renderer = createRenderer({
 		antialias: true,
 		powerPreference: "high-performance"
 	});
 
+    await initializeRenderer(renderer, error => { renderer.setAnimationLoop(null); console.error(error); window.$message?.error(error.message); });
+    if (signal?.aborted) { await renderer.dispose(); throw new DOMException('View closed', 'AbortError'); }
 	renderer.setSize(container.offsetWidth, container.offsetHeight);
 	renderer.setClearColor(0x0c1126);
 	renderer.setPixelRatio(window.devicePixelRatio);
@@ -192,18 +194,24 @@ export function createBasicScene(container: HTMLElement) {
 
 	const animate = () => {
 		controls.update();
-		renderer.render(scene, camera);
+		try { assertSupportedMaterials(scene); renderer.render(scene, camera); }
+        catch (error) { renderer.setAnimationLoop(null); console.error(error); window.$message?.error(String(error)); }
 	}
 
 	renderer.setAnimationLoop(animate);
 
+	let disposed = false;
 	const dispose = () => {
+		if (disposed) return;
+		disposed = true;
+		if (timer) clearTimeout(timer);
 		resizeObserver.unobserve(container);
 		resizeObserver.disconnect();
 		// @ts-ignore
 		resizeObserver = null;
 		
 		renderer.setAnimationLoop(null);
+		renderer.domElement.remove();
 		renderer.dispose();
 		// @ts-ignore
 		renderer = null;

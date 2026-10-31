@@ -85,7 +85,7 @@ export class Session {
         // 插入 WASM 水印
         let outputUint8Array = rawU8;
         try {
-            outputUint8Array = await encodeGLB(rawU8, {});
+            outputUint8Array = new Uint8Array(await encodeGLB(rawU8, {}));
         } catch (e: any) {
             this._logger.warn('EncodeGLB skipped: ' + (e?.message || e));
         }

@@ -69,7 +69,7 @@ import {CloudUpload, Reload, CheckmarkCircle, CloseOutline, CloseCircleSharp} fr
 import {t} from "@/language";
 import {useDragStore} from "@/store/modules/drag";
 import {fetchGetBim2GltfList} from "@/http/api/bim";
-import {Bim2GltfWsData, WebSocketMessage} from "~/network";
+
 import {Loader,Hooks} from "@astral3d/engine";
 import {filterSize} from "@/utils/common/file";
 import {onWebSocket, offWebSocket} from "@/hooks/useWebSocket";

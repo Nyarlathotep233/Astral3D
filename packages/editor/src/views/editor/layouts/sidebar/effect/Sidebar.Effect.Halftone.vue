@@ -21,6 +21,13 @@ onMounted(() => {
   window.viewer.addEventListener('loaded', viewerLoaded);
 })
 
+// Saved shader parameters are radians (including existing project defaults).
+// The UI's 0–90 slider is degrees; convert only at this boundary, not on reload.
+function setRotation(key: 'rotateR' | 'rotateG' | 'rotateB', degrees: number) {
+  halftone[key] = degrees * Math.PI / 180;
+  handleHalftoneConfigChange();
+}
+
 function handleHalftoneConfigChange(){
   App.project.setKey(`effect.Halftone`, toRaw(halftone));
 }
@@ -59,7 +66,7 @@ function handleHalftoneConfigChange(){
   <div class="sidebar-config-item">
     <span>{{ t(`layout.sider.postProcessing.RotateR`) }}</span>
     <div>
-      <n-slider v-model:value="halftone.rotateR" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="handleHalftoneConfigChange" />
+      <n-slider :value="halftone.rotateR * 180 / Math.PI" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="value => setRotation('rotateR', value)" />
     </div>
   </div>
 
@@ -67,7 +74,7 @@ function handleHalftoneConfigChange(){
   <div class="sidebar-config-item">
     <span>{{ t(`layout.sider.postProcessing.RotateG`) }}</span>
     <div>
-      <n-slider v-model:value="halftone.rotateG" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="handleHalftoneConfigChange" />
+      <n-slider :value="halftone.rotateG * 180 / Math.PI" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="value => setRotation('rotateG', value)" />
     </div>
   </div>
 
@@ -75,7 +82,7 @@ function handleHalftoneConfigChange(){
   <div class="sidebar-config-item">
     <span>{{ t(`layout.sider.postProcessing.RotateB`) }}</span>
     <div>
-      <n-slider v-model:value="halftone.rotateB" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="handleHalftoneConfigChange" />
+      <n-slider :value="halftone.rotateB * 180 / Math.PI" :step="0.01" :min="0" :max="90" :disabled="disabled" @update:value="value => setRotation('rotateB', value)" />
     </div>
   </div>
 

@@ -49,7 +49,7 @@ export const useAssetsStore = defineStore('assets-manager', () => {
     const fetchCategory = async () => {
         const res = await fetchAssetsCategoryTreeList();
         if(res.error){
-            window.$message?.error(res.error);
+            window.$message?.error(res.error.msg);
             return;
         }
 

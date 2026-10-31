@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
 const searchText = inject('searchText') as Ref<string>;
 
 // 搜索和筛选状态
-const tags = ref([]);
+const tags = ref<string[] | null>([]);
 const filterTags = ref([]);
 // 资源数据
 const assetsData = ref<Array<IAssets.Item>>([]);

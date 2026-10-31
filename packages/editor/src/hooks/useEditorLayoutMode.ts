@@ -8,7 +8,7 @@ import {
 
 /** URL 中保留的精简布局 key（如 assembly） */
 export function getPinnedLayoutKey(
-  layoutQuery: string | string[] | null | undefined
+  layoutQuery: string | (string | null)[] | null | undefined
 ): string | undefined {
   const layoutKey = Array.isArray(layoutQuery) ? layoutQuery[0] : layoutQuery;
   if (!layoutKey) return undefined;

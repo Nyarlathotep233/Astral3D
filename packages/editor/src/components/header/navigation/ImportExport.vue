@@ -576,6 +576,7 @@ function buildStandalonePreviewHtml(sceneName: string) {
         });
 
         window.viewer = viewer;
+        await viewer.ready;
 
         setStatus("正在加载场景首包...");
         const loader = new sdk.Package(viewer);
@@ -589,6 +590,10 @@ function buildStandalonePreviewHtml(sceneName: string) {
             onProgress: function (progress) {
               const p = Number(progress || 0).toFixed(2);
               setStatus("正在加载场景... " + p + "%");
+            },
+            onError: function (error) {
+              window.clearTimeout(timer);
+              reject(error);
             },
             onComplete: function () {
               window.clearTimeout(timer);
@@ -671,9 +676,13 @@ async function exportStandalonePreviewZip() {
       packageFiles: packageFiles.map(file => file.name),
     };
 
-    // 运行时资源：MVP 仅注入核心 SDK UMD
-    const runtimeUmd = await fetchRuntimeFile("/standalone-runtime/astral3d.umd.js");
-    runtimeFolder.file("astral3d.umd.js", runtimeUmd);
+    // Produced by the current SDK build, including decoder/LUT/texture resources.
+    const runtimeBase = `${import.meta.env.BASE_URL}standalone-runtime/`;
+    const runtimeFiles: string[] = JSON.parse(new TextDecoder().decode(await fetchRuntimeFile(`${runtimeBase}manifest.json`)));
+    for (const name of runtimeFiles) {
+      const bytes = await fetchRuntimeFile(`${runtimeBase}${name}`);
+      runtimeFolder.file(name, bytes);
+    }
     archive.file("project.json", JSON.stringify(manifest, null, 2));
     archive.file("index.html", buildStandalonePreviewHtml(sceneInfo.sceneName || sceneInfo.id));
     archive.file("README.txt", [

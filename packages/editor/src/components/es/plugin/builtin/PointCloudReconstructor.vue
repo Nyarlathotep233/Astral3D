@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, nextTick, useTemplateRef, reactive } from "vue";
+import { computed, ref, onBeforeUnmount, onMounted, nextTick, useTemplateRef, reactive } from "vue";
 import { useThemeVars } from 'naive-ui';
 import { Upload, Delete, Link } from '@vicons/carbon';
 import * as THREE from 'three';
@@ -33,15 +33,21 @@ const stats = reactive({
 })
 
 let tmpScene, tmpDispose;
+const sceneAbort = new AbortController();
+onBeforeUnmount(() => { sceneAbort.abort(); tmpDispose?.(); });
 let reconstructor, startTime;
 // 点云模型对象，重建好的对象
 let pointCloud,reconstructedGroup;
-onMounted(async () => {
-    await nextTick();
-
-    const p = createBasicScene(viewerRef.value as HTMLDivElement);
-    tmpScene = p.scene;
-    tmpDispose = p.dispose;
+let sceneReady: Promise<void>;
+onMounted(() => {
+    sceneReady = nextTick().then(async () => {
+        const p = await createBasicScene(viewerRef.value as HTMLDivElement, sceneAbort.signal);
+        tmpScene = p.scene;
+        tmpDispose = p.dispose;
+    });
+    void sceneReady.catch(error => {
+        if (!sceneAbort.signal.aborted) { console.error(error); window.$message?.error(String(error)); }
+    });
 })
 
 // 拖拽文件进入
@@ -101,6 +107,8 @@ function handleUploadChange(event) {
 
 // 文件模型加载
 async function handleFileLoad() {
+    try { await sceneReady; } catch { return; }
+    if (sceneAbort.signal.aborted) return;
     clearScene();
 
     const verifyExec = (object3D:THREE.Points) => {
@@ -112,6 +120,7 @@ async function handleFileLoad() {
     }
 
     const object3D = await Loader.loadFile(fileList.value[0], new THREE.LoadingManager(), null, false) as THREE.Points;
+    if (sceneAbort.signal.aborted) return;
     if (object3D.type === "Points") {
         verifyExec(object3D);
     } else if (object3D.children.length === 1 && object3D.children[0].type === "Points") {
@@ -223,6 +232,7 @@ function handleImportScene() {
 
 // 关闭插件
 function handleClose(){
+    sceneAbort.abort();
     clearScene();
 
     tmpDispose && tmpDispose();

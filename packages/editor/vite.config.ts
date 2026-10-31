@@ -1,6 +1,7 @@
 import {defineConfig, loadEnv} from 'vite';
 import path from 'path';
 import dotenv from "dotenv";
+import {standaloneRuntime} from './build/standaloneRuntime';
 import vue from '@vitejs/plugin-vue';
 import Unocss from 'unocss/vite';
 // import cesium from 'vite-plugin-cesium';
@@ -36,6 +37,9 @@ export default defineConfig(async ({mode, command}) => {
             deleteOriginFile: VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE,
         },
         enableAnalyze: VITE_ENABLE_ANALYZE,
+        // The legacy TLA transform miscompiles r186 class static blocks.
+        // WebGPU-capable browsers support native TLA and ES2022 class syntax.
+        nativeTopLevelAwait: true,
         enableConfig:VITE_ENABLE_CONFIG_GENERATE
     });
 
@@ -54,6 +58,7 @@ export default defineConfig(async ({mode, command}) => {
         define: define,
         base: VITE_PUBLIC_PATH,
         build: {
+            target: 'es2022',
             outDir: "dist",
             terserOptions: {
                 compress: {
@@ -82,6 +87,7 @@ export default defineConfig(async ({mode, command}) => {
         },
         root,
         plugins:[
+            standaloneRuntime(),
             vue(),
             Unocss(),
             // cesium(),
@@ -158,7 +164,9 @@ export default defineConfig(async ({mode, command}) => {
             // }),
             viteStaticCopy({
                 targets: [
-                    { src: 'node_modules/@astral3d/engine/dist/libs/*', dest: 'assets/libs' }
+                    { src: 'node_modules/@astral3d/engine/dist/libs/*', dest: 'assets/libs' },
+                    { src: 'node_modules/@astral3d/engine/dist/resource/*', dest: 'assets/resource' },
+                    { src: 'node_modules/@astral3d/engine/dist/static/*', dest: 'assets/static' }
                 ],
             }),
             ...plugins

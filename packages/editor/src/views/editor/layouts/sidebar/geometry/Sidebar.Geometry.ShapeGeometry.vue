@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import { ShapeGeometry,ExtrudeGeometry } from "three";
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -19,7 +20,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new ShapeGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new ShapeGeometry(
       parameters.shapes,
       objectData.curveSegments
   )))
@@ -28,7 +29,7 @@ function update() {
 function toExtrude() {
   if(!App.selected) return;
 
-  App.execute( new SetGeometryCommand(App.selected, new ExtrudeGeometry(
+  App.execute( new SetGeometryCommand(App.selected as Mesh, new ExtrudeGeometry(
       parameters.shapes, {
         curveSegments: objectData.curveSegments
       }

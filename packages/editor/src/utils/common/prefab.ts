@@ -73,7 +73,7 @@ function remapObjectAndResourceUuids(object: THREE.Object3D) {
   function remapMaterial(material: THREE.Material) {
     if (!material || materials.has(material)) return;
 
-    material.uuid = THREE.MathUtils.generateUUID();
+    (material as {uuid: string}).uuid = THREE.MathUtils.generateUUID();
     materials.add(material);
 
     Object.values(material).forEach((value: any) => {

@@ -68,13 +68,15 @@ function syncViewCubeVisible() {
   window.setTimeout(setViewCubeVisible, 100);
 }
 
+let ownedViewer: Viewer | undefined;
+let destroyed = false;
 onMounted(async () => {
   App.setConfig({
     theme: globalStore.theme.replace("Theme", ""),
     mainColor: globalStore.mainColor.hexHover
   });
 
-  window.viewer = new Viewer({
+  window.viewer = ownedViewer = new Viewer({
     container: viewportRef.value,
     enableScript: true,
     edit: {
@@ -90,9 +92,11 @@ onMounted(async () => {
 
   Hooks.useAddSignal("rendererUpdated", syncViewCubeVisible);
 
-  try { await window.viewer.ready; }
+  try { await ownedViewer.ready; }
   catch { return; } // Viewer reports the actual initialization error.
+  if (destroyed) return;
   await nextTick();
+  if (destroyed) return;
   syncViewCubeVisible();
 
   if (isEditorPlay.value) {
@@ -107,12 +111,15 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  destroyed = true;
   Hooks.useRemoveSignal("rendererUpdated", syncViewCubeVisible);
   window.removeEventListener("message", handlePlayMessage);
   window.removeEventListener("error", handleRuntimeError);
   window.removeEventListener("unhandledrejection", handleUnhandledRejection);
   cleanupPlayPackage();
-  window.viewer?.dispose();
+  MenuOperation._miniMap?.dispose();
+  MenuOperation._miniMap = null;
+  ownedViewer?.dispose();
 });
 
 watch(hideViewCube, syncViewCubeVisible);

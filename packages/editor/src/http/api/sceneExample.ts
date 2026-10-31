@@ -5,7 +5,7 @@
  * @description 示例场景
  */
 import {request} from "@/http/request";
-import {Service} from "~/network";
+
 
 export const ADMIN_KEY_STORAGE_KEY = "H3D_ADMIN_KEY";
 export const ADMIN_KEY_HEADER = "X-H3D-Admin-Key";

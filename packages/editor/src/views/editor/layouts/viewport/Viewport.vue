@@ -33,6 +33,8 @@ const globalStore = useGlobalConfigStore();
 const pluginStore = usePluginStore();
 
 const viewportRef = ref();
+let ownedViewer: Viewer | undefined;
+let destroyed = false;
 
 onMounted(async () => {
   App.setConfig({
@@ -40,7 +42,7 @@ onMounted(async () => {
     mainColor: globalStore.mainColor.hexHover
   });
 
-  window.viewer = new Viewer({
+  window.viewer = ownedViewer = new Viewer({
     container: viewportRef.value,
     enableScript: false,
     edit: {
@@ -51,9 +53,11 @@ onMounted(async () => {
     }
   });
 
-  try { await window.viewer.ready; }
+  try { await ownedViewer.ready; }
   catch { return; } // Viewer reports the actual initialization error.
+  if (destroyed) return;
   await nextTick();
+  if (destroyed) return;
 
   // 添加astral engine内置插件并监听插件注册
   pluginStore.setPlugins(Array.from(window.viewer.modules.plugin.plugins.values()));
@@ -68,6 +72,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  destroyed = true;
+  ownedViewer?.dispose();
   Hooks.useRemoveSignal("pluginInstall",pluginStore.addPlugin);
   Hooks.useRemoveSignal("pluginUninstall",pluginStore.removePlugin);
 })

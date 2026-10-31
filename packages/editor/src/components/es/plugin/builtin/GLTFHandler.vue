@@ -220,7 +220,7 @@ defineExpose({
     <div class="optimize-upload h-150px grid gap-2"
          :style="{gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))'}">
       <div class="optimize-upload-card" v-if="fileList.length === 0" @click="handleSelectFile" @dragover.stop.prevent @drop.stop.prevent="handleFilesDrop">
-        <input v-show="false" type="file" ref="uploadInputRef" multiple="multiple" accept=".glb,.gltf" @change="handleUploadChange"  />
+        <input v-show="false" type="file" ref="uploadInputRef" multiple accept=".glb,.gltf" @change="handleUploadChange"  />
 
         <n-icon size="48" :depth="3" class="mb-12px">
           <Upload/>

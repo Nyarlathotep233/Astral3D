@@ -11,8 +11,8 @@ import {useAttrs,ref,nextTick} from "vue";
 
 withDefaults(defineProps<{
   value: string,
-  label: string,
-  defaultNoBorder: boolean,
+  label?: string,
+  defaultNoBorder?: boolean,
 }>(), {
   value: '',
   label: '',

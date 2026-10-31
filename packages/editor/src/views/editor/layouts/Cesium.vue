@@ -11,13 +11,13 @@ const cesiumRef = ref();
 onMounted(async () => {
   await nextTick();
 
-  const ViewPort = await import('@/cesium/viewPort');
+  const {default: ViewPort} = await import('@/cesium/viewPort');
   console.log('CesiumViewPort', ViewPort);
   cesiumViewPort = new ViewPort(cesiumRef.value);
 })
 
 onBeforeUnmount(() => {
-  cesiumViewPort = null;
+  if (cesiumViewPort) cesiumViewPort = null;
 })
 </script>
 

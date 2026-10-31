@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type {Mesh} from "three";
 import {reactive, onMounted} from "vue";
 import {DodecahedronGeometry} from "three";
 import {SetGeometryCommand,App} from '@astral3d/engine';
@@ -21,7 +22,7 @@ onMounted(() => {
 function update() {
   if(!App.selected) return;
 
-  App.execute(new SetGeometryCommand(App.selected, new DodecahedronGeometry(
+  App.execute(new SetGeometryCommand(App.selected as Mesh, new DodecahedronGeometry(
       objectData.radius,
       objectData.detail
   )))

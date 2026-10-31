@@ -152,7 +152,7 @@ async function handleCreateFromScene() {
   creating.value = false;
 
   if (res.error !== null) {
-    window.$message?.error(res.error.message || "生成模板失败");
+    window.$message?.error(res.error.msg || "生成模板失败");
     return;
   }
 
@@ -185,7 +185,7 @@ async function handleUpdateTemplateKey() {
   updatingKey.value = false;
 
   if (res.error !== null) {
-    window.$message?.error(res.error.message || "保存模板Key失败");
+    window.$message?.error(res.error.msg || "保存模板Key失败");
     return;
   }
 
@@ -203,7 +203,7 @@ function handleDelete(template: ISceneFetchData) {
     onPositiveClick: async () => {
       const res = await fetchDeleteSceneExample(template.id);
       if (res.error !== null) {
-        window.$message?.error(res.error.message || "删除模板失败");
+        window.$message?.error(res.error.msg || "删除模板失败");
         return;
       }
 

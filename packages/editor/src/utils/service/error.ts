@@ -9,7 +9,6 @@ import {
   REQUEST_TIMEOUT_MSG
 } from '@/config/service';
 import { showErrorMsg } from './msg';
-import {Service} from "../../../types/network";
 
 type ErrorStatus = keyof typeof ERROR_STATUS;
 

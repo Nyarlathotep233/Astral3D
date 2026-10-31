@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import {ref, onMounted, watch,nextTick} from "vue";
+import {ref, onMounted, watch,nextTick,onBeforeUnmount} from "vue";
 import type {UploadFileInfo} from 'naive-ui';
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import { Loader } from "@astral3d/engine";
+import { Loader, createRenderer, initializeRenderer, captureViewport } from "@astral3d/engine";
 
 const props = withDefaults(defineProps<{
   texture: THREE.Color | THREE.Texture | THREE.CubeTexture | null,
@@ -62,7 +62,10 @@ function canvasClick() {
   uploadRef.value.openOpenFileDialog();
 }
 
-function setValue(newTexture) {
+async function setValue(newTexture) {
+  if (destroyed || !canvasRef.value) return;
+  const version = ++textureVersion;
+  try {
   const context = canvasRef.value.getContext('2d');
 
   // 如果画布不可见，则上下文似乎可以为空
@@ -77,8 +80,10 @@ function setValue(newTexture) {
       const scale = canvasRef.value.width / image.width;
 
       if ( newTexture.isDataTexture || newTexture.isCompressedTexture ) {
-        const canvas2 = renderToCanvas(newTexture);
+        const canvas2 = await renderToCanvas(newTexture);
+        if (destroyed || version !== textureVersion) { URL.revokeObjectURL(canvas2.src); return; }
         context.drawImage( canvas2, 0, 0, image.width * scale, image.height * scale );
+        URL.revokeObjectURL(canvas2.src);
       } else {
         context.drawImage( image, 0, 0, image.width * scale, image.height * scale );
       }
@@ -96,6 +101,7 @@ function setValue(newTexture) {
     uploadRef.value.clear();
     file.value = [];
   }
+  } catch(error) { console.error(error); if (!destroyed) window.$message?.error(String(error)); }
 }
 
 function loadFile(file) {
@@ -209,13 +215,23 @@ function setColorSpace(colorSpace: string) {
   }
 }
 
-let renderer;
+let renderer: THREE.WebGPURenderer | undefined;
+let rendererReady: Promise<void> | undefined;
+let destroyed = false;
+let textureVersion = 0;
+onBeforeUnmount(() => {
+  destroyed = true;
+  if (rendererReady) void rendererReady.then(() => renderer?.dispose()).catch(() => {});
+});
 
-function renderToCanvas(texture) {
+async function renderToCanvas(texture) {
   if (renderer === undefined) {
-    renderer = new THREE.WebGLRenderer();
+    renderer = createRenderer();
+    rendererReady = initializeRenderer(renderer, error => { console.error(error); window.$message?.error(error.message); });
   }
 
+  await rendererReady;
+  if (destroyed) throw new Error("Texture preview is disposed");
   const image = texture.image;
   renderer.setSize(image.width, image.height, false);
   const scene = new THREE.Scene();
@@ -224,8 +240,8 @@ function renderToCanvas(texture) {
   const quad = new THREE.PlaneGeometry(2, 2);
   const mesh = new THREE.Mesh(quad, material);
   scene.add(mesh);
-  renderer.render(scene, camera);
-  return renderer.domElement;
+  try { return await captureViewport(renderer, () => renderer!.render(scene, camera)); }
+  finally { quad.dispose(); material.dispose(); }
 }
 
 defineExpose({

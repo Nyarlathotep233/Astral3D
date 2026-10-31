@@ -260,7 +260,7 @@ export class MenuOperation {
       mouse.y = -(y / canvas.offsetHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, window.viewer.camera);
-      raycaster.firstHitOnly = true;
+      (raycaster as THREE.Raycaster & {firstHitOnly: boolean}).firstHitOnly = true;
 
       const intersectObjects:THREE.Object3D[] = [MenuOperation.Roaming.group];
       if(window.viewer.modules.tilesManage.mergeMesh){

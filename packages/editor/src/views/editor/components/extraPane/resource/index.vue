@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, inject, provide, ref, watch} from 'vue';
+import {computed, provide, ref, watch} from 'vue';
 import {Search} from "@vicons/carbon";
 import {t} from "@/language";
 import Builtin from "./builtin/index.vue";

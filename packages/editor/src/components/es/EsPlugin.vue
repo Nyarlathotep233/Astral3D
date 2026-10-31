@@ -13,7 +13,6 @@ const themeVars = useThemeVars();
 const baseColor = computed(() => themeVars.value.baseColor);
 
 const toolsDialogVisible = ref(false);
-const pluginRef = ref();
 const x = ref(315);
 const y = ref(document.body.clientHeight - 80);
 const cursor = ref("pointer");
@@ -88,7 +87,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div ref="pluginRef" class="es-tools w-40px h-40px fixed z-9000 flex justify-center items-center"
+  <div class="es-tools w-40px h-40px fixed z-9000 flex justify-center items-center"
        :style="{ left: `${x}px`, top: `${y}px`,cursor:`${cursor}` }"
        @pointerdown="startDrag">
     <Logo class="w-26px h-26px"/>

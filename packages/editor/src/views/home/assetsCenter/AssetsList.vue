@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
 });
 
 // 搜索和筛选状态
-const tags = ref([]);
+const tags = ref<string[] | null>([]);
 const filterTags = ref([]);
 const searchQuery = ref("");
 // 资源数据

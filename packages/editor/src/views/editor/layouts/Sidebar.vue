@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {h, onBeforeUnmount, onMounted, ref, markRaw, nextTick, computed, watch} from "vue";
-import type {Component, DefineComponent} from "vue";
+import type {Component} from "vue";
 import { NIcon, NTooltip } from "naive-ui";
 import type { TabsInst } from 'naive-ui'
 import {
@@ -58,7 +58,7 @@ type SidebarTabGroup = "scene" | "object";
 interface SidebarTabItem {
   name: string;
   group: SidebarTabGroup;
-  icon: { text: string; color: string; component: DefineComponent };
+  icon: { text: string; color: string; component: Component };
   component: Component;
 }
 
@@ -94,7 +94,7 @@ function ensureCurrentTabVisible() {
     : names[0];
 }
 
-function iconTabName(icon: { text: string,color:string,component: DefineComponent }) {
+function iconTabName(icon: { text: string,color:string,component: Component }) {
     return h(NTooltip, {
         placement: "left",
         trigger: "hover"
