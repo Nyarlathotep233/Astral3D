@@ -1,8 +1,8 @@
 import legacyBuiltins from './legacyBuiltins.json';
 import {UniformsUtils, type IUniform} from 'three';
 import {NodeMaterial, Material, ShaderMaterial, MaterialLoader, Texture, DataTexture,
-    RGBAFormat, JSONMeta} from 'three/webgpu';
-import {uv, normalView, positionLocal, reference, sin, float, varying, vec4, texture} from 'three/tsl';
+    RGBAFormat, JSONMeta, type NodeBuilder, type Node} from 'three/webgpu';
+import {uv, normalView, positionLocal, reference, sin, float, varying, vec4, texture, output} from 'three/tsl';
 import circle from './nodes/CircleGrid.js';
 import checker from './nodes/DynamicCheckerboard.js';
 import flicker from './nodes/Flicker.js';
@@ -60,6 +60,16 @@ export class BuiltinMaterial extends NodeMaterial {
         this.fragmentNode = factories[this.kind](uniforms, inputs).main();
         if (this.kind === 'Rain' || this.kind === 'Snow') this.vertexNode = vec4(positionLocal, 1);
         this.needsUpdate = true;
+    }
+
+    setupOutput(builder: NodeBuilder, fragment: Node): Node {
+        const result = super.setupOutput(builder, fragment);
+        // r186 skips MRT composition for fragmentNode materials. Keep the effect's
+        // RGBA intact while supplying the pass outputs (e.g. pixelation normals).
+        const mrt = builder.renderer.getRenderTarget() ? builder.renderer.getMRT() : null;
+        if (!mrt) return result;
+        output.assign(result);
+        return this.mrtNode ? mrt.merge(this.mrtNode) : mrt;
     }
 
     copy(source: this): this {
