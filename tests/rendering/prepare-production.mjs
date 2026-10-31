@@ -36,3 +36,32 @@ window.__production={ready:true,webgpu:viewer.renderer.backend.isWebGPUBackend==
 if(!__production.webgpu||!__production.shared||litPixels<1000||__contexts.some(x=>/webgl/i.test(x))||__errors.length)throw new Error('Production renderer verification failed');
 </script>`);
 console.log('http://127.0.0.1:8095/verify-rendering.html');
+
+// Exercise the real built preview route and its in-memory transport. The missing
+// case intentionally omits child ZIPs; it must report failure, not wait 180 seconds.
+const packageNames = (await fs.readdir('.codex-logs/package-test')).filter(name => name.endsWith('.zip'));
+await fs.writeFile(path.join(root, 'verify-play.html'), `<!doctype html><title>H3D play transport verification</title>
+<script>
+window.__playResult={statuses:[],done:false};
+const sessionId='local-play-transport-check';
+const missing=new URLSearchParams(location.search).has('missing');
+const names=${JSON.stringify(packageNames)};
+addEventListener('message',async e=>{
+  if(e.source!==document.getElementById('preview').contentWindow||e.origin!==location.origin||e.data?.sessionId!==sessionId)return;
+  __playResult.statuses.push({type:e.data.type,message:e.data.message});
+  if(e.data.type==='h3d:play:ready'){
+    const packages=await Promise.all(names.filter(name=>!missing||name==='webgpu-test.zip').map(async name=>{
+      const response=await fetch('./verify-packages/'+name);
+      if(!response.ok)throw Error('Fixture ZIP unavailable: '+name);
+      return {name,mimeType:'application/zip',buffer:await response.arrayBuffer()};
+    }));
+    __playResult.started=performance.now();
+    e.source.postMessage({type:'h3d:play:load',sessionId,firstPackageName:'webgpu-test.zip',packages},location.origin,packages.map(p=>p.buffer));
+  }
+  if(e.data.type==='h3d:play:started'||e.data.type==='h3d:play:error'){
+    __playResult.elapsedMs=performance.now()-__playResult.started;
+    __playResult.passed=missing?e.data.type==='h3d:play:error'&&e.data.message.includes('missing play package:'):e.data.type==='h3d:play:started';
+    __playResult.done=true;
+  }
+});
+</script><iframe id="preview" style="width:960px;height:640px" src="./#/preview/local-test?editorPlay=true&sessionId=local-play-transport-check"></iframe>`);

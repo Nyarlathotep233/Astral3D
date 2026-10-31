@@ -188,14 +188,14 @@ async function loadPlaySnapshot(message: import("@/utils/playMode").PlayLoadMess
   previousPackageFetch = Package._fetch;
   previousRequestBaseUrl = String(window.viewer.options.request?.baseUrl || "");
 
-  Package._fetch = (url: string, options: {onSuccess?: (res: {blob: () => Blob}) => void, onError?: (error: unknown) => void} = {}) => {
+  Package._fetch = (url: string, options: {onSuccess?: (res: Response) => void, onError?: (error: unknown) => void} = {}) => {
     const filename = decodeURIComponent(url.split("/").pop() || "");
     const blob = packageBlobMap.get(filename);
     if (!blob) {
       options.onError?.(new Error(`missing play package: ${filename}`));
       return;
     }
-    options.onSuccess?.({blob: () => blob});
+    options.onSuccess?.(new Response(blob));
   };
 
   if (!window.viewer.options.request) window.viewer.options.request = {baseUrl: ""};
@@ -224,6 +224,10 @@ async function loadPlaySnapshot(message: import("@/utils/playMode").PlayLoadMess
         onComplete: () => {
           window.clearTimeout(timeout);
           resolve();
+        },
+        onError: (error) => {
+          window.clearTimeout(timeout);
+          reject(error);
         },
       });
     });
