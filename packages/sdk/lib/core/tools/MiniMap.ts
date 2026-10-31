@@ -1,4 +1,6 @@
-import {MathUtils, OrthographicCamera, PerspectiveCamera, Scene, WebGLRenderer,Object3D} from "three";
+import {createRenderer, initializeRenderer, assertSupportedMaterials} from '../rendering/renderer';
+import {renderWithClipping} from '../rendering/clipping';
+import {MathUtils, OrthographicCamera, PerspectiveCamera, Scene, WebGPURenderer,Object3D} from "three/webgpu";
 import Viewer from "@/core/viewer/Viewer";
 
 interface IMiniMapOptions {
@@ -10,8 +12,13 @@ interface IMiniMapOptions {
 
 class MiniMap {
     _miniMapCamera: OrthographicCamera | PerspectiveCamera | null = null;
-    _miniMapRenderer: WebGLRenderer | null = null;
+    _miniMapRenderer: WebGPURenderer | null = null;
     _followTarget: Object3D;
+    readonly ready: Promise<void>;
+    private initialized = false;
+    private destroyed = false;
+    private viewer: Viewer;
+    private destroyListener = () => this.dispose();
 
     private scene: Scene;
     private sceneHelpers: Scene;
@@ -22,6 +29,7 @@ class MiniMap {
     isShow: boolean = false;
 
     constructor(viewer:Viewer, options:IMiniMapOptions) {
+        this.viewer = viewer;
         this.scene = viewer.scene;
         this.sceneHelpers = viewer.sceneHelpers;
         this.mapRenderSize = options.mapRenderSize;
@@ -49,11 +57,18 @@ class MiniMap {
 
         // 更新地图相机位置和朝向
         this.updateCamera();
+        viewer.addEventListener('beforeDestroy', this.destroyListener);
+        this.ready = initializeRenderer(this._miniMapRenderer!, error => viewer.failRendering(error)).then(async () => {
+            if (this.destroyed) { await this._miniMapRenderer!.dispose(); return; }
+            this.initialized = true;
+            this.update();
+        });
+        void this.ready.catch(error => viewer.failRendering(error));
     }
 
     createDomElement() {
         // 初始化小地图渲染器
-        const mapRenderer = new WebGLRenderer({alpha: true});
+        const mapRenderer = createRenderer({alpha: true});
         mapRenderer.setSize(this.mapRenderSize, this.mapRenderSize);
         // mapRenderer.setClearColor(0x7d684f);
         mapRenderer.shadowMap.enabled = false;
@@ -98,7 +113,7 @@ class MiniMap {
     updateCamera() {
         // 更新小地图css旋转角度，与玩家同步
         let targetRotateY = MathUtils.radToDeg(this._followTarget.rotation.y - Math.PI);
-        (this._miniMapRenderer as WebGLRenderer).domElement.style.transform = `rotateZ(${targetRotateY}deg)`;
+        (this._miniMapRenderer as WebGPURenderer).domElement.style.transform = `rotateZ(${targetRotateY}deg)`;
 
         // 更新地图相机位置和朝向
         let targetPos = this._followTarget.position;
@@ -111,19 +126,31 @@ class MiniMap {
     }
 
     update() {
+        if (!this.initialized || this.destroyed || this.viewer.renderError) return;
+        try {
+        assertSupportedMaterials(this.scene);
         // 更新地图相机位置和朝向
         this.updateCamera();
 
-        const renderer = this._miniMapRenderer as WebGLRenderer;
+        const renderer = this._miniMapRenderer as WebGPURenderer;
 
         renderer.autoClear = false;
 
         // 渲染小地图
-        renderer.render(this.scene, this._miniMapCamera as OrthographicCamera);
+        renderer.clear();
+        renderWithClipping(this.scene, () => renderer.render(this.scene, this._miniMapCamera as OrthographicCamera));
 
         renderer.render(this.sceneHelpers, this._miniMapCamera as OrthographicCamera);
 
         renderer.autoClear = true;
+        } catch (error) { this.viewer.failRendering(error); }
+    }
+    dispose() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        this.viewer.removeEventListener('beforeDestroy', this.destroyListener);
+        this.dom.remove();
+        if (this.initialized) void this._miniMapRenderer?.dispose();
     }
 }
 

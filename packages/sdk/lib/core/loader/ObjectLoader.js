@@ -1,3 +1,4 @@
+import {parseBuiltinMaterial, recognizeLegacyBuiltin} from '../rendering/BuiltinMaterial';
 /**
  * THREE JSON 解析器
  * @author ErSan
@@ -14,6 +15,8 @@ import Tiles from "../objects/Tile.js";
 class ObjectLoader extends THREE.Loader {
     constructor(manager) {
         super(manager);
+        // Optional, scoped to one split-package load; ordinary parses remain independent.
+        this.resourceCache = null;
     }
 
     load(url, onLoad, onProgress, onError) {
@@ -259,7 +262,7 @@ class ObjectLoader extends THREE.Loader {
 
     parseMaterials(json, textures) {
 
-        const cache = {}; // MultiMaterial
+        const cache = this.resourceCache?.materials || {}; // MultiMaterial
         const materials = {};
 
         if (json !== undefined) {
@@ -273,7 +276,8 @@ class ObjectLoader extends THREE.Loader {
 
                 if (cache[data.uuid] === undefined) {
 
-                    cache[data.uuid] = loader.parse(data);
+                    const builtin = data.type === 'H3DBuiltinMaterial' ? data : recognizeLegacyBuiltin(data);
+                    cache[data.uuid] = builtin ? parseBuiltinMaterial(builtin, textures) : loader.parse(data);
 
                 }
 
@@ -540,6 +544,10 @@ class ObjectLoader extends THREE.Loader {
 
                 const data = json[i];
 
+                if (this.resourceCache?.textures[data.uuid]) {
+                    textures[data.uuid] = this.resourceCache.textures[data.uuid];
+                    continue;
+                }
                 if (data.image === undefined) {
 
                     console.warn('THREE.ObjectLoader: No "image" specified for', data.uuid);
@@ -619,6 +627,7 @@ class ObjectLoader extends THREE.Loader {
                 if (data.userData !== undefined) texture.userData = data.userData;
 
                 textures[data.uuid] = texture;
+                if (this.resourceCache) this.resourceCache.textures[data.uuid] = texture;
 
             }
 

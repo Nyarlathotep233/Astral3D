@@ -1,4 +1,6 @@
+import {renderWithClipping} from '../rendering/clipping';
 import * as THREE from 'three/webgpu';
+import {texture} from 'three/tsl';
 import {createRenderer, initializeRenderer, assertSupportedMaterials, captureViewport} from '../rendering/renderer';
 import CameraControls from 'camera-controls';
 import {Timer} from 'three/webgpu';
@@ -132,15 +134,6 @@ const onDoubleClickPosition = new THREE.Vector2();
 let timeStamp = 0;
 
 // 事件绑定
-const Fn: any = {
-    pointerdown: null,
-    pointerup: null,
-    pointermove: null,
-    keydown: null,
-    keyup: null,
-    touchstart: null,
-    dblclick: null,
-}
 
 // 脚本管理数据结构
 type EventHandlers = {
@@ -175,10 +168,21 @@ interface InstallScriptsOptions {
 }
 
 export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
+    private Fn: any = {
+    pointerdown: null,
+    pointerup: null,
+    pointermove: null,
+    keydown: null,
+    keyup: null,
+    touchstart: null,
+    dblclick: null,
+}
+
+
     public container: HTMLElement;
     public options: IViewerSetting;
     public renderer!: THREE.WebGPURenderer;
-    public readonly ready: Promise<void>;
+    public ready: Promise<void>;
     public renderError: Error | null = null;
     private initialized = false;
     private destroyed = false;
@@ -222,6 +226,10 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         // unhandled rejection when a view is closed before it can await readiness.
         void this.ready.catch(() => {});
     }
+
+    private frameTarget!: THREE.RenderTarget;
+    private outputPipeline!: THREE.RenderPipeline;
+    private frameSize = new THREE.Vector2();
 
     private async initialize() {
         this.renderer = await this.createEngine();
@@ -428,6 +436,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         }
 
         this.renderer = newRenderer;
+        this.outputPipeline?.dispose();
+        this.frameTarget?.dispose();
+        // Composite scene/effects/helpers in one linear target. Rendering helpers
+        // directly after a tone-mapped pipeline otherwise replaces its screen output.
+        this.frameTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, samples: this.renderer.samples});
+        this.outputPipeline = new THREE.RenderPipeline(this.renderer, texture(this.frameTarget.texture));
 
         this.renderer.setPixelRatio(Math.max(Math.ceil(window.devicePixelRatio), 1));
         this.renderer.setSize(this.container.offsetWidth, this.container.offsetHeight);
@@ -445,7 +459,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.modules.controls.connect(newRenderer.domElement);
 
         // 初始化后处理
-        this.modules.effect.createComposer();
+        this.modules.effect.createPipeline();
 
         this.modules.viewHelper.init();
 
@@ -603,14 +617,14 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 初始化事件监听
      */
     initEvent() {
-        Fn.pointerdown = this.onPointerDown.bind(this);
-        this.container.addEventListener('pointerdown', Fn.pointerdown);
-        Fn.pointermove = this.onPointerMove.bind(this);
-        this.container.addEventListener('pointermove', Fn.pointermove);
-        Fn.touchstart = this.onTouchStart.bind(this);
-        this.container.addEventListener('touchstart', Fn.touchstart);
-        Fn.dblclick = this.onDoubleClick.bind(this)
-        this.container.addEventListener('dblclick', Fn.dblclick);
+        this.Fn.pointerdown = this.onPointerDown.bind(this);
+        this.container.addEventListener('pointerdown', this.Fn.pointerdown);
+        this.Fn.pointermove = this.onPointerMove.bind(this);
+        this.container.addEventListener('pointermove', this.Fn.pointermove);
+        this.Fn.touchstart = this.onTouchStart.bind(this);
+        this.container.addEventListener('touchstart', this.Fn.touchstart);
+        this.Fn.dblclick = this.onDoubleClick.bind(this)
+        this.container.addEventListener('dblclick', this.Fn.dblclick);
     }
 
     /**
@@ -738,15 +752,15 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
             Object.keys(App.scripts).forEach(processUuid);
         }
 
-        if (!Fn.keydown) {
-            Fn.keydown = (event: KeyboardEvent) => {
+        if (!this.Fn.keydown) {
+            this.Fn.keydown = (event: KeyboardEvent) => {
                 this.dispatchEvent({type: "onKeyDown", event})
             }
-            window.addEventListener('keydown', Fn.keydown);
-            Fn.keyup = (event: KeyboardEvent) => {
+            window.addEventListener('keydown', this.Fn.keydown);
+            this.Fn.keyup = (event: KeyboardEvent) => {
                 this.dispatchEvent({type: "onKeyUp", event})
             }
-            window.addEventListener('keyup', Fn.keyup);
+            window.addEventListener('keyup', this.Fn.keyup);
         }
     }
 
@@ -831,12 +845,12 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
             events[event] = {};
         });
 
-        if (Fn.keydown) {
-            window.removeEventListener('keydown', Fn.keydown);
-            Fn.keydown = null;
+        if (this.Fn.keydown) {
+            window.removeEventListener('keydown', this.Fn.keydown);
+            this.Fn.keydown = null;
 
-            window.removeEventListener('keyup', Fn.keyup);
-            Fn.keyup = null;
+            window.removeEventListener('keyup', this.Fn.keyup);
+            this.Fn.keyup = null;
         }
     }
 
@@ -943,8 +957,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         event.preventDefault();
         const array = getMousePosition(this.container, event.clientX, event.clientY);
         onDownPosition.fromArray(array);
-        Fn.pointerup = this.onPointerUp.bind(this);
-        document.addEventListener('pointerup', Fn.pointerup);
+        this.Fn.pointerup = this.onPointerUp.bind(this);
+        document.addEventListener('pointerup', this.Fn.pointerup);
     }
 
     /**
@@ -957,8 +971,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         const array = getMousePosition(this.container, event.clientX, event.clientY);
         onUpPosition.fromArray(array);
         this.handleClick();
-        document.removeEventListener('pointerup', Fn.pointerup);
-        Fn.pointerup = null;
+        document.removeEventListener('pointerup', this.Fn.pointerup);
+        this.Fn.pointerup = null;
     }
 
     /**
@@ -979,8 +993,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         const touch = event.changedTouches[0];
         const array = getMousePosition(this.container, touch.clientX, touch.clientY);
         onDownPosition.fromArray(array);
-        Fn.pointerup = this.onTouchEnd.bind(this);
-        document.addEventListener('touchend', Fn.pointerup);
+        this.Fn.pointerup = this.onTouchEnd.bind(this);
+        document.addEventListener('touchend', this.Fn.pointerup);
     }
 
     /**
@@ -994,8 +1008,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         const array = getMousePosition(this.container, touch.clientX, touch.clientY);
         onUpPosition.fromArray(array);
         this.handleClick();
-        document.removeEventListener('touchend', Fn.pointerup);
-        Fn.pointerup = null;
+        document.removeEventListener('touchend', this.Fn.pointerup);
+        this.Fn.pointerup = null;
     }
 
     /**
@@ -1107,16 +1121,23 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         assertSupportedMaterials(this.scene);
         assertSupportedMaterials(this.sceneHelpers);
 
+        this.renderer.getDrawingBufferSize(this.frameSize);
+        this.frameTarget.setSize(this.frameSize.x, this.frameSize.y);
+        this.renderer.setRenderTarget(this.frameTarget);
         this.renderer.clear();
 
         App.csm.update();
 
+        renderWithClipping(this.scene, () => {
         if (this.modules.effect.enabled) {
             this.modules.effect.render(<number>delta);
         } else {
             this.renderer.render(this.scene, App.viewportCamera);
         }
 
+        });
+
+        if (this.modules.effect.enabled) this.renderer.clearDepth();
         // 非默认相机不渲染辅助
         if (this.camera === App.viewportCamera) {
             if (this.options.edit?.enabled) this.renderer.render(this.sceneHelpers, this.camera);
@@ -1126,6 +1147,8 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.css3DRenderer.render(this.scene, App.viewportCamera);
 
         this.modules.viewHelper.render();
+        this.renderer.setRenderTarget(null);
+        this.outputPipeline.render();
 
         this.dispatchEvent({type: 'afterRender', delta: <number>delta});
 
@@ -1133,7 +1156,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         // 计算帧时
         const fs = endTime - startTime;
         useDispatchSignal("sceneRendered", fs);
-        } catch (error) { this.failRendering(error); }
+        } catch (error) { this.renderer.setRenderTarget(null); this.failRendering(error); }
     }
 
     failRendering(error: unknown) {
@@ -1160,18 +1183,23 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.resizeObserver?.disconnect();
         if (this.resizeTimer) clearTimeout(this.resizeTimer);
         this.timer.dispose();
+        this.outputPipeline?.dispose();
+        this.frameTarget?.dispose();
         if (!this.modules) return;
         this.renderer.setAnimationLoop(null);
         this.dispatchEvent({type: "beforeDestroy"});
 
-        this.container.removeEventListener('mousedown', Fn.mousedown);
-        Fn.mousedown = null;
-        this.container.removeEventListener('pointermove', Fn.pointermove);
-        Fn.pointermove = null;
-        this.container.removeEventListener('touchstart', Fn.touchstart);
-        Fn.touchstart = null;
-        this.container.removeEventListener('dblclick', Fn.dblclick);
-        Fn.dblclick = null;
+        this.container.removeEventListener('pointerdown', this.Fn.pointerdown);
+        this.Fn.pointerdown = null;
+        this.container.removeEventListener('pointermove', this.Fn.pointermove);
+        this.Fn.pointermove = null;
+        this.container.removeEventListener('touchstart', this.Fn.touchstart);
+        this.Fn.touchstart = null;
+        this.container.removeEventListener('dblclick', this.Fn.dblclick);
+        this.Fn.dblclick = null;
+        document.removeEventListener('pointerup', this.Fn.pointerup);
+        document.removeEventListener('touchend', this.Fn.pointerup);
+        this.Fn.pointerup = null;
 
         Object.keys(this.modules).forEach(key => {
             if (this.modules[key].dispose) {
@@ -1245,6 +1273,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     async getViewportImage() {
         await this.ready;
         this.assertRenderable();
+        await this.modules.effect.ready;
         return captureViewport(this.renderer, () => {
             this.render();
             this.assertRenderable();

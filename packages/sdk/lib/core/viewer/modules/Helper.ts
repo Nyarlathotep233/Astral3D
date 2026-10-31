@@ -5,8 +5,8 @@ import App from "@/core/app/App";
 import Viewer from "../Viewer";
 import {getOsTheme} from "@/utils";
 
-let _updateFn;
 export class Helper {
+    private _updateFn;
     private viewer: Viewer;
     private gizmo: ViewportGizmo | undefined;
     private controls: CameraControls;
@@ -38,9 +38,9 @@ export class Helper {
     }
 
     init() {
-        _updateFn = this.update.bind(this);
-        useAddSignal('cameraChanged', _updateFn);
-        useAddSignal('sceneResize', _updateFn);
+        this._updateFn = this.update.bind(this);
+        useAddSignal('cameraChanged', this._updateFn);
+        useAddSignal('sceneResize', this._updateFn);
 
         if (!this.viewer.renderer) return;
 
@@ -156,16 +156,27 @@ export class Helper {
     render() {
         if (!this.gizmo) return;
 
-        this.gizmo.render();
+        const target = this.viewer.renderer.getRenderTarget();
+        if (!target) { this.gizmo.render(); return; }
+        // The pinned gizmo changes renderer viewport only; WebGPU offscreen passes
+        // use the render target's viewport/scissor instead (in physical pixels).
+        const viewport = target.viewport.clone(), scissor = target.scissor.clone();
+        const scissorTest = target.scissorTest;
+        const rect = (this.gizmo as unknown as {_viewport: number[]})._viewport;
+        target.viewport.fromArray(rect).multiplyScalar(this.viewer.renderer.getPixelRatio());
+        target.scissor.copy(target.viewport);
+        target.scissorTest = true;
+        try { this.gizmo.render(); }
+        finally { target.viewport.copy(viewport); target.scissor.copy(scissor); target.scissorTest = scissorTest; }
     }
 
     dispose() {
         if (this.gizmo) this.gizmo.dispose();
 
-        if(_updateFn){
-            useRemoveSignal('cameraChanged', _updateFn);
-            useRemoveSignal('sceneResize', _updateFn);
-            _updateFn = null;
+        if(this._updateFn){
+            useRemoveSignal('cameraChanged', this._updateFn);
+            useRemoveSignal('sceneResize', this._updateFn);
+            this._updateFn = null;
         }
     }
 }

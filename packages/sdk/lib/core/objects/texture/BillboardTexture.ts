@@ -222,7 +222,8 @@ export default class BillboardTexture extends THREE.CanvasTexture {
             let imageWidth = imageSize.width;
             let imageHeight = imageSize.height;
 
-            let context = this.image.getContext('2d');
+            const context = this.image.getContext('2d');
+            if (!context) throw new Error('Billboard canvas 2D context unavailable');
             context.clearRect(0, 0, this.image.width, this.image.height);
             context.scale(canvasWidth / this.width, canvasHeight / this.height);
             context.save();
@@ -413,9 +414,9 @@ export default class BillboardTexture extends THREE.CanvasTexture {
                         context.restore();
                     }
 
-                    context.textAlign = textAlign;
+                    context.textAlign = textAlign as CanvasTextAlign;
                     context.font = this.font;
-                    context.textBaseline = this.options.text.baseline || 'top';
+                    context.textBaseline = (this.options.text.baseline || 'top') as CanvasTextBaseline;
                     context.fillStyle = this.options.text.fontColor || '#ffffff';
                     context.lineJoin = 'miter';
                     context.miterLimit = 1;

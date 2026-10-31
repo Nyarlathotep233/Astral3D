@@ -922,7 +922,7 @@ export class App {
      * 从json数据生成场景
      * @param sceneJson
      */
-    async fromJSON(sceneJson: ISceneJson) {
+    async fromJSON(sceneJson: ISceneJson, loader = Loader.objectLoader) {
         //先清空场景
         this.clear();
 
@@ -932,7 +932,6 @@ export class App {
         this.metadata = sceneJson.metadata || {};
         sceneJson.metadata = {};
 
-        let loader = Loader.objectLoader;
         let camera = await loader.parseAsync(sceneJson.camera) as THREE.Camera;
 
         this.camera.copy(camera as THREE.PerspectiveCamera);

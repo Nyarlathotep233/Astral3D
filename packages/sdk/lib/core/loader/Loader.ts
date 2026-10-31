@@ -298,7 +298,8 @@ class Loader {
 
                         const loader = new ColladaLoader(manager);
                         //@ts-ignore
-                        const collada = loader.parse(contents);
+                        const collada = loader.parse(contents, "");
+                        if (!collada) { reject(new Error("Invalid Collada document")); return; }
 
                         collada.scene.name = filename;
 
@@ -503,7 +504,7 @@ class Loader {
                         const loader = new LDrawLoader();
                         loader.setPath('three/examples/models/ldraw/officialLibrary/');
                         // @ts-ignore
-                        loader.parse(event.target?.result as string, undefined, function (group) {
+                        loader.parse(event.target?.result as string, function (group) {
                             group.name = filename;
                             // Convert from LDraw coordinates: rotate 180 degrees around OX
                             group.rotation.x = Math.PI;
@@ -688,7 +689,9 @@ class Loader {
                         const contents = event.target?.result as ArrayBuffer;
                         const { VOXLoader, VOXMesh } = await import('three/examples/jsm/loaders/VOXLoader.js');
 
-                        const chunks = new VOXLoader().parse(contents);
+                        const parsed = new VOXLoader().parse(contents);
+                        if (!parsed) { reject(new Error("Invalid VOX file")); return; }
+                        const chunks = parsed.chunks;
 
                         const group = new THREE.Group();
                         group.name = filename;

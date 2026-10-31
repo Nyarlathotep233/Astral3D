@@ -1,3 +1,4 @@
+import {BuiltinMaterial} from '../../rendering/BuiltinMaterial';
 /**
  * @author ErSan
  * @email  mlt131220@163.com
@@ -5,35 +6,11 @@
  * @description 流光墙着色器材质
  * @from http://t.csdnimg.cn/zSxq0
  */
-import {DoubleSide, ShaderMaterial,RepeatWrapping,TextureLoader} from "three";
+import {DoubleSide, RepeatWrapping,TextureLoader} from "three";
 import {useDispatchSignal} from "@/hooks";
 
-const vertex = `
-     varying vec2 vUv;
-     varying vec3 vPosition;
-     void main(){
-           vUv = uv;
-           vPosition = position;
-           vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-           gl_Position = projectionMatrix * mvPosition;
-     }
-`;
-
-const fragment = /*glsl*/`
-    varying vec2 vUv;
-    uniform float uTime;
-    uniform sampler2D uFlowTexture;
-    uniform sampler2D uBgTexture;
-    void main( void ) {
-         vec2 position = vUv;
-         vec4 colorA = texture2D(uFlowTexture, vec2(vUv.x, fract(vUv.y - uTime)));
-         vec4 colorB = texture2D(uBgTexture, position.xy);
-         gl_FragColor = colorB + colorB * colorA;
-    }
-`;
-
 export class StreamerWallShaderMaterial{
-    static _ShaderMaterial: ShaderMaterial;
+    static _ShaderMaterial: BuiltinMaterial;
     static Name = "StreamerWallShaderMaterial";
 
     static get Material() {
@@ -43,7 +20,7 @@ export class StreamerWallShaderMaterial{
         return StreamerWallShaderMaterial._ShaderMaterial;
     }
 
-    static set Material(value: ShaderMaterial) {
+    static set Material(value: BuiltinMaterial) {
         StreamerWallShaderMaterial._ShaderMaterial = value;
     }
 
@@ -52,19 +29,19 @@ export class StreamerWallShaderMaterial{
     }
 
     static InstanceShaderMaterial(){
-        const bgTexture = new TextureLoader().load("/static/images/resource/material/shader/texture2D/GradationBlue.png");
+        const bgTexture = new TextureLoader().load(new URL("../../rendering/assets/GradationBlue.png", import.meta.url).href);
 
-        const flowTexture = new TextureLoader().load("/static/images/resource/material/shader/texture2D/FlowTexture.png");
+        const flowTexture = new TextureLoader().load(new URL("../../rendering/assets/FlowTexture.png", import.meta.url).href);
         flowTexture.wrapS = RepeatWrapping;
 
-        const material = new ShaderMaterial({
+        const material = new BuiltinMaterial('StreamerWall', {
             uniforms: {
                 uTime: {value: 0.0},
                 uFlowTexture: {value: flowTexture},
                 uBgTexture: {value: bgTexture}
             },
-            vertexShader: vertex,
-            fragmentShader: fragment,
+
+
             side: DoubleSide,
             transparent: true,
             depthTest: false,
@@ -88,7 +65,7 @@ export class StreamerWallShaderMaterial{
         StreamerWallShaderMaterial._ShaderMaterial.uniforms.uTime.value += .01
     }
 
-    static UpdatePreview(previewMaterial: ShaderMaterial) {
+    static UpdatePreview(previewMaterial: BuiltinMaterial) {
         previewMaterial.uniforms.uTime.value += .01
     }
 }

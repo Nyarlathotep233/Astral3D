@@ -32,12 +32,16 @@ export default defineConfig(async ({mode, command}) => {
             deleteOriginFile: VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE,
         },
         enableAnalyze: VITE_ENABLE_ANALYZE,
+        // The legacy TLA transform miscompiles r186 class static blocks.
+        // WebGPU-capable browsers support native TLA and ES2022 class syntax.
+        nativeTopLevelAwait: true,
         enableConfig:VITE_ENABLE_CONFIG_GENERATE
     });
 
     return {
         base: VITE_PUBLIC_PATH,
         build: {
+            target: 'es2022',
             lib: {
                 entry: resolve(__dirname, 'lib/index.ts'),
                 name: 'Astral3D', // 打包后全局变量的名称

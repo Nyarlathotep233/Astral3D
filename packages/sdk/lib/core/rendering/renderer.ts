@@ -1,10 +1,13 @@
+import {DepthNodeMaterial} from './DepthNodeMaterial.js';
 import { Material, Object3D, WebGPURenderer } from 'three/webgpu';
 
 export type RenderingAPI = 'webgpu' | 'webgl2';
 
 /** One official renderer for every 3D entrypoint. Its built-in fallback is intentional. */
 export function createRenderer(options: ConstructorParameters<typeof WebGPURenderer>[0] = {}) {
-    return new WebGPURenderer(options);
+    const renderer = new WebGPURenderer(options);
+    renderer.library.addMaterial(DepthNodeMaterial, 'MeshDepthMaterial');
+    return renderer;
 }
 
 export function getRenderingAPI(renderer: WebGPURenderer): RenderingAPI {
@@ -67,9 +70,14 @@ export async function captureViewport(renderer: WebGPURenderer, render: () => vo
     });
     const image = new Image();
     const url = URL.createObjectURL(blob);
-    image.src = url;
     try {
-        await image.decode();
+        // decode() can remain pending in a background editor/preview tab. The load
+        // event also guarantees a drawable image and does not require a paint tick.
+        await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error('Screenshot image failed to load'));
+            image.src = url;
+        });
     } catch (error) {
         URL.revokeObjectURL(url);
         throw error;

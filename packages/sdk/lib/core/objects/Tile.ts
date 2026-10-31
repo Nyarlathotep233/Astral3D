@@ -1,5 +1,6 @@
 import {TilesRenderer} from "3d-tiles-renderer";
-import {GLTFExtensionsPlugin,GLTFMeshFeaturesExtension,GLTFStructuralMetadataExtension,TilesFadePlugin,DebugTilesPlugin,UnloadTilesPlugin} from "3d-tiles-renderer/plugins";
+import {GLTFExtensionsPlugin,GLTFMeshFeaturesExtension,GLTFStructuralMetadataExtension,DebugTilesPlugin,UnloadTilesPlugin} from "3d-tiles-renderer/plugins";
+import {TilesFadeNodePlugin} from '../rendering/TilesFadeNodePlugin.js';
 import Loader from "@/core/loader/Loader.ts";
 import {PerspectiveCamera, WebGPURenderer, Group, JSONMeta, Vector2} from "three/webgpu";
 import {deepAssign} from "@/utils";
@@ -50,7 +51,7 @@ export default class Tiles extends Group{
         // 设置debug插件
         this.setDebug(this.options.debug,false);
         // 瓦片渐显隐
-        this.renderer.registerPlugin(new TilesFadePlugin());
+        this.renderer.registerPlugin(new TilesFadeNodePlugin());
         // 从gpu卸载不可见瓦片数据，cpu上仍然存在
         this.renderer.registerPlugin(new UnloadTilesPlugin());
 

@@ -15,7 +15,7 @@ import {
     Object3D
 } from "three";
 import {useAddSignal, useDispatchSignal, useRemoveSignal} from "@/hooks";
-import {isGroup} from "@/utils";
+import {setSceneClipping} from "../rendering/clipping";
 import Viewer from "@/core/viewer/Viewer";
 import App from "@/core/app/App";
 
@@ -42,7 +42,7 @@ class ClippedEdgesBox {
         this.controls = viewer.modules.controls;
 
         // 开启模型对象的局部剪裁平面功能. 如果不设置为true，设置剪裁平面的模型不会被剪裁
-        this.viewer.renderer.localClippingEnabled = true;
+
 
         objectSelectedFn = this.objectSelected.bind(this);
     }
@@ -164,26 +164,7 @@ class ClippedEdgesBox {
             new Plane(new Vector3(0, 0, 1), -this.boxMin.z) // back
         );
 
-        const setChildClippingPlanes = (child) => {
-            if (["Mesh", "LineSegments"].includes(child.type)) {
-                child.material.clippingPlanes = this.planes;
-                child.material.clipIntersection = false;
-            }
-        }
-
-        if (!this.lastSelected) {
-            this.viewer.scene.traverseVisible(c => {
-                setChildClippingPlanes(c)
-            })
-        } else {
-            if (isGroup(this.lastSelected)) {
-                App.traverseMeshToArr(this.lastSelected).forEach(child => {
-                    setChildClippingPlanes(child)
-                })
-            } else {
-                setChildClippingPlanes(this.lastSelected)
-            }
-        }
+        setSceneClipping(this.lastSelected || this.viewer.scene, this.planes);
     }
 
     protected updatePlanes() {
@@ -291,25 +272,7 @@ class ClippedEdgesBox {
         this.faces = [];
         this.lines = [];
 
-        const setChildClippingPlanes = (child) => {
-            if (["Mesh", "LineSegments"].includes(child.type)) {
-                child.material.clippingPlanes = [];
-            }
-        }
-
-        if (!this.lastSelected) {
-            this.viewer.scene.traverseVisible(c => {
-                setChildClippingPlanes(c);
-            })
-        } else {
-            if (isGroup(this.lastSelected)) {
-                App.traverseMeshToArr(this.lastSelected).forEach(child => {
-                    setChildClippingPlanes(child)
-                })
-            } else {
-                setChildClippingPlanes(this.lastSelected)
-            }
-        }
+        setSceneClipping(this.lastSelected || this.viewer.scene, null);
     }
 
     // ------------------- 指针事件 -----------------------

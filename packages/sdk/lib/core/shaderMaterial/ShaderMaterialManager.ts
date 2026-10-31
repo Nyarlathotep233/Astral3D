@@ -1,91 +1,42 @@
-import {ShaderMaterial, Vector2} from "three";
-import {useAddSignal} from "@/hooks";
-import {CircleGridShaderMaterial} from "@/core/shaderMaterial/modules/CircleGridShaderMaterial";
-import {DynamicCheckerboardShaderMaterial} from "@/core/shaderMaterial/modules/DynamicCheckerboardShaderMaterial";
-import {FlickerShaderMaterial} from "@/core/shaderMaterial/modules/FlickerShaderMaterial";
-import {SlowSmokeShaderMaterial} from "@/core/shaderMaterial/modules/SlowSmokeShaderMaterial";
-import {StreamerWallShaderMaterial} from "@/core/shaderMaterial/modules/StreamerWallShaderMaterial";
-import { SnowingShaderMaterial } from "@/core/shaderMaterial/modules/SnowingShaderMaterial";
-import App from "@/core/app/App";
-
-interface IShaderMaterialClass {
-    Name: string,
-    _ShaderMaterial: ShaderMaterial,
-    Resolution?: Vector2,
-    Update: () => void,
-}
+import {BuiltinMaterial} from '../rendering/BuiltinMaterial';
+import {useAddSignal, useRemoveSignal} from '@/hooks';
+import App from '@/core/app/App';
 
 export class ShaderMaterialManager {
-    shaderMaterials: IShaderMaterialClass[] = [];
-    classMap: { [className: string]: string } = {};
-
-    constructor() {
-        useAddSignal("instantiateShaderMaterial", (shaderMaterialClass: IShaderMaterialClass) => {
-            this.push(shaderMaterialClass);
-        })
-        useAddSignal("sceneResize", (width: number, height: number) => {
-            const resolution = new Vector2(width, height);
-            this.shaderMaterials.forEach(sm => {
-                sm.Resolution = resolution;
-            })
-        })
-        useAddSignal("sceneLoadComplete", () => {
-            this.init();
-        })
-    }
-
-    get needRender() {
-        return this.shaderMaterials.length > 0;
-    }
-
-    init() {
-        if(!App.metadata._ShaderMaterialClassMap) return;
-
-        this.classMap = App.metadata._ShaderMaterialClassMap;
-        if (this.classMap) {
-            for (let className in this.classMap) {
-                const material = App.materials[this.classMap[className]] as ShaderMaterial;
-
-                switch (className) {
-                    case "CircleGridShaderMaterial":
-                        CircleGridShaderMaterial.Material = material;
-                        this.shaderMaterials.push(CircleGridShaderMaterial);
-                        break;
-                    case "DynamicCheckerboardShaderMaterial":
-                        DynamicCheckerboardShaderMaterial.Material = material;
-                        this.shaderMaterials.push(DynamicCheckerboardShaderMaterial);
-                        break;
-                    case "FlickerShaderMaterial":
-                        FlickerShaderMaterial.Material = material;
-                        this.shaderMaterials.push(FlickerShaderMaterial);
-                        break;
-                    case "SlowSmokeShaderMaterial":
-                        SlowSmokeShaderMaterial.Material = material;
-                        this.shaderMaterials.push(SlowSmokeShaderMaterial);
-                        break;
-                    case "StreamerWallShaderMaterial":
-                        StreamerWallShaderMaterial.Material = material;
-                        this.shaderMaterials.push(StreamerWallShaderMaterial);
-                        break;
-                    case "SnowingShaderMaterial":
-                        SnowingShaderMaterial.Material = material;
-                        this.shaderMaterials.push(SnowingShaderMaterial);
-                        break;
-                }
-            }
-        }
-    }
-
-    push(sm: IShaderMaterialClass) {
-        this.shaderMaterials.push(sm);
-
+    classMap: Record<string, string> = {};
+    private animated = new Set<BuiltinMaterial>();
+    private instantiate = (sm: {Name: string; _ShaderMaterial: BuiltinMaterial}) => {
         this.classMap[sm.Name] = sm._ShaderMaterial.uuid;
         App.metadata._ShaderMaterialClassMap = this.classMap;
+    };
+    private resize = (width: number, height: number) => {
+        this.collect();
+        this.animated.forEach(material => material.uniforms.uResolution?.value.set(width, height));
+    };
+    constructor() {
+        useAddSignal('instantiateShaderMaterial', this.instantiate);
+        useAddSignal('sceneResize', this.resize);
     }
-
+    private collect() {
+        this.animated.clear();
+        App.scene.traverse(object => {
+            // Snow accumulation is advanced by Weather at its original speed.
+            if ((object as any).metaData?.material) return;
+            const value = (object as any).material;
+            for (const material of Array.isArray(value) ? value : value ? [value] : []) {
+                if (material.isH3DBuiltinMaterial && material.kind !== 'Rain' && material.kind !== 'Snow') this.animated.add(material);
+            }
+        });
+    }
+    get needRender() { return this.animated.size > 0; }
+    init() { this.classMap = App.metadata._ShaderMaterialClassMap || {}; this.collect(); }
     update() {
-        for (let i = 0; i < this.shaderMaterials.length; i++) {
-            this.shaderMaterials[i].Update();
-        }
+        this.collect();
+        this.animated.forEach(material => { material.uniforms.uTime.value += material.kind === 'Flicker' ? .02 : .01; });
+    }
+    dispose() {
+        useRemoveSignal('instantiateShaderMaterial', this.instantiate);
+        useRemoveSignal('sceneResize', this.resize);
+        this.animated.clear();
     }
 }

@@ -1,3 +1,4 @@
+import {BuiltinMaterial} from '../../rendering/BuiltinMaterial';
 /**
  * @author ErSan
  * @email  mlt131220@163.com
@@ -5,49 +6,11 @@
  * @description 动态棋盘着色器材质
  * @from  https://glslsandbox.com/e#109552.0
  */
-import {DoubleSide, ShaderMaterial} from "three";
+import {DoubleSide} from "three";
 import {useDispatchSignal} from "@/hooks";
 
-const vertex = `
-varying vec2 vUv;
-
-void main () {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-    `;
-
-const fragment = /*glsl*/`
-#ifdef GL_ES
-precision mediump float;
-#endif
-
-varying vec2 vUv;
-uniform float uTime;
-
-void main() {
- vec2 uv = vUv;
-
- float cycle = fract(uTime);
-
- vec2 grid = vec2(10, 10);
- vec2 position = (uv * grid) - vec2(cycle,0);
-
- float color = 0.0;
- 
- if (mod(position.y,2.0) < 1.0) {
-  if (fract(position.x) < cycle) color = 1.0;
- } else {
-  if (fract(position.x) > cycle) color = 1.0;
- }
- 
- if (mod(floor(uTime), 2.0) < 1.0) color = 1.0 - color;
-  
- gl_FragColor = vec4( color, color, color, 1.0 );
-}`;
-
 export class DynamicCheckerboardShaderMaterial {
-    static _ShaderMaterial: ShaderMaterial;
+    static _ShaderMaterial: BuiltinMaterial;
     static Name = "DynamicCheckerboardShaderMaterial";
 
     static get Material() {
@@ -57,7 +20,7 @@ export class DynamicCheckerboardShaderMaterial {
         return DynamicCheckerboardShaderMaterial._ShaderMaterial;
     }
 
-    static set Material(value: ShaderMaterial) {
+    static set Material(value: BuiltinMaterial) {
         DynamicCheckerboardShaderMaterial._ShaderMaterial = value;
     }
 
@@ -66,14 +29,14 @@ export class DynamicCheckerboardShaderMaterial {
     }
 
     static InstanceShaderMaterial() {
-        const material = new ShaderMaterial({
+        const material = new BuiltinMaterial('DynamicCheckerboard', {
             uniforms:{
                 uTime: {
                     value: 1.0
                 }
             },
-            vertexShader: vertex,
-            fragmentShader: fragment,
+
+
             side: DoubleSide,
             transparent: true,
         });
@@ -95,7 +58,7 @@ export class DynamicCheckerboardShaderMaterial {
         DynamicCheckerboardShaderMaterial._ShaderMaterial.uniforms.uTime.value += .01
     }
 
-    static UpdatePreview(previewMaterial : ShaderMaterial) {
+    static UpdatePreview(previewMaterial : BuiltinMaterial) {
         previewMaterial.uniforms.uTime.value += .01
     }
 }

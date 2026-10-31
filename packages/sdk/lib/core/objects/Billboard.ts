@@ -83,7 +83,7 @@ export default class Billboard extends THREE.Sprite<BillboardEventMap> {
 
         this.name = this.options.name;
 
-        const texture = new BillboardTexture(this.options, material ? (material.map?.image) : undefined);
+        const texture = new BillboardTexture(this.options, material ? (material.map?.image as HTMLImageElement | undefined) : undefined);
         texture.colorSpace = THREE.SRGBColorSpace;
 
         if (material) {

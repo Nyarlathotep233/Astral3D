@@ -1,3 +1,4 @@
+import {BuiltinMaterial} from '../../rendering/BuiltinMaterial';
 /*
  * @author ErSan
  * @email  mlt131220@163.com
@@ -12,12 +13,12 @@ import {SnowingShaderMaterial} from "@/core/shaderMaterial/modules/SnowingShader
 import Viewer from "../Viewer";
 import App from "@/core/app/App";
 
-let _fogConfigChangeFn: any = null;
-let _rainConfigChangeFn: any = null;
-let _snowConfigChangeFn: any = null;
-let _objectAddedFn: any = null;
 
 export class Weather {
+    private _objectAddedFn: any = null;
+    private _snowConfigChangeFn: any = null;
+    private _rainConfigChangeFn: any = null;
+    private _fogConfigChangeFn: any = null;
     private viewer: Viewer;
     rain: Rain | null = null;
     snow: Snow | null = null;
@@ -26,17 +27,17 @@ export class Weather {
     constructor(viewer: Viewer) {
         this.viewer = viewer;
 
-        _fogConfigChangeFn = this.sceneFogSettingsChanged.bind(this)
-        useAddSignal("sceneFogSettingsChanged", _fogConfigChangeFn);
+        this._fogConfigChangeFn = this.sceneFogSettingsChanged.bind(this)
+        useAddSignal("sceneFogSettingsChanged", this._fogConfigChangeFn);
 
-        _rainConfigChangeFn = this.sceneRainSettingsChanged.bind(this);
-        useAddSignal("sceneRainSettingsChanged", _rainConfigChangeFn);
+        this._rainConfigChangeFn = this.sceneRainSettingsChanged.bind(this);
+        useAddSignal("sceneRainSettingsChanged", this._rainConfigChangeFn);
 
-        _snowConfigChangeFn = this.sceneSnowSettingsChanged.bind(this);
-        useAddSignal("sceneSnowSettingsChanged", _snowConfigChangeFn);
+        this._snowConfigChangeFn = this.sceneSnowSettingsChanged.bind(this);
+        useAddSignal("sceneSnowSettingsChanged", this._snowConfigChangeFn);
 
-        _objectAddedFn = this.objectAdded.bind(this);
-        useAddSignal("objectAdded", _objectAddedFn);
+        this._objectAddedFn = this.objectAdded.bind(this);
+        useAddSignal("objectAdded", this._objectAddedFn);
     }
 
     objectAdded(object) {
@@ -132,8 +133,8 @@ export class Weather {
             !obj.metaData && (obj.metaData = {});
             obj.metaData.material = obj.material;
 
-            obj.material = SnowingShaderMaterial.InstanceShaderMaterial().clone();
-            obj.material.copyAttr(obj.metaData.material);
+            obj.material = SnowingShaderMaterial.InstanceShaderMaterial();
+            THREE.Material.prototype.copy.call(obj.material, obj.metaData.material);
             obj.material.transparent = obj.metaData.material.transparent;
             obj.material.uniforms.uTime.value = 0.01;
             obj.material.uniforms.uHasTexture.value = 1.0;
@@ -149,8 +150,8 @@ export class Weather {
             const alpha = obj.material.transparent ? obj.material.opacity : 1;
             const color = new THREE.Vector4(obj.material.color.r, obj.material.color.g, obj.material.color.b, alpha);
 
-            obj.material = SnowingShaderMaterial.InstanceShaderMaterial().clone();
-            obj.material.copyAttr(obj.metaData.material);
+            obj.material = SnowingShaderMaterial.InstanceShaderMaterial();
+            THREE.Material.prototype.copy.call(obj.material, obj.metaData.material);
             obj.material.transparent = obj.metaData.material.transparent;
             obj.material.uniforms.uTime.value = 0.01;
             obj.material.uniforms.uHasTexture.value = 0.0;
@@ -179,9 +180,7 @@ export class Weather {
         for (let i = this.snowingMaterialObj.length - 1; i >= 0; i--) {
             const obj = this.snowingMaterialObj[i];
 
-            // 释放 ShaderMaterial
-            // TODO: 20250519: R176版本调用报错，暂不销毁
-            // (<THREE.ShaderMaterial>obj.material).dispose();
+            (obj.material as BuiltinMaterial).dispose();
 
             // 恢复原始材质
             obj.material = obj.metaData.material as THREE.Material;
@@ -263,7 +262,7 @@ export class Weather {
             if (App.project.getKey("weather.snow.accumulation")) {
                 const speed = this.snow.options.speed;
                 this.snowingMaterialObj.forEach(obj => {
-                    const m = obj.material as THREE.ShaderMaterial;
+                    const m = obj.material as BuiltinMaterial;
 
                     if (m.uniforms.uTime.value > speed / 2) {
                         m.uniforms.uTime.value = speed / 2;
@@ -281,13 +280,15 @@ export class Weather {
     }
 
     dispose() {
-        useRemoveSignal("sceneFogSettingsChanged", _fogConfigChangeFn);
-        _fogConfigChangeFn = null;
-        useRemoveSignal("sceneRainSettingsChanged", _rainConfigChangeFn);
-        _rainConfigChangeFn = null;
-        useRemoveSignal("sceneSnowSettingsChanged", _snowConfigChangeFn);
-        _snowConfigChangeFn = null;
+        useRemoveSignal("sceneFogSettingsChanged", this._fogConfigChangeFn);
+        this._fogConfigChangeFn = null;
+        useRemoveSignal("sceneRainSettingsChanged", this._rainConfigChangeFn);
+        this._rainConfigChangeFn = null;
+        useRemoveSignal("sceneSnowSettingsChanged", this._snowConfigChangeFn);
+        this._snowConfigChangeFn = null;
 
+        useRemoveSignal("objectAdded", this._objectAddedFn);
+        this.removeSnowMap();
         this.rain && this.rain.dispose();
         this.snow && this.snow.dispose();
     }

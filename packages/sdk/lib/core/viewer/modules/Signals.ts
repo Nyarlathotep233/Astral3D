@@ -1,8 +1,6 @@
 import * as THREE from "three/webgpu";
 import {RoomEnvironment} from "three/examples/jsm/environments/RoomEnvironment.js";
-import {ShaderPass} from "three/examples/jsm/postprocessing/ShaderPass.js";
-import {Effect} from "./Effect";
-import {useAddSignal} from "@/hooks";
+import {useAddSignal, useRemoveSignal} from "@/hooks";
 import Viewer from "../Viewer";
 import App from "@/core/app/App";
 import {focusObject} from "@/utils/scene/controls.ts";
@@ -18,41 +16,48 @@ export class Signals {
         this.init();
     }
 
+    private subscriptions: Array<() => void> = [];
+    private listen(name: Parameters<typeof useAddSignal>[0], fn: (...args: any[]) => void) {
+        useAddSignal(name, fn);
+        this.subscriptions.push(() => useRemoveSignal(name, fn));
+    }
+    dispose() { this.subscriptions.forEach(remove => remove()); this.subscriptions = []; }
+
     init() {
-        useAddSignal("sceneCleared", this.sceneCleared.bind(this));
-        useAddSignal("transformModeChanged", this.transformModeChanged.bind(this));
-        useAddSignal("snapChanged", this.snapChanged.bind(this));
-        useAddSignal("spaceChanged", this.spaceChanged.bind(this));
-        useAddSignal("effectEnabledChange", this.effectEnabledChange.bind(this));
+        this.listen("sceneCleared", this.sceneCleared.bind(this));
+        this.listen("transformModeChanged", this.transformModeChanged.bind(this));
+        this.listen("snapChanged", this.snapChanged.bind(this));
+        this.listen("spaceChanged", this.spaceChanged.bind(this));
+        this.listen("effectEnabledChange", this.effectEnabledChange.bind(this));
 
-        useAddSignal("rendererUpdated", this.rendererUpdated.bind(this));
-        useAddSignal("rendererCreated", this.rendererCreated.bind(this));
-        useAddSignal("rendererConfigUpdate", this.rendererConfigUpdate.bind(this));
-        useAddSignal("rendererDetectKTX2Support", this.rendererDetectKTX2Support.bind(this));
+        this.listen("rendererUpdated", this.rendererUpdated.bind(this));
+        this.listen("rendererCreated", this.rendererCreated.bind(this));
+        this.listen("rendererConfigUpdate", this.rendererConfigUpdate.bind(this));
+        this.listen("rendererDetectKTX2Support", this.rendererDetectKTX2Support.bind(this));
 
-        useAddSignal("sceneBackgroundChanged", this.sceneBackgroundChanged.bind(this));
-        useAddSignal("sceneEnvironmentChanged", this.sceneEnvironmentChanged.bind(this));
-        useAddSignal("sceneGraphChanged", this.sceneGraphChanged.bind(this));
-        useAddSignal("cameraChanged", this.cameraChanged.bind(this));
-        useAddSignal("cameraReset", this.viewer.updateAspectRatio.bind(this.viewer));
-        useAddSignal("viewportCameraChanged", this.viewportCameraChanged.bind(this));
-        useAddSignal("viewportShadingChanged", this.viewportShadingChanged.bind(this));
+        this.listen("sceneBackgroundChanged", this.sceneBackgroundChanged.bind(this));
+        this.listen("sceneEnvironmentChanged", this.sceneEnvironmentChanged.bind(this));
+        this.listen("sceneGraphChanged", this.sceneGraphChanged.bind(this));
+        this.listen("cameraChanged", this.cameraChanged.bind(this));
+        this.listen("cameraReset", this.viewer.updateAspectRatio.bind(this.viewer));
+        this.listen("viewportCameraChanged", this.viewportCameraChanged.bind(this));
+        this.listen("viewportShadingChanged", this.viewportShadingChanged.bind(this));
 
-        useAddSignal("objectSelected", this.objectSelected.bind(this));
-        useAddSignal("objectFocused", this.objectFocused.bind(this));
-        useAddSignal("objectAdded", this.objectAdded.bind(this));
-        useAddSignal("objectChanged", this.objectChanged.bind(this));
-        useAddSignal("objectRemoved", this.objectRemoved.bind(this));
+        this.listen("objectSelected", this.objectSelected.bind(this));
+        this.listen("objectFocused", this.objectFocused.bind(this));
+        this.listen("objectAdded", this.objectAdded.bind(this));
+        this.listen("objectChanged", this.objectChanged.bind(this));
+        this.listen("objectRemoved", this.objectRemoved.bind(this));
 
-        useAddSignal("geometryChanged", this.geometryChanged.bind(this));
-        useAddSignal("materialChanged", this.materialChanged.bind(this));
+        this.listen("geometryChanged", this.geometryChanged.bind(this));
+        this.listen("materialChanged", this.materialChanged.bind(this));
 
-        useAddSignal("sceneResize", this.sceneResize.bind(this));
-        useAddSignal("showGridChanged", this.showGridChanged.bind(this));
+        this.listen("sceneResize", this.sceneResize.bind(this));
+        this.listen("showGridChanged", this.showGridChanged.bind(this));
 
-        useAddSignal("scriptAdded",this.scriptAdded.bind(this));
-        useAddSignal("scriptRemoved",this.scriptRemoved.bind(this));
-        useAddSignal("scriptChanged",this.scriptChanged.bind(this));
+        this.listen("scriptAdded",this.scriptAdded.bind(this));
+        this.listen("scriptRemoved",this.scriptRemoved.bind(this));
+        this.listen("scriptChanged",this.scriptChanged.bind(this));
     }
 
     /**
@@ -153,7 +158,8 @@ export class Signals {
     }
 
     rendererConfigUpdate(){
-        void this.viewer.createEngine().catch(error => this.viewer.failRendering(error));
+        this.viewer.ready = this.viewer.createEngine().then(() => {});
+        void this.viewer.ready.catch(error => this.viewer.failRendering(error));
     }
 
     rendererDetectKTX2Support( ktx2Loader ) {
@@ -403,15 +409,6 @@ export class Signals {
     sceneResize(){
         this.viewer.updateAspectRatio();
         this.viewer.renderer?.setSize(this.viewer.container.offsetWidth,this.viewer.container.offsetHeight);
-        if(this.viewer.modules.effect.enabled && this.viewer.modules.effect.composer){
-            this.viewer.modules.effect.composer.setSize(this.viewer.container.offsetWidth,this.viewer.container.offsetHeight);
-            if(Effect.PassMap.has("FXAA")){
-                const FXAA = Effect.PassMap.get("FXAA") as ShaderPass;
-                const pixelRatio = this.viewer.renderer.getPixelRatio();
-                FXAA.material.uniforms[ 'resolution' ].value.x = 1 / (this.viewer.container.offsetWidth * pixelRatio);
-                FXAA.material.uniforms[ 'resolution' ].value.y = 1 / (this.viewer.container.offsetHeight * pixelRatio);
-            }
-        }
 
         this.viewer.css3DRenderer.setSize(this.viewer.container.offsetWidth,this.viewer.container.offsetHeight);
         

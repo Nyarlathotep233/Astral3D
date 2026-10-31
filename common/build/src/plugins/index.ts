@@ -15,16 +15,17 @@ interface Options {
     };
     enableAnalyze?: boolean;
     enableConfig?: boolean;
+    nativeTopLevelAwait?: boolean;
 }
 
-export async function createPlugins({isBuild,compress,enableAnalyze,enableConfig}: Options) {
+export async function createPlugins({isBuild,compress,enableAnalyze,enableConfig,nativeTopLevelAwait = false}: Options) {
     const vitePlugins: (PluginOption | PluginOption[])[] = [
-        topLevelAwait({
+        ...(nativeTopLevelAwait ? [] : [topLevelAwait({
             // 每个块模块的顶级await promise的导出名称
             promiseExportName: "__tla",
             // 用于在每个块模块中生成顶级await承诺的导入名称的函数
             promiseImportName: i => `__tla_${i}`
-        }),
+        })]),
         EnhanceLog({
             /** 高亮文件名（firefox不支持） */
             colorFileName: true,

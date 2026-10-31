@@ -1,35 +1,15 @@
+import {BuiltinMaterial} from '../../rendering/BuiltinMaterial';
 /**
  * @author ErSan
  * @email  mlt131220@163.com
  * @date   2024/5/18 13:49
  * @description 闪烁着色器材质
  */
-import {DoubleSide, ShaderMaterial,Color} from "three";
+import {DoubleSide, Color} from "three";
 import {useDispatchSignal} from "@/hooks";
 
-const vertex = `
-     uniform float uTime;
-     uniform float uHeight;
-     varying float vOpacity;
-
-     void main() {
-         vec3 vPosition = position;
-         vOpacity = mix(1.0, 0.0, position.y / uHeight * 1.0) * (1.0 + sin(uTime) * 0.5);
-         gl_Position = projectionMatrix * modelViewMatrix * vec4(vPosition, 1);
-     }
-`;
-
-const fragment = /*glsl*/`
-    uniform vec3 uColor;
-    uniform float uOpacity;
-    varying float vOpacity;
-    void main() {
-        gl_FragColor = vec4(uColor, vOpacity * uOpacity);
-    }
-`;
-
 export class FlickerShaderMaterial{
-    static _ShaderMaterial: ShaderMaterial;
+    static _ShaderMaterial: BuiltinMaterial;
     static Name = "FlickerShaderMaterial";
 
     static get Material() {
@@ -39,7 +19,7 @@ export class FlickerShaderMaterial{
         return FlickerShaderMaterial._ShaderMaterial;
     }
 
-    static set Material(value: ShaderMaterial) {
+    static set Material(value: BuiltinMaterial) {
         FlickerShaderMaterial._ShaderMaterial = value;
     }
 
@@ -48,7 +28,7 @@ export class FlickerShaderMaterial{
     }
 
     static InstanceShaderMaterial(){
-        const material = new ShaderMaterial({
+        const material = new BuiltinMaterial('Flicker', {
             uniforms: {
                 uTime: {value: 1.0},
                 uHeight: {
@@ -61,8 +41,8 @@ export class FlickerShaderMaterial{
                     value: new Color("#00ffff"),
                 }
             },
-            vertexShader: vertex,
-            fragmentShader: fragment,
+
+
             side: DoubleSide,
             transparent: true
         });
@@ -84,7 +64,7 @@ export class FlickerShaderMaterial{
         FlickerShaderMaterial._ShaderMaterial.uniforms.uTime.value += .02
     }
 
-    static UpdatePreview(previewMaterial: ShaderMaterial) {
+    static UpdatePreview(previewMaterial: BuiltinMaterial) {
         previewMaterial.uniforms.uTime.value += .02
     }
 }
