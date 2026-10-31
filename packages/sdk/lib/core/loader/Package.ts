@@ -286,6 +286,10 @@ export class Package {
 
         // 首包保存scene基本信息,不clone子级
         const newScene = this.viewer.scene.clone(false);
+        // The packaging shell must serialize the original environment/background
+        // identities, not the fresh texture UUIDs produced by Scene.clone().
+        newScene.background = this.viewer.scene.background;
+        newScene.environment = this.viewer.scene.environment;
         newScene.children = [];
 
         const sceneJson = newScene.toJSON() as unknown as ITHREEScene.SceneJSON;

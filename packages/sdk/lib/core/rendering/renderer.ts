@@ -1,5 +1,5 @@
 import {DepthNodeMaterial} from './DepthNodeMaterial.js';
-import { Material, Object3D, WebGPURenderer } from 'three/webgpu';
+import { EquirectangularReflectionMapping, EquirectangularRefractionMapping, Material, Object3D, Scene, Texture, WebGPURenderer } from 'three/webgpu';
 
 export type RenderingAPI = 'webgpu' | 'webgl2';
 
@@ -7,6 +7,45 @@ export type RenderingAPI = 'webgpu' | 'webgl2';
 export function createRenderer(options: ConstructorParameters<typeof WebGPURenderer>[0] = {}) {
     const renderer = new WebGPURenderer(options);
     renderer.library.addMaterial(DepthNodeMaterial, 'MeshDepthMaterial');
+    // r186 CubeMapNode caches equirectangular conversions by texture, not renderer.
+    // Its GPU-only cube target cannot be reused by a new renderer or the minimap.
+    // Keep a renderer-owned input identity without changing the saved scene texture.
+    const backgrounds = new Map<Texture, {texture: Texture; version: number; release: () => void}>();
+    const previousBackground = new WeakMap<Object3D, Texture>();
+    const render = renderer.render.bind(renderer);
+    renderer.render = (object, camera) => {
+        const scene = object as Scene;
+        const source = scene.background;
+        const previous = previousBackground.get(object);
+        // Nested conversion/outline passes may temporarily replace the background.
+        // Never release resources while their enclosing pass is still encoding.
+        if (previous && source === backgrounds.get(previous)?.texture) return render(object, camera);
+        if (source && 'isTexture' in source && source.isTexture && !scene.backgroundNode &&
+            (source.mapping === EquirectangularReflectionMapping || source.mapping === EquirectangularRefractionMapping)) {
+            if (previous && previous !== source) backgrounds.get(previous)?.release();
+            let owned = backgrounds.get(source);
+            if (!owned) {
+                const texture = source.clone();
+                texture.toJSON = source.toJSON.bind(source);
+                const release = () => { texture.dispose(); source.removeEventListener('dispose', release); backgrounds.delete(source); };
+                owned = {texture, version: source.version, release};
+                source.addEventListener('dispose', release);
+                backgrounds.set(source, owned);
+            } else if (owned.version !== source.version) {
+                owned.texture.dispose();
+                owned.texture.copy(source);
+                owned.version = source.version;
+            }
+            previousBackground.set(object, source);
+            scene.background = owned.texture;
+            try { render(object, camera); } finally { scene.background = source; }
+        } else render(object, camera);
+    };
+    const dispose = renderer.dispose.bind(renderer);
+    renderer.dispose = () => {
+        for (const owned of backgrounds.values()) owned.release();
+        return dispose();
+    };
     return renderer;
 }
 

@@ -189,6 +189,10 @@ export class App {
      */
     setScene(scene:THREE.Scene) {
         this.scene.copy(scene,false)
+        // Scene.copy clones these textures; loading must retain their UUIDs and
+        // references shared with other materials, rather than creating new assets.
+        this.scene.background = scene.background;
+        this.scene.environment = scene.environment;
         // copy方法不会复制uuid，需要手动赋值
         this.scene.uuid = scene.uuid;
         if (this.scene.animations && this.scene.animations.length > 0) this.clipAction(this.scene);

@@ -8,10 +8,13 @@ import Viewer from "../Viewer";
 import App from "@/core/app/App";
 import Preview from "@/core/preview/Preview.ts";
 
-let _objectRemovedFn, _objectAddedFn, _bodyChangedFn,_addEmitterFn,_emitterAdd2Fn;
-
 class ParticleSystem {
   private viewer: Viewer | Preview;
+  private objectRemovedFn = this.handleObjectRemoved.bind(this);
+  private objectAddedFn = this.handleObjectAdded.bind(this);
+  private bodyChangedFn = this.handleParticleBodyChanged.bind(this);
+  private emitterAdd2Fn = this.handleEmitterAdd.bind(this);
+  private addEmitterFn = this.handleAddEmitter.bind(this);
 
   // 存储所有粒子的组
   particlesGroup: THREE.Group;
@@ -65,18 +68,12 @@ class ParticleSystem {
   }
 
   initEvent(){
-    _objectRemovedFn = this.handleObjectRemoved.bind(this);
-    useAddSignal("objectRemoved", _objectRemovedFn);
-    _objectAddedFn = this.handleObjectAdded.bind(this);
-    useAddSignal("objectAdded", _objectAddedFn);
-    _bodyChangedFn = this.handleParticleBodyChanged.bind(this);
-    useAddSignal("particleBodyChanged", _bodyChangedFn);
-    _emitterAdd2Fn = this.handleEmitterAdd.bind(this);
-    useAddSignal("emitterAdd2ParticleSystem", _emitterAdd2Fn);
-
-    _addEmitterFn = this.handleAddEmitter.bind(this);
-    this.spriteSystem.eventDispatcher.addEventListener('EMITTER_ADDED', _addEmitterFn)
-    this.meshSystem.eventDispatcher.addEventListener('EMITTER_ADDED', _addEmitterFn)
+    useAddSignal("objectRemoved", this.objectRemovedFn);
+    useAddSignal("objectAdded", this.objectAddedFn);
+    useAddSignal("particleBodyChanged", this.bodyChangedFn);
+    useAddSignal("emitterAdd2ParticleSystem", this.emitterAdd2Fn);
+    this.spriteSystem.eventDispatcher.addEventListener('EMITTER_ADDED', this.addEmitterFn)
+    this.meshSystem.eventDispatcher.addEventListener('EMITTER_ADDED', this.addEmitterFn)
   }
 
   handleAddEmitter(emitter: Particle.Emitter){
@@ -277,14 +274,12 @@ class ParticleSystem {
   }
 
   dispose() {
-    useRemoveSignal("objectRemoved", _objectRemovedFn);
-    _objectRemovedFn = null;
-    useRemoveSignal("particleBodyChanged", _bodyChangedFn);
-    _bodyChangedFn = null;
-
-    this.spriteSystem.eventDispatcher.removeEventListener('EMITTER_ADDED', _addEmitterFn);
-    this.meshSystem.eventDispatcher.removeEventListener('EMITTER_ADDED', _addEmitterFn);
-    _addEmitterFn = null;
+    useRemoveSignal("objectRemoved", this.objectRemovedFn);
+    useRemoveSignal("objectAdded", this.objectAddedFn);
+    useRemoveSignal("particleBodyChanged", this.bodyChangedFn);
+    useRemoveSignal("emitterAdd2ParticleSystem", this.emitterAdd2Fn);
+    this.spriteSystem.eventDispatcher.removeEventListener('EMITTER_ADDED', this.addEmitterFn);
+    this.meshSystem.eventDispatcher.removeEventListener('EMITTER_ADDED', this.addEmitterFn);
 
     this.spriteSystem.destroy();
     this.meshSystem.destroy();
