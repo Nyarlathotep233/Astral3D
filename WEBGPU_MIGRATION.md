@@ -16,17 +16,20 @@ Base: `dev` (`eddfcd4`). Branch: `refactor/webgpu-renderer`.
 
 ## Implementation / verification checklist
 
-- [x] Fixed WebGL baseline (camera, lights, exposure, DPR and viewport)
-- [ ] Renderer factory and asynchronous Viewer/Preview lifecycle
-- [ ] Materials, shadows, clipping and helpers
-- [ ] Built-in shader effects and serialization round trip
-- [ ] Postprocessing and removal of path tracing
-- [ ] All preview and screenshot entrypoints
-- [ ] Current-build standalone runtime and isolated exported-package test
-- [ ] Production build, types and automated WebGPU browser verification
-- [ ] No legacy WebGL context requests in 3D tests on a WebGPU-capable device
-- [ ] Failure paths, unsupported shaders and resource lifecycle
-- [ ] Human visual / interaction acceptance (required before merging)
+- [x] Default WebGPURenderer factory, async Viewer/Preview, explicit errors, no application fallback
+- [x] Main scene, helpers, clipping, CSMShadowNode, depth material mapping
+- [x] Six registered built-in node materials and rain/snow
+- [x] Eight postprocessing effects and removal of path tracing
+- [x] Remaining preview/minimap/lightweight/texture rendering entrypoints
+- [x] Built-in clone/JSON and local split-package save/reload checks
+- [x] Current-build standalone runtime, independent localhost smoke test
+- [x] SDK/editor TypeScript and Vue SFC checks (see pinned checker below)
+- [x] WebGPU-capable source integration: zero WebGL contexts, visible scene pixels, no runtime errors
+- [ ] Complete production-editor interaction matrix with a working test business service
+- [ ] Matched r176 baseline visual acceptance, representative-scene GPU performance and long-run resource measurements
+- [ ] Developer manual acceptance (required before merge)
+
+Implementation checks are not a declaration of final migration acceptance.
 
 ## Reproducible baseline
 
@@ -78,17 +81,141 @@ Evidence: ignored `tests/rendering/results/factory-verification.json` and
 r176 baseline (tone-mapping behavior); this is an **open visual difference**, not accepted
 by changing exposure or suppressing the comparison.
 
-Outstanding before the editor can be accepted:
+## Checkpoint: 2026-10-31 — implementation and integration verification
 
-- Full SDK typecheck currently fails: legacy EffectComposer/clipping integration and
-  Loader/Billboard typing/API changes remain. The application build is NOT passing.
-- EffectComposer must be replaced before the real Viewer initialization is runnable;
-  factory tests do not establish that the editor is working.
-- CSM, built-in TSL materials and serialization, weather, all postprocessing, clipping,
-  remaining preview entrypoints and current-build standalone export are not finished.
-- Actual editor UI (including the removed mode selector), full Viewer/Preview lifecycle,
-  production build, isolated standalone, save/reload and manual acceptance are NOT verified.
-- No business backend changes, production scene writes, dev merge, deployment or push.
+### Implemented
+
+- Main Viewer uses one renderer and one canvas. Scene/effects/helpers render to one
+  linear offscreen target, followed by exactly one final display transform. This is
+  a render target, not the rejected dual-renderer/overlaid-canvas design.
+- Fixed a browser-only defect: rendering helper objects directly after RenderPipeline
+  replaced the main screen output without a console error. Added pixel-presence checks,
+  composed helpers before final output, and adapted the gizmo's offscreen viewport/scissor.
+- Node pipeline: Outline, FXAA, Bloom, Bokeh (41-sample port), Pixelate, Halftone,
+  LUT3D and Afterimage, including combined operation. Pixelation supplies the base
+  scene pass so it no longer discards earlier effects. No effect is silently disabled.
+- Halftone saved rotations retain shader radians; the degree sliders convert only at
+  the UI boundary. Legacy files that had already saved degrees under these fields
+  are not guessed/reinterpreted; adjust those values explicitly if encountered.
+- Standard materials retain their serialized type. MeshDepthMaterial has an explicit
+  depth-packing node implementation; it is not replaced by an unrelated material.
+- Six built-in effects and weather shaders are fixed TSL graphs. Registry serialization
+  retains UUIDs, parameters and texture references. Only exact known r176 built-in GLSL
+  sources are recognized. Modified/custom GLSL is rejected, with its source retained.
+- GLSL creation/editing removed; existing source is read-only. Ordinary JS remains editable.
+- CSM uses official shadow nodes, marks its transient cascade objects ignored before
+  insertion, and disposes shadow resources. Tile fading retains the existing simulation
+  but replaces the active plugin's material adapter with node masks.
+- Clipping uses temporary render-only ClippingGroups and restores children in finally;
+  logical parent pointers, UUIDs and serialized hierarchy do not change.
+- Async ready/disposal propagated to preview, minimap, lightweight scene, texture thumbnail,
+  Vue viewport and project-preview consumers. Renderer replacement refreshes frame resources.
+- Split packages preserve shared material/texture instances and saved sibling order.
+  Loading errors stop rendering and call onError; completion waits for renderer/effects.
+  Unsupported material validation runs before the packer's first upload callback.
+- Standalone serves current SDK output through a build manifest, not the checked-in old
+  UMD. Runtime decoders/LUTs/assets keep their SDK-relative paths under runtime/.
+- SDK/editor build targets ES2022 and bypasses only their legacy top-level-await
+  transform: that transform miscompiled Three r186 static class blocks and caused a
+  production-only startup exception. Other consumers keep the previous build default.
+  SDK-relative resources are also copied beside production chunks.
+- Type fixes are limited to reported errors: imports, narrowing, component/option types,
+  template attributes, unused bindings and existing RequestError.msg access. No API fields
+  or business data sources were added. The inactive Cesium component only received a
+  type/import correction; no new entry references it.
+
+### Automated/visual evidence
+
+Run the source fixture server from the repository root as above, then:
+
+```powershell
+Get-Content tests/rendering/verify-runtime.py -Raw | browser-harness
+Get-Content tests/rendering/verify-factory.py -Raw | browser-harness
+```
+
+The runtime suite exercises the actual Viewer and modules, captures images and checks
+that scene pixels remain present (not merely that shaders compile). It covers built-in
+JSON/clone/legacy registration, depth packing, clipping identity and pixels, eight effects,
+combined effects, CSM, weather, tile-node adapter, minimap, three preview disposal cycles,
+pending-init cancellation and renderer recreation with exactly one canvas.
+The local package suite writes only test ZIP files: multi-material meshes in separate
+packages retain shared materials/textures, parameters, UUIDs, sibling order and JS scripts.
+Simulation is deliberately frozen while comparing time uniforms; animation is not
+mistaken for serialization corruption.
+
+The real Vue editor was opened using an in-memory test scene. Verified selection,
+transform attachment, move/undo/redo, material undo, box clipping, cover screenshot,
+DataTexture thumbnail and lightweight-scene disposal. No WebGL contexts or JS runtime
+errors were observed in those checks. The local business service at 127.0.0.1:8080 was
+unavailable: its actual errors were retained. A test-only browser change opened the existing
+layout; no fake API response, login bypass, application loading-gate change or remote save
+was used. This does **not** validate service-backed loading/saving.
+
+Negative fixture: unknown ShaderMaterial retained object/material/source, stopped rendering
+and invoked the pack upload callback zero times. Factory failure injection confirmed the
+permitted official WebGL2 fallback for absent adapter/device creation failure. These
+fallback cases are not counted as WebGPU acceptance. Device-loss notification was simulated,
+not a physical GPU loss.
+
+### Type and build commands
+
+```powershell
+node packages/sdk/node_modules/typescript/bin/tsc -p packages/sdk/tsconfig.json
+node packages/editor/node_modules/typescript/bin/tsc -p packages/editor/tsconfig.json
+npm exec --yes --package=typescript@5.8.3 --package=vue-tsc@3.3.14 -- vue-tsc --noEmit -p packages/editor/tsconfig.json
+Push-Location packages/sdk; node scripts/build.mjs; Pop-Location
+Push-Location packages/editor; node node_modules/vite/bin/vite.js build; Pop-Location
+```
+
+The transitive vue-tsc 2.0.19 swallows its own incompatibility exception with TS 5.8;
+its silent exit is **not** valid verification. The pinned checker above was run independently,
+without changing application dependencies or weakening compiler settings.
+
+Production renderer verification imports the actual editor build chunk (not the source
+fixture), loads the local split packages, and enables LUT:
+
+```powershell
+node tests/rendering/prepare-production.mjs
+python -m http.server 8095 --bind 127.0.0.1 --directory packages/editor/dist
+# Open http://127.0.0.1:8095/verify-rendering.html
+```
+
+The rebuilt production chunk passed: actual WebGPU, visible scene, shared material identity,
+LUT loaded from the emitted hashed asset, zero WebGL context requests and no runtime errors.
+This is a renderer integration fixture, not the full business editor UI.
+
+For isolated standalone verification, first run the package suite and build the SDK:
+
+```powershell
+node tests/rendering/prepare-standalone.mjs
+python -m http.server 8094 --bind 127.0.0.1 --directory .codex-logs/standalone
+```
+
+This uses the exact exported HTML template, locally packed data and current UMD/resources.
+Check http://127.0.0.1:8094/ with context monitoring installed before reload. Local testing
+confirmed WebGPU, restored objects, and LUT fetched from runtime/resource/luts/ on that
+origin without editor-service dependencies. Binary artifacts and screenshots remain ignored
+under .codex-logs/ and tests/rendering/results/; they are not source deliverables.
+The SDK UMD, emitted standalone runtime and isolated exported runtime have matching SHA-256
+hashes. The final standalone check also exercised Bloom and verified visible scene pixels.
+
+Final real-editor recheck passed move/undo/redo, transform attachment, box clipping,
+Bloom, one main canvas and cover capture. Monaco's actual options confirmed GLSL read-only
+and JS editable. Switching languages initially exposed unhandled `Canceled` promises from
+Monaco's WordHighlighter disposal. Updating the existing model language/editor options
+instead of rebuilding the editor fixed this: three JS/GLSL switches retained the editor,
+correct read-only state and produced no runtime errors. No exception filter was added.
+The final editor checks remained WebGPU with zero WebGL context requests.
+
+### Still required before acceptance
+
+- Developer approval of same-camera r176/WebGPU visual differences; the original darker
+  solid-background difference is not resolved by changing exposure or resolution.
+- Full service-backed test-copy save/reload and production-editor UI interactions, broader
+  skinned/instanced/particle/environment/asset corpus, real tile content, and prolonged
+  preview/scene switching with GPU resource/performance measurements.
+- No GPU performance improvement is claimed; the editor's CPU submission counter is not
+  GPU time. No production project was written, and nothing was merged, deployed or pushed.
 
 ## Manual acceptance
 

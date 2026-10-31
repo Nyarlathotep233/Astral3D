@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><title>H3D WebGPU verification</title></head>
+<body style="margin:0"><div id="viewport" style="width:960px;height:640px;position:relative"></div><script>
+// Installed before any Three import. Counts actual API requests, not class names.
+window.__contextRequests = [];
+window.__renderErrors = [];
+for (const type of [HTMLCanvasElement, window.OffscreenCanvas].filter(Boolean)) {
+  const original = type.prototype.getContext;
+  type.prototype.getContext = function(kind, ...args) {
+    window.__contextRequests.push(kind);
+    return original.call(this, kind, ...args);
+  };
+}
+const originalError = console.error;
+console.error = (...args) => { window.__renderErrors.push(args.map(String).join(' ')); originalError(...args); };
+addEventListener('error', e => window.__renderErrors.push(e.message));
+addEventListener('unhandledrejection', e => window.__renderErrors.push(String(e.reason)));
+// Explicit test-only failure injection. The application does not monkey-patch APIs.
+const failure = new URLSearchParams(location.search).get('failure');
+if (failure === 'adapter') navigator.gpu.requestAdapter = async () => null;
+if (failure === 'device') {
+  const request = navigator.gpu.requestAdapter.bind(navigator.gpu);
+  navigator.gpu.requestAdapter = async (...args) => {
+    const adapter = await request(...args);
+    adapter.requestDevice = async () => { throw new Error('Injected device creation failure'); };
+    return adapter;
+  };
+}
+</script><script type="module">
+import * as T from 'three/webgpu';
+import * as clipping from '/packages/sdk/lib/core/rendering/clipping.ts';
+window.clipping = clipping;
+import * as sdk from '/packages/sdk/lib/index.ts';
+import {createFixture} from './fixture.mjs';
+const {App, Viewer}=sdk;
+window.sdk=sdk; window.T=T;
+const viewer=window.viewer=new Viewer({container:document.getElementById('viewport'),enableScript:false,edit:{enabled:true},grid:{enabled:false}});
+await viewer.ready;
+const fixture=createFixture(T);
+App.camera.copy(fixture.camera);
+App.scene.background=fixture.scene.background;
+for (const child of [...fixture.scene.children]) App.addObject(child);
+viewer.renderer.setPixelRatio(1);
+viewer.renderer.setSize(960,640);
+viewer.render();
+window.__editorRuntime={ready:true,api:sdk.getRenderingAPI(viewer.renderer),errors:window.__renderErrors};
+</script></body></html>
