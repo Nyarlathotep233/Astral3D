@@ -1,6 +1,6 @@
 # 本地 WebGL / WebGPU 共用服务台账
 
-更新：2026-10-31。此文件保存在原前端仓库，创建新环境前先核对并复用以下资源。
+更新：2026-11-01。此文件保存在原前端仓库，创建新环境前先核对并复用以下资源。
 仅本地开发验证，未合并、未部署。不要因为本台账列出了路径就自动删除数据。
 
 ## 工作目录与服务
@@ -46,7 +46,8 @@ SQL 和资源备份可能含业务敏感数据，仅保留本地，不提交 Git
 `.codex-logs` 的忽略通过当前仓库 `.git/info/exclude` 配置，不代表换机器后也自动忽略。
 
 本轮按文件长度统计：WebGL 工作树（含依赖与构建）约 4.88 GiB；
-`service-acceptance-20261031` 约 0.15 GiB；`shared-service-original-20261031` 约 0.72 GiB。
+`service-acceptance-20261031` 恢复后约 0.673 GiB；`shared-service-original-20261031` 约 0.72 GiB。
+此前记录的 0.15 GiB 是副本 upload 目录被失败测试误删后的异常状态，不是完整副本大小。
 这些是逻辑文件大小，pnpm 硬链接等因素使其不等于实际新增磁盘占用。
 
 ## 启动时复用已有资源
@@ -75,7 +76,7 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
 不要直接使用原配置裸启动来“重启测试服务”：它仍指向原库，Flyway 会作用于实际连接的库。
 后台启动时使用 `Start-Process -WindowStyle Hidden` 并保存 PID/日志；端口和参数比历史 PID 更可靠。
 重建 JAR 前停止对应测试进程（Windows 文件锁）；使用 `mvn -DskipTests '-Dmaven.jar.forceCreation=true' package`
-避免仅更新业务模块后继续复用旧可执行 JAR。本轮最终运行 PID 为 26532，仅供排查，不应盲目复用/终止。
+避免仅更新业务模块后继续复用旧可执行 JAR。11 月 1 日修复后运行 PID 为 74244，仅供排查，不应盲目复用/终止。
 
 ## 本轮验收和兼容边界
 
@@ -94,7 +95,7 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
   保留原材质和场景对象，未保存。不宣称任意旧 GLSL、所有历史 GIS 或所有 WebGPU 节点格式双向兼容。
 - 临时改变同一标签页 hash 不会可靠重建编辑器；验收切换 URL 后使用整页刷新，正常列表入口会新开标签页。
   不在地址已变但场景未重新加载时保存。本轮此情况只发生在上述验收场景中，未触及历史场景。
-- 服务重启中的封面请求异常暴露了旧保存流程未检查响应/空文件的问题；两版均增加真实失败检查，
+- 副本文件缺失暴露了旧保存流程未检查封面响应/空文件的问题（最初归因于服务重启不准确）；两版均增加真实失败检查，
   不自动生成替代封面。浏览器实测 HTTP 404 时保存失败、版本标记/版本号不变且保留输入。
 - 自动检查：两版各 16 个保存/回滚/封面异常用例；后端 null/webgl/webgpu 三种回滚用例通过；
   缺失 ZIP 的真实更新请求失败后数据库版本、标记和 ZIP 地址不变；旧客户端省略版本字段更新时，已有标记保持。
@@ -109,6 +110,27 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
 手测：分别打开 `https://localhost:8090/#/`、`https://localhost:8091/#/`，核对相同场景卡片的标记。
 从列表新窗口进入对应验收场景，修改方块后保存、刷新，检查标记、版本、方块和封面。
 历史场景只读查看。标记仅提示版本，不保证跨版本兼容，勿用旧版覆盖含新节点材质的项目。
+
+## 2026-11-01 副本资源误删修复
+
+上轮缺失 ZIP 的测试路径是 `upload/renderer-version-intentional-missing.zip`。
+后端校验失败后把其父目录 `upload` 当作“本次新上传目录”递归删除。测试当时只核对数据库标记/版本/ZIP
+字符串未变，没有核对全量文件，导致漏报。原数据库和原资源未受影响。
+
+- 已删除失败回滚中按请求路径清理新 ZIP 父目录及封面的逻辑；该接口无法证明请求路径的独占归属。
+  失败后的孤立上传文件保留，未来只能经明确授权和引用核查后清理。成功保存的原有清理流程未改。
+- `tools/SceneAssetRollbackCheck.java` 在独立小型临时目录通过真实控制器更新链路复现，修复前失败、修复后通过。
+  与现有 null/webgl/webgpu 标记回滚测试一并通过。不再用真实副本 upload 根目录做破坏性错误测试。
+- 复用已有 `shared-service-original-20261031/static-before`，按初始 383 个文件的哈希匹配，补回 217 个缺失文件；
+  其余 166 个文件完全一致，未覆盖现存文件、未重建数据库、未创建新的完整副本。
+- 本轮恢复记录：`.codex-logs/scene-recovery-20261101.json`；原库/原资源不变校验：
+  `.codex-logs/scene-audit-original-integrity-20261101.json`。
+- **9600ea… 的测试 V5 是复制后才生成的版本，不在初始备份中，其 ZIP/封面未恢复。**
+  V3 文件已精确补回，但没有擅自把数据库 V5 改成 V3，也没有拿 V3 冒充 V5。已询问用户是否明确回退该测试记录。
+- 逐场景检查详见 `SCENE_OPEN_AUDIT_20261101.md`。不能用上一轮少量场景检查或浏览器缓存代表全量可用。
+- 诊断脚本/截图/JSON 位于 `.codex-logs/scene-audit-20261101*`；回滚测试的微型临时目录位于
+  `.codex-logs/rollback-regression-scratch`，编译文件复用 `.codex-logs/renderer-rollback-classes`。
+  均不是新建业务环境，清理仍需用户确认。
 
 ## 复用与清理
 

@@ -260,6 +260,12 @@ async function getScene(sceneInfo) {
   const p = new Package(window.viewer);
   p.unpack({
     url: sceneInfo.zip,
+    onError: () => {
+      // Package/Viewer already reports the actual error and retains the scene.
+      // Do not leave a permanent loading notice after a rejected package.
+      notice.destroy();
+      p.dispose();
+    },
     onSceneLoad: () => {
       drawingInfo.value = App.project.getKey("drawing");
     },

@@ -345,6 +345,9 @@ The completed 30-minute evidence is retained; no additional prolonged run is req
 
 For the shared WebGL/WebGPU local service, persistent scene-version labels and the inventory
 of existing copies/backups, see [LOCAL_WEBGPU_ENVIRONMENT.md](LOCAL_WEBGPU_ENVIRONMENT.md).
+The 2026-11-01 [all-scene audit](SCENE_OPEN_AUDIT_20261101.md) supersedes any implication that
+all historical scenes were already verified: it records the test-copy asset deletion and recovery,
+the missing V5 test artifact, and the remaining GIS/custom-GLSL incompatibilities.
 
 Use test projects/copies only. Open the local editor, edit and transform objects, change
 materials/shadows/effects, undo/redo, capture a cover, save and reload the test copy.
