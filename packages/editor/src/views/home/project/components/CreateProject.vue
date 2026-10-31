@@ -98,6 +98,7 @@ function handleSubmit() {
         zip: "",
         coverPicture:"",
         sceneVersion:1,
+        rendererVersion: "webgpu",
         exampleSceneId: data.id,
         cesiumConfig: cesiumData ? JSON.stringify(cesiumData) : undefined
       })

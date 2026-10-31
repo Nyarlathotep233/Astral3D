@@ -343,6 +343,9 @@ The completed 30-minute evidence is retained; no additional prolonged run is req
 
 ## Manual acceptance
 
+For the shared WebGL/WebGPU local service, persistent scene-version labels and the inventory
+of existing copies/backups, see [LOCAL_WEBGPU_ENVIRONMENT.md](LOCAL_WEBGPU_ENVIRONMENT.md).
+
 Use test projects/copies only. Open the local editor, edit and transform objects, change
 materials/shadows/effects, undo/redo, capture a cover, save and reload the test copy.
 Check model/material previews, play mode, orthographic views, clipping and the minimap.

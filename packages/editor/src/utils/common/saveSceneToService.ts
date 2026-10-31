@@ -31,6 +31,7 @@ async function runSaveSceneToService() {
 
   const p = new Package(window.viewer);
   const oldVersion = sceneInfo.sceneVersion;
+  const oldRendererVersion = sceneInfo.rendererVersion;
 
   try {
     globalConfigStore.loadingText = window.$t("scene['Generate scene data, please wait']");
@@ -38,6 +39,7 @@ async function runSaveSceneToService() {
 
     // 版本自动 +1
     App.project.setKey("sceneInfo.sceneVersion", sceneInfo.sceneVersion + 1);
+    App.project.setKey("sceneInfo.rendererVersion", "webgpu");
 
     const biz = `${sceneInfo.id}-V${sceneInfo.sceneVersion}`;
 
@@ -49,7 +51,13 @@ async function runSaveSceneToService() {
     }
 
     const f = await fetch(sceneInfo.coverPicture.startsWith("blob") ? sceneInfo.coverPicture : `file/static/${sceneInfo.coverPicture}`);
+    if (!f.ok) {
+      throw new Error(`${window.$t("prompt['Failed to save the cover image']")} (HTTP ${f.status})`);
+    }
     const blob = await f.blob();
+    if (blob.size === 0) {
+      throw new Error(window.$t("prompt['Failed to save the cover image']"));
+    }
     const coverUploadRes = await fetchUpload({
       file: new File([blob], `${sceneInfo.sceneName}-${Date.now()}.png`, { type: blob.type }),
       biz: `upload/3DEditor/screenshot/${biz}`,
@@ -104,6 +112,7 @@ async function runSaveSceneToService() {
     return App.project.getKey("sceneInfo");
   } catch (error) {
     App.project.setKey("sceneInfo.sceneVersion", oldVersion);
+    App.project.setKey("sceneInfo.rendererVersion", oldRendererVersion);
     throw error;
   } finally {
     setTimeout(() => {
