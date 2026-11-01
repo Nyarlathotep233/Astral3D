@@ -125,8 +125,12 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
   其余 166 个文件完全一致，未覆盖现存文件、未重建数据库、未创建新的完整副本。
 - 本轮恢复记录：`.codex-logs/scene-recovery-20261101.json`；原库/原资源不变校验：
   `.codex-logs/scene-audit-original-integrity-20261101.json`。
-- **9600ea… 的测试 V5 是复制后才生成的版本，不在初始备份中，其 ZIP/封面未恢复。**
-  V3 文件已精确补回，但没有擅自把数据库 V5 改成 V3，也没有拿 V3 冒充 V5。已询问用户是否明确回退该测试记录。
+- **9600ea… 的测试 V5 文件无法精确恢复；用户于 2026-11-01 明确授权回退到 V3，现已完成。**
+  5 个 V3 ZIP 和封面均按备份哈希核对，只更新副本库该记录的版本、ZIP、大小和封面，保留测试名称和未标记状态。
+  两版禁用缓存复测均为 320 个对象、219 个网格，无运行错误。原库未改。
+  回退前记录保存于 `.codex-logs/scene-v5-before-explicit-rollback-20261101.json`；来源、回读和两版验证
+  保存于 `.codex-logs/scene-v3-rollback-source-20261101.json`、`scene-v3-after-explicit-rollback-20261101.json`、
+  `scene-v3-rollback-browser-20261101.json`，未新建数据库或资源副本。
 - 逐场景检查详见 `SCENE_OPEN_AUDIT_20261101.md`。不能用上一轮少量场景检查或浏览器缓存代表全量可用。
 - 诊断脚本/截图/JSON 位于 `.codex-logs/scene-audit-20261101*`；回滚测试的微型临时目录位于
   `.codex-logs/rollback-regression-scratch`，编译文件复用 `.codex-logs/renderer-rollback-classes`。
