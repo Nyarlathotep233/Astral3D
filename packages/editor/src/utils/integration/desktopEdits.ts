@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { App, AtomicBatchCommand, BatchRecoveryError, Hooks, SetPositionCommand, SetRotationCommand, SetScaleCommand, SetValueCommand } from '@astral3d/engine';
 import { isSceneSaving } from '@/utils/common/saveSceneToService';
+import { materialAt, materialStep, scriptStep } from './desktopEditSteps';
 
 let revision = 0;
 const results = new Map<string, { request: string; result?: any; error?: string }>();
@@ -23,7 +24,11 @@ export function desktopEditStatus() {
 // Add/remove must be idempotent inverses even when an object signal listener throws.
 // Ordinary App commands remain unchanged; these steps are used only by atomic MCP batches.
 function membership(object: THREE.Object3D, parent: THREE.Object3D, index: number, adding: boolean) {
+  const scripts = new Map<THREE.Object3D, ISceneScript[]>();
+  object.traverse(child => { if (App.scripts[child.uuid]) scripts.set(child, App.scripts[child.uuid]!); });
+  const assertStopped = () => { if (scripts.size && window.viewer.enableScript) throw new Error('Scripted object edits require the editor runtime to be stopped'); };
   const attach = () => {
+    assertStopped();
     if (object.parent) object.parent.remove(object);
     try { App.addObject(object, parent, index, true); }
     catch (error) {
@@ -31,8 +36,13 @@ function membership(object: THREE.Object3D, parent: THREE.Object3D, index: numbe
       if (!object.parent) { parent.children.splice(Math.min(index, parent.children.length), 0, object); object.parent = parent; }
       throw error;
     }
+    for (const [child, list] of scripts) { App.scripts[child.uuid] = list; for (const script of list) Hooks.useDispatchSignal('scriptAdded', child, script); }
   };
-  const detach = () => { if (object.parent) App.removeObject(object); };
+  const detach = () => {
+    assertStopped();
+    if (object.parent) App.removeObject(object);
+    for (const [child, list] of scripts) { delete App.scripts[child.uuid]; for (const script of list) Hooks.useDispatchSignal('scriptRemoved', child, script); }
+  };
   return adding ? { execute: attach, undo: detach } : { execute: detach, undo: attach };
 }
 
@@ -73,11 +83,26 @@ function prepare(operations: any[]) {
       } else {
         const object = resolve(op.target);
         if (op.type === 'transform') transforms(object, op);
+        else if (op.type === 'material') {
+          const material = materialAt(object, op.slot);
+          for (const key of Object.keys(op.values)) if ((material as any)[key] === undefined) throw new Error(`Material ${material.type} does not support ${key}`);
+          factories.push(() => materialStep(object, op,
+            value => {
+              const old = materialAt(object, op.slot);
+              if (old === value) return;
+              App.setObjectMaterial(object, op.slot, value);
+              App.removeMaterialFromRefCounter(old);
+              App.addMaterialToRefCounter(value);
+              Hooks.useDispatchSignal('materialRemoved'); Hooks.useDispatchSignal('materialAdded');
+            },
+            value => Hooks.useDispatchSignal('materialChanged', value)));
+        } else if (op.type.startsWith('script-')) {
+          if (window.viewer.enableScript) throw new Error('Script editing requires the editor runtime to be stopped');
+          factories.push(() => scriptStep(App.scripts as any, object, op, Hooks.useDispatchSignal));
+        }
         else if (op.type === 'attributes') {
           for (const key of ['name','visible','castShadow','receiveShadow']) if (op[key] !== undefined) factories.push(() => new SetValueCommand(object, key, op[key]));
         } else if (op.type === 'remove') {
-          // Scripts need deferred install/uninstall semantics before removal can be transactional.
-          object.traverse(child => { if (App.scripts[child.uuid]?.length) throw new Error('Removing scripted subtrees is not supported by this batch version'); });
           removed.add(object.uuid);
           factories.push(() => membership(object, object.parent!, object.parent!.children.indexOf(object), false));
         } else throw new Error(`Unsupported operation: ${op.type}`);

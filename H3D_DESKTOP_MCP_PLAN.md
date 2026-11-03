@@ -1,9 +1,9 @@
 # H3D Desktop + 本地 MCP：源码分析与实施计划
 
-日期：2026-11-03。状态：**实施中；桌面与只读 MCP 已接通，批量编辑/保存尚未实现**。
+日期：2026-11-03。状态：**实施中；桌面、只读 MCP、基础对象/材质参数/JS 脚本批量编辑已接通；资源导入、Play/保存工具及完整交付验收未完成**。
 
 分析基线：前端 `refactor/webgpu-renderer` / `8c8b7cf`，后端当前本地源码。
-已从上述基线新建 `feature/desktop-mcp`，实现桌面生产页面装载及只读 MCP。未部署、未写场景。
+已从上述基线新建 `feature/desktop-mcp`，实现桌面生产页面装载、只读及上述内存编辑 MCP。仅在授权测试场景进行可撤销的内存验收，未保存、未部署。
 当前证据及未完成项见 [DESKTOP_MCP_ACCEPTANCE.md](C:/project/3D/Astral3D/Astral3D/DESKTOP_MCP_ACCEPTANCE.md)。后文源码分析和未实现阶段仍是实施约束，不是通过声明。
 
 ## 1. 最新范围与交付目标

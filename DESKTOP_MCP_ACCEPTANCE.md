@@ -101,3 +101,19 @@ Get-Clipboard -Raw | node tests/desktop-mcp/verify-live.mjs 9600ea7d95189faa4acf
 ```
 
 这里只读，不调用 App.toJSON、不创建对象、不保存。历史场景继续只读；后续写入限已授权测试项目。
+
+## 阶段 D1：材质参数与 JS 脚本内存编辑（2026-11-03）
+
+- 在既有 batch 中增加 material、script-add/update/remove，不新增另一条写入或保存链路。
+- 材质显式选择槽与 shared/object：共享编辑保留 UUID；对象独立编辑克隆该槽，纹理引用保持不变。撤销恢复原材质 UUID、槽引用与材质注册计数，重做复用同一克隆。
+- JS 源码、名称、参数按原字段修改；保留脚本数组/对象身份、原本缺省的 params。编辑不执行源码，不开放 eval/Shell/GLSL。主编辑器既有 enableScript=false，未新增自动运行。
+- 可删除带脚本对象，撤销恢复其脚本和层级。删除时先完成对象移出，再通知脚本删除，避免脚本通知抛错后逆操作重复注册仍在场的对象。
+- 13 项自动测试通过，新增多材质槽/共享引用、脚本身份与缺省字段、脚本删除通知一次性失败后的对象/材质计数恢复。Vue 类型检查、编辑器生产构建通过。
+- 真实 Electron + MCP 在蓝色方块验收场景通过：创建、红色材质修改、脚本增改删、带脚本对象删除/恢复、undo/redo、共享材质编辑；最终摘要与初始一致，仍只有原来的 1 个业务网格。
+- 截图已目视确认蓝色原对象与红色新增对象；脚本探针未运行，实际 WebGPU，未捕获未处理 JS 异常，观测到的业务写请求为零。全部测试改动已撤销，**没有保存/上传**。
+- 证据：`.codex-logs/desktop-mcp/material-script.json`、`material-script.png`、`material-script-browser.json`。重建期间曾过早打开页面得到 Resource request failed；等待构建完成后重新加载通过，未新增资源兜底。
+- 本阶段仍是源码 Electron + 生产页面；旧解包 exe 未更新。资源导入、纹理编辑、Play/保存工具、安装验收仍未完成，不称完整 MCP 编辑交付。
+
+手测：当前源码 Electron → 蓝色方块验收场景 → 复制 MCP 配置 → `Get-Clipboard -Raw | node tests/desktop-mcp/verify-material-script.mjs .codex-logs/desktop-mcp/material-script.json`。核对红色截图、历史中一批一项及最终恢复；不要保存。开发者手工验收及服务保存重载仍是后续门禁。
+
+D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不是 GPU 耗时），恢复到原 4 个运行时对象；未处理 JS 错误为空，脚本探针仍未执行。正常关闭两扇测试窗口后 8098 / 9231 释放，只保留既有 8080 副本服务。

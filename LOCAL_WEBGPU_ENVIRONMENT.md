@@ -162,3 +162,8 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
 6. 数据库副本、测试资源、SQL 备份、完整资源备份是不同项，应分别确认保留/删除。
    不删除原数据库或原 `astral-service/static`。不要仅删除测试资源而保留仍引用它的运行服务。
 7. 未来长时间测试默认 15 分钟，不为本轮再创建长时间测试环境。
+
+### 同日 C1 / D1 写入阶段记录
+
+继续复用上述唯一数据库、资源目录与 desktop profile；没有新增环境副本。用户授权可见测试窗口，仅操作 `db24d798905d186dfb61505f9396d5b8` 的内存对象，测试后全部撤销，无保存/上传。新增证据为 `desktop-mcp/write-*.json/.png`、`material-script*.json/.png`，构建日志为 `desktop-material-build.log` / `desktop-material-typecheck.log`。旧 `release/win-unpacked` 仍是 A/B 只读版本，不能用于验收 C1 / D1。
+D1 本轮结束已关闭源码测试窗口；8098 / 9231 监听释放，原 8080 业务服务保留。清理边界不变，未删除任何副本/profile/证据。

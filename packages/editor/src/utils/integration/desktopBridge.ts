@@ -38,7 +38,7 @@ function status() {
     error: loadError || viewer?.renderError?.message || null,
     renderingAPI: backend?.isWebGPUBackend ? 'webgpu' : backend?.isWebGLBackend ? 'webgl2' : null,
     sceneUuid: route && loadState === 'ready' ? App.scene.uuid : null,
-    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture', 'primitive-batch', 'local-transform', 'object-attributes', 'batch-history', 'operation-status'],
+    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture', 'primitive-batch', 'local-transform', 'object-attributes', 'material-parameters', 'script-edit', 'batch-history', 'operation-status'],
     writable: true,
     ...desktopEditStatus(),
   };
