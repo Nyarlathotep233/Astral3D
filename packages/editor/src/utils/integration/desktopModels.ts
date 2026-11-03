@@ -1,21 +1,37 @@
 import { LoadingManager, type Object3D } from 'three';
 import { Loader, assertSupportedMaterials } from '@astral3d/engine';
 import { DesktopImportJobs } from './desktopImportJobs';
+import { preparePrefab } from '@/utils/common/prefab';
+import { disposeDetachedObject } from '@/utils/common/disposeDetachedObject';
+import { getBuiltinPrefabResource } from '@/views/editor/components/extraPane/resource/builtin/prefabRegistry';
 
-function disposeModel(object:Object3D) {
-  const resources = new Set<any>(), images = new Set<any>();
-  object.traverse((child:any)=>{
-    if(child.geometry)resources.add(child.geometry);
-    for(const material of Array.isArray(child.material)?child.material:child.material?[child.material]:[]) {
-      resources.add(material);
-      for(const value of Object.values(material) as any[]) if(value?.isTexture) {resources.add(value);if(value.source?.data)images.add(value.source.data);}
-    }
-  });
-  for(const resource of resources)resource.dispose();
-  for(const image of images)if(typeof image.close==='function')image.close();
+type PreparedObject = { object: Object3D; scripts: ISceneJson['scripts'] };
+function summary(object: Object3D) {
+  let objects=0,meshes=0;
+  object.traverse((child:any)=>{objects++;if(child.isMesh)meshes++;});
+  return {objects,meshes,animations:object.animations.length};
 }
 
-export const desktopModelJobs = new DesktopImportJobs<Object3D>(async (source, signal, phase) => {
+export const desktopModelJobs = new DesktopImportJobs<PreparedObject>(async (source, signal, phase) => {
+  if (source.type === 'local-prefab' || source.type === 'builtin-prefab') {
+    const resource = source.type === 'builtin-prefab' ? getBuiltinPrefabResource(source.key) : null;
+    if (source.type === 'builtin-prefab' && !resource) throw new Error(`Unknown built-in prefab: ${source.key}`);
+    const url = resource ? new URL(resource.path, window.location.href).href : source.resolvedLocal.url;
+    const manager = new LoadingManager();
+    const loader = Loader.createObjectLoader(manager);
+    loader.setResourcePath(url.slice(0,url.lastIndexOf('/')+1));
+    const abort = () => manager.abort();
+    signal.addEventListener('abort',abort,{once:true});
+    let prepared: Awaited<ReturnType<typeof preparePrefab>> | undefined;
+    try {
+      phase('parsing');
+      prepared = await preparePrefab(url, {scriptParams:source.scriptParams}, {signal,loader,confirmEmbeddedContent:source.confirmEmbeddedContent});
+      assertSupportedMaterials(prepared.object);
+      return {value:prepared,summary:{source:source.type,...(resource?{key:resource.key}:{filePath:source.filePath}),...summary(prepared.object),
+        scripts:Object.values(prepared.scripts).reduce((total,list)=>total+(list?.length||0),0),embeddedContent:prepared.embeddedContent}};
+    } catch (error) { if(prepared)disposeDetachedObject(prepared.object);throw error; }
+    finally { signal.removeEventListener('abort',abort); }
+  }
   const {url,resourceRoot} = source.resolvedLocal;
   const manager = new LoadingManager(), failures:string[]=[];
   manager.onError = () => { failures.push('A model dependency failed to load'); };
@@ -44,9 +60,7 @@ export const desktopModelJobs = new DesktopImportJobs<Object3D>(async (source, s
     // GLTFLoader may swallow a failed texture and return a null map. Never insert that partial result.
     if(failures.length)throw new Error(failures.join('; '));
     assertSupportedMaterials(object);
-    let objects=0,meshes=0;
-    object.traverse((child:any)=>{objects++;if(child.isMesh)meshes++;});
-    return {value:object,summary:{filePath:source.filePath,objects,meshes,animations:gltf.animations.length}};
-  } catch(error) { if(object)disposeModel(object);throw error; }
+    return {value:{object,scripts:{}},summary:{filePath:source.filePath,...summary(object)}};
+  } catch(error) { if(object)disposeDetachedObject(object);throw error; }
   finally { signal.removeEventListener('abort',abort);if(loader)Loader.disposeGLTFLoaderEffects(loader); }
-}, disposeModel);
+}, value=>disposeDetachedObject(value.object));

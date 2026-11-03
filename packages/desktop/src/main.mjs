@@ -173,6 +173,7 @@ if (locked) {
       mcp = await startMcp({ port: settings.mcpPort, token, bridge: { list: listWindows, call: async (id, method, args) => {
         if (!Object.hasOwn(EDITOR_TOOLS, method)) throw new Error('Unknown editor tool');
         if (method === 'h3d_model_prepare') args = { ...args, resolvedLocal: await localImports.prepare(args.filePath) };
+        if (method === 'h3d_import_prepare' && args.source.type === 'local-prefab') args = { ...args, resolvedLocal: await localImports.prepare(args.source.filePath, 'prefab') };
         return callWindow(id, method, args);
       } } });
     } catch (error) { mcpError = error.message; console.error('[H3D Desktop] MCP start failed:', mcpError); }

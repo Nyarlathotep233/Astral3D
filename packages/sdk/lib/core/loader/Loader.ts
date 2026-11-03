@@ -108,6 +108,10 @@ class Loader {
 
 	constructor(){}
 
+    createObjectLoader(manager?: THREE.LoadingManager): ObjectLoader {
+        return new ObjectLoader(manager);
+    }
+
     get objectLoader():ObjectLoader{
         if(!this._objectLoader){
             this._objectLoader = new ObjectLoader();

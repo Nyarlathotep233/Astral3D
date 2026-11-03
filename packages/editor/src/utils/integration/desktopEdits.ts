@@ -24,9 +24,9 @@ export function desktopEditStatus() {
 
 // Add/remove must be idempotent inverses even when an object signal listener throws.
 // Ordinary App commands remain unchanged; these steps are used only by atomic MCP batches.
-function membership(object: THREE.Object3D, parent: THREE.Object3D, index: number, adding: boolean) {
+function membership(object: THREE.Object3D, parent: THREE.Object3D, index: number, adding: boolean, preparedScripts?: ISceneJson['scripts']) {
   const scripts = new Map<THREE.Object3D, ISceneScript[]>();
-  object.traverse(child => { if (App.scripts[child.uuid]) scripts.set(child, App.scripts[child.uuid]!); });
+  object.traverse(child => { const list=preparedScripts?.[child.uuid] || App.scripts[child.uuid]; if (list) scripts.set(child,list); });
   const assertStopped = () => { if (scripts.size && window.viewer.enableScript) throw new Error('Scripted object edits require the editor runtime to be stopped'); };
   let restoredFailure = false;
   const attach = () => {
@@ -75,9 +75,9 @@ function prepare(operations: any[]) {
       if(op.type==='insert-model') {
         if(refs.has(op.ref))throw new Error(`Duplicate local ref: ${op.ref}`);
         if(imported.has(op.jobId))throw new Error('A prepared model can only be inserted once');
-        const object=desktopModelJobs.ready(op.jobId), parent=op.parent?resolve(op.parent):App.scene;
+        const prepared=desktopModelJobs.ready(op.jobId), object=prepared.object, parent=op.parent?resolve(op.parent):App.scene;
         imported.add(op.jobId); refs.set(op.ref,object); parentOf.set(object,parent);
-        factories.push(()=>membership(object,parent,parent.children.length,true));
+        factories.push(()=>membership(object,parent,parent.children.length,true,prepared.scripts));
         if(op.name!==undefined)factories.push(()=>new SetValueCommand(object,'name',op.name));
         transforms(object,op);
       } else if (op.type === 'create') {

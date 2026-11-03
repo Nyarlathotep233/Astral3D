@@ -825,15 +825,27 @@
     "id": "import.prefab",
     "title": "预制体包实例化",
     "group": "import",
-    "status": "planned",
+    "status": "partial",
     "gui": "packages/editor/src/components/header/navigation/ImportExport.vue",
     "implementation": "packages/editor/src/utils/common/prefab.ts",
-    "tools": [],
-    "operations": [],
+    "tools": [
+      "h3d_import_prepare",
+      "h3d_model_job",
+      "h3d_scene_batch",
+      "h3d_history"
+    ],
+    "operations": [
+      "insert-model"
+    ],
     "sideEffect": "scene-memory",
-    "undo": "planned",
-    "tests": [],
-    "notes": ""
+    "undo": "batch-history",
+    "tests": [
+      "prefab-import.test.mjs",
+      "local-import.test.mjs",
+      "script-membership.test.mjs",
+      "verify-prefab-import.mjs"
+    ],
+    "notes": "已接本地 .h3dprefab.zip 与注册表内置预制体，复用 GUI preparePrefab；单测通过。真实生产页面/独立包/保存重载待验收；HTML 明示执行确认、复杂粒子/Tiles 预制体尚未验证，不宣称完整支持。"
   },
   {
     "id": "import.builtin",

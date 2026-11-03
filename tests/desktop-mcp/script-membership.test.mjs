@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Scene } from '../../packages/editor/node_modules/three/build/three.module.js';
+import { Scene, Group, Mesh, BoxGeometry, MeshStandardMaterial } from '../../packages/editor/node_modules/three/build/three.module.js';
 import { build } from '../../packages/desktop/node_modules/esbuild/lib/main.js';
 import { AtomicBatchCommand, BatchRecoveryError } from '../../packages/sdk/lib/core/commands/AtomicBatchCommand.ts';
 
@@ -24,7 +24,10 @@ const app = {
   execute(command) { command.execute(); command.id = this.history.undos.length + 1; this.history.undos.push(command); },
   deselect() {},
 };
-const fixture = { app, AtomicBatchCommand, BatchRecoveryError, ObjectRegistrationError, notify() {} };
+const jobs = new Map(), consumed = [];
+const fixture = { app, AtomicBatchCommand, BatchRecoveryError, ObjectRegistrationError, notify() {}, jobs: {
+  ready: id => jobs.get(id), consume: id => consumed.push(id),
+} };
 globalThis.__h3dMembershipTest = fixture;
 globalThis.window = { viewer: { enableScript: false } };
 const output = await build({
@@ -33,7 +36,7 @@ const output = await build({
   plugins: [{ name: 'membership-fixture', setup(b) {
     b.onResolve({ filter: /^\.\/desktopModels$/ }, () => ({ path:'models', namespace:'fixture' }));
     b.onResolve({ filter: /^@astral3d\/engine$|^@\/utils\/common\/saveSceneToService$/ }, args => ({ path: args.path, namespace: 'fixture' }));
-    b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path==='models' ? 'export const desktopModelJobs={};' : args.path.endsWith('saveSceneToService')
+    b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path==='models' ? 'export const desktopModelJobs=globalThis.__h3dMembershipTest.jobs;' : args.path.endsWith('saveSceneToService')
       ? 'export const isSceneSaving=()=>false;'
       : `const f=globalThis.__h3dMembershipTest; export const App=f.app, AtomicBatchCommand=f.AtomicBatchCommand, BatchRecoveryError=f.BatchRecoveryError;
          export const Hooks={useDispatchSignal:(...args)=>f.notify(...args),useAddSignal:()=>{}};
@@ -41,7 +44,26 @@ const output = await build({
   } }],
 });
 
-const { applyDesktopEdit } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
+const { applyDesktopEdit } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text + '\n//# sourceURL=h3d-membership-fixture.mjs').toString('base64')}`);
+
+test('prepared prefab scripts attach once, undo/redo retain identities, and partial notification failure restores the scene', () => {
+  const root=new Group(), child=new Mesh(new BoxGeometry(),new MeshStandardMaterial());root.add(child);
+  const scripts={ [root.uuid]:[{name:'root',source:'not executed'}], [child.uuid]:[{name:'child',source:'not executed'}] };
+  const jobId=randomUUID();jobs.set(jobId,{object:root,scripts});
+  const batch = () => applyDesktopEdit('h3d_scene_batch', { expectedRevision:0, operationId:randomUUID(), label:'prefab', operations:[{type:'insert-model',jobId,ref:'prefab'}] });
+  const beforeChildren=[...app.scene.children], beforeScripts={...app.scripts}, beforeHistory=[...app.history.undos];
+  fixture.notify = event => { if(event==='scriptAdded'){fixture.notify=()=>{};throw Error('prefab script observer failed');} };
+  assert.throws(batch,/prefab script observer/);
+  assert.equal(root.parent,null);assert.deepEqual(app.scene.children,beforeChildren);
+  assert.deepEqual(app.scripts,beforeScripts);assert.deepEqual(app.history.undos,beforeHistory);
+  assert.ok(!consumed.includes(jobId));assert.equal(jobs.get(jobId).object,root);
+  const result=batch(), command=app.history.undos.at(-1);
+  assert.equal(result.refs.prefab,root.uuid);assert.equal(consumed.filter(id=>id===jobId).length,1);
+  assert.equal(app.scripts[root.uuid],scripts[root.uuid]);assert.equal(app.scripts[child.uuid],scripts[child.uuid]);
+  command.undo();assert.equal(root.parent,null);assert.deepEqual(app.scripts,beforeScripts);
+  command.execute();assert.equal(root.parent,app.scene);assert.equal(app.scripts[child.uuid],scripts[child.uuid]);
+  command.undo();app.history.undos.pop();
+});
 
 test('atomic recovery does not remove a subtree whose registration already rolled back', () => {
   const before = new Map(counts), children = [...app.scene.children], history = [...app.history.undos];

@@ -50,3 +50,13 @@ test('vector schemas use homogeneous arrays while retaining exactly three finite
   };
   walk(schema);
 });
+
+test('prefab sources and embedded execution confirmation use one strict cross-client contract', () => {
+  const schema=tools.h3d_import_prepare.schema;
+  const args={sessionId:'98a01537-8fe6-42f2-bbb8-5cbb3d5f8a39',sceneId:'test',jobId:'6c1cd15a-1ed2-4d05-9eee-4824ddbb0fa5',source:{type:'builtin-prefab',key:'tower-crane'}};
+  assert.equal(schema.parse(args).confirmEmbeddedContent,false);
+  assert.equal(schema.parse({...args,confirmEmbeddedContent:true}).confirmEmbeddedContent,true);
+  assert.ok(schema.safeParse({...args,source:{type:'local-prefab',filePath:'C:/Downloads/model.h3dprefab.zip'}}).success);
+  for(const source of [{type:'builtin-prefab',key:'tower-crane',url:'https://other'},{type:'local-prefab'},{type:'script',code:'run()'}])assert.ok(!schema.safeParse({...args,source}).success);
+  assert.ok(!schema.safeParse({...args,resolvedLocal:{url:'file:///private'}}).success);
+});

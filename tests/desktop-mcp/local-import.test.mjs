@@ -12,8 +12,15 @@ test('absolute model paths work across workspace, Downloads, template and linked
     for(const dir of [root,outside,template])await mkdir(dir);
     await writeFile(path.join(root,'模型 #100%.gltf'),'model');await writeFile(path.join(template,'buffer.bin'),'buffer');
     await writeFile(path.join(root,'secret.txt'),'not a model');await writeFile(path.join(outside,'model.glb'),'downloaded model');
+    await writeFile(path.join(template,'模型.h3dprefab.zip'),'prefab');await writeFile(path.join(template,'unrelated.zip'),'unrelated');
     await symlink(outside,path.join(root,'linked'),process.platform==='win32'?'junction':'dir');
     const access=createLocalImportAccess();
+    const prefab=await access.prepare(path.join(template,'模型.h3dprefab.zip'),'prefab');
+    const prefabResponse=await access.respond(prefab.url);
+    assert.equal(prefabResponse.headers.get('content-type'),'application/zip');
+    assert.equal(await prefabResponse.text(),'prefab');
+    await assert.rejects(()=>access.prepare(path.join(template,'unrelated.zip'),'prefab'));
+    await assert.rejects(()=>access.respond(new URL('unrelated.zip',prefab.url).href),/type/);
     const prepared=await access.prepare(path.join(root,'模型 #100%.gltf'));
     assert.equal(await (await access.respond(prepared.url)).text(),'model');
     assert.equal(await (await access.respond(new URL('../template/buffer.bin',prepared.url).href)).text(),'buffer');

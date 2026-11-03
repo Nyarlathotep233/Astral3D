@@ -28,3 +28,11 @@ DSH headless 必须在启动环境已有 `DEEPSEEK_API_KEY` 或用户已配置�
 - 当前日志在 `.codex-logs/desktop-mcp/codex-readonly.jsonl` 与 `dsh-readonly.jsonl`；可复跑覆盖同名证据，重要结果先另行明确归档，不复制业务数据。
 
 验收以调用日志、独立状态/截图、保存重载等共同判定，不以 exit=0 或 Agent 自述代替。未实现的保存/Play/导出/管理操作不让 Agent 用 Shell/CDP 代做。
+
+## DSH 桌面客户端接续（未通过）
+
+用户已打开 DeepSeek Harness 桌面客户端并授权直接操作。已通过原生 UI 定位其插件配置页；此后 Windows 锁屏，暂停输入并请用户解锁。没有把旧对话截图当作当前模型成功调用 MCP 的证据，也没有提取桌面登录凭据给 CLI 使用。
+
+解锁后先核对实际 MCP 配置入口，在新会话运行同一 `agent-readonly-task.txt`，不修改原 haolink 对话、全局模型或权限策略。若遇登录/权限确认交由用户处理。桌面客户端能登录并不证明 headless CLI 已有模型凭据；两条验证路径分别记录。
+
+此次新增预制体工具需在最新主进程中验证；当前源码/单元通过不等于 Codex 或 DSH 已实际使用。100/1000 对象三轮、完整保存/导出和独立包验收仍待实现后执行。

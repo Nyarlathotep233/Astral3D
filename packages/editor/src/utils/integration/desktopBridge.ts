@@ -39,7 +39,7 @@ function status() {
     error: loadError || viewer?.renderError?.message || null,
     renderingAPI: backend?.isWebGPUBackend ? 'webgpu' : backend?.isWebGLBackend ? 'webgl2' : null,
     sceneUuid: route && loadState === 'ready' ? App.scene.uuid : null,
-    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture', 'primitive-batch', 'local-transform', 'object-attributes', 'material-parameters', 'script-edit', 'batch-history', 'operation-status', 'local-gltf-import'],
+    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture', 'primitive-batch', 'local-transform', 'object-attributes', 'material-parameters', 'script-edit', 'batch-history', 'operation-status', 'local-gltf-import', 'prefab-import'],
     writable: true,
     ...desktopEditStatus(),
   };
@@ -62,7 +62,8 @@ export function installDesktopBridge() {
       return current;
     }
     assertScene(args);
-    if(method==='h3d_model_prepare')return desktopModelJobs.start(args.jobId,{filePath:args.filePath,resolvedLocal:args.resolvedLocal});
+    if(method==='h3d_model_prepare')return desktopModelJobs.start(args.jobId,{type:'local-model',filePath:args.filePath,resolvedLocal:args.resolvedLocal});
+    if(method==='h3d_import_prepare')return desktopModelJobs.start(args.jobId,{...args.source,resolvedLocal:args.resolvedLocal,scriptParams:args.scriptParams,confirmEmbeddedContent:args.confirmEmbeddedContent});
     if(method==='h3d_model_job')return args.action==='cancel'?desktopModelJobs.cancel(args.jobId):desktopModelJobs.status(args.jobId);
     if (['h3d_scene_batch', 'h3d_history', 'h3d_operation_status'].includes(method)) return applyDesktopEdit(method, args);
     const started = generation;

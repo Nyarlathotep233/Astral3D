@@ -19,6 +19,13 @@ const operation = z.discriminatedUnion('type', [
 ]);
 const mutation = { ...binding, expectedRevision: z.number().int().nonnegative(), operationId: z.string().uuid() };
 export const WRITE_TOOLS = {
+  h3d_import_prepare: {
+    description: 'Prepare an editor prefab outside the scene, from an absolute local .h3dprefab.zip or a key returned by h3d_prefabs_list. Uses the GUI parser and regenerates object/resource UUIDs while retaining shared references and ordinary JS scripts without executing them. Poll h3d_model_job and insert with scene_batch insert-model. HTML parsing may execute content and needs confirmEmbeddedContent=true; cancellation cannot undo execution. No upload or save.',
+    schema: z.object({ ...binding, jobId: z.string().uuid(), source: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('local-prefab'), filePath: z.string().min(1).max(2048) }).strict(),
+      z.object({ type: z.literal('builtin-prefab'), key: z.string().min(1).max(128) }).strict(),
+    ]), scriptParams: z.record(z.string(), z.json()).optional(), confirmEmbeddedContent: z.boolean().default(false) }).strict(),
+  },
   h3d_model_prepare: {
     description: 'Prepare a local GLB/glTF outside the scene. filePath must be an absolute local file path. No directory grant or workspace restriction; Downloads, templates and other folders are allowed. Does not add, upload or save. Poll h3d_model_job; insert a ready job once with a scene batch. Retry the same jobId and path for status, not a new job.',
     schema:z.object({ ...binding, jobId:z.string().uuid(), filePath:z.string().min(1).max(2048) }).strict(),

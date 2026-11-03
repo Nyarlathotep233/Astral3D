@@ -21,9 +21,11 @@ function absoluteFile(value) {
 export function createLocalImportAccess() {
   const resourceRoot = `h3d://app${IMPORT_PREFIX}${randomUUID()}/`;
   return {
-    async prepare(filePath) {
+    async prepare(filePath, kind = 'model') {
       absoluteFile(filePath);
-      if (!['.glb','.gltf'].includes(path.extname(filePath).toLowerCase())) throw new Error('Local model import currently supports .glb and .gltf');
+      if (kind === 'prefab') {
+        if (!filePath.toLowerCase().endsWith('.h3dprefab.zip')) throw new Error('Prefab import requires an editor .h3dprefab.zip package');
+      } else if (kind !== 'model' || !['.glb','.gltf'].includes(path.extname(filePath).toLowerCase())) throw new Error('Local model import currently supports .glb and .gltf');
       await realpath(filePath); // Report a missing file before starting a preparation job.
       // Preserve the supplied directory for relative glTF dependencies, including ../ and links.
       return { url: resourceRoot + pathToFileURL(filePath).href.slice('file://'.length), resourceRoot };
@@ -33,7 +35,7 @@ export function createLocalImportAccess() {
       const parsed = new URL(url);
       if (parsed.search || parsed.hash || !parsed.href.startsWith(resourceRoot)) throw new Error('Invalid or expired model resource URL');
       const file = absoluteFile(fileURLToPath(`file://${parsed.href.slice(resourceRoot.length)}`));
-      const type = types[path.extname(file).toLowerCase()];
+      const type = file.toLowerCase().endsWith('.h3dprefab.zip') ? 'application/zip' : types[path.extname(file).toLowerCase()];
       if (!type) throw new Error('Unsupported model dependency file type');
       const handle = await open(await realpath(file), 'r');
       try {

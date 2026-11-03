@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import * as THREE from "three";
 import { App, Loader, AddObjectWithScriptsCommand } from "@astral3d/engine";
+import { disposeDetachedObject } from './disposeDetachedObject';
 
 const PREFAB_SIGNATURE = "h3d-prefab-package";
 const PREFAB_VERSION = 1;
@@ -100,6 +101,18 @@ function remapObjectAndResourceUuids(object: THREE.Object3D) {
     }
   });
 
+  // UUID-bound tracks must follow the newly instantiated objects. Clips can be
+  // shared by several nodes, so remap each track only once.
+  const tracks = new WeakSet<THREE.KeyframeTrack>();
+  object.traverse((child) => {
+    for (const clip of child.animations) for (const track of clip.tracks) {
+      if (tracks.has(track)) continue;
+      tracks.add(track);
+      const { nodeName } = THREE.PropertyBinding.parseTrackName(track.name);
+      const mapped = objectUuidMap.get(nodeName);
+      if (mapped) track.name = track.name.replace(nodeName, mapped);
+    }
+  });
   return objectUuidMap;
 }
 
@@ -175,8 +188,8 @@ function applyPrefabOptions(object: THREE.Object3D, options: InstantiatePrefabOp
   }
 }
 
-async function loadPrefabPackage(source: string | Blob): Promise<PrefabPackage> {
-  const blob = typeof source === "string" ? await fetch(source).then((res) => {
+async function loadPrefabPackage(source: string | Blob, signal?: AbortSignal): Promise<PrefabPackage> {
+  const blob = typeof source === "string" ? await fetch(source, { signal }).then((res) => {
     if (!res.ok) throw new Error(`Prefab load failed: ${res.status}`);
     return res.blob();
   }) : source;
@@ -225,29 +238,48 @@ export async function loadPrefabObject(source: string | Blob): Promise<THREE.Obj
   return object;
 }
 
+/** Shared GUI/MCP preparation. No App mutation or ordinary scene-script execution. */
+export async function preparePrefab(source: string | Blob, options: InstantiatePrefabOptions = {}, controls: {
+  signal?: AbortSignal;
+  loader?: typeof Loader.objectLoader;
+  confirmEmbeddedContent?: boolean;
+} = {}) {
+  const prefab = await loadPrefabPackage(source, controls.signal);
+  controls.signal?.throwIfAborted();
+  let embeddedContent = false;
+  const scan = (node: any) => {
+    if (node?.type === 'HtmlPanel' || node?.type === 'HtmlSprite') embeddedContent = true;
+    for (const child of node?.children || []) scan(child);
+  };
+  scan(prefab.object.object);
+  // GUI keeps its existing explicit-import behavior. MCP must acknowledge the
+  // parser's HTML execution before preparation; cancelling cannot undo that execution.
+  if (embeddedContent && controls.confirmEmbeddedContent === false) {
+    throw new Error('Prefab contains executable HTML content; confirmEmbeddedContent is required before parsing. Cancellation cannot undo its execution.');
+  }
+  let object: THREE.Object3D | undefined;
+  try {
+    object = await (controls.loader || Loader.objectLoader).parseAsync(prefab.object) as THREE.Object3D;
+    controls.signal?.throwIfAborted();
+    const uuidMap = remapObjectAndResourceUuids(object);
+    const scripts = mergeScriptParams(remapScripts(prefab.scripts || {}, uuidMap), options.scriptParams);
+    object.name = object.name || prefab.name;
+    object.userData = {
+      ...object.userData,
+      prefab: { mode: 'snapshot', name: prefab.name, rootUuid: prefab.rootUuid },
+    };
+    applyPrefabOptions(object, options);
+    return { object, scripts, name: prefab.name, embeddedContent };
+  } catch (error) { if (object) disposeDetachedObject(object); throw error; }
+}
+
 export async function instantiatePrefab(source: string | Blob, positionOrOptions?: THREE.Vector3 | InstantiatePrefabOptions) {
   const options: InstantiatePrefabOptions = positionOrOptions instanceof THREE.Vector3
     ? { position: positionOrOptions }
     : positionOrOptions || {};
 
-  const prefab = await loadPrefabPackage(source);
-  const object = await Loader.objectLoader.parseAsync(prefab.object) as THREE.Object3D;
-  const uuidMap = remapObjectAndResourceUuids(object);
-  const scripts = mergeScriptParams(remapScripts(prefab.scripts || {}, uuidMap), options.scriptParams);
-
-  object.name = object.name || prefab.name;
-  object.userData = {
-    ...object.userData,
-    prefab: {
-      mode: "snapshot",
-      name: prefab.name,
-      rootUuid: prefab.rootUuid,
-    },
-  };
-
-  applyPrefabOptions(object, options);
-
-  App.execute(new AddObjectWithScriptsCommand(object, scripts), options.commandName || `Add Prefab: ${prefab.name || object.name}`);
+  const { object, scripts, name } = await preparePrefab(source, options);
+  App.execute(new AddObjectWithScriptsCommand(object, scripts), options.commandName || `Add Prefab: ${name || object.name}`);
 
   return object;
 }
@@ -255,5 +287,6 @@ export async function instantiatePrefab(source: string | Blob, positionOrOptions
 export const Prefab = {
   createPrefabFile,
   loadPrefabObject,
+  preparePrefab,
   instantiatePrefab,
 };

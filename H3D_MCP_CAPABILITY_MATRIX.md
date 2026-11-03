@@ -2,7 +2,7 @@
 
 > 由 `node tests/desktop-mcp/render-coverage.mjs` 从 `packages/desktop/src/capabilities.json` 生成。目录不是验收结论。
 
-当前 120 项：available 11，partial 4，planned 105。
+当前 120 项：available 11，partial 5，planned 104。
 
 - available：所描述操作已接入；不代表完整保存重载或双 Agent 验收已通过。具体证据见验收记录。
 - partial：仅列出的工具操作/参数已接入，不代表整个 GUI 能力。
@@ -70,7 +70,7 @@
 | import.xyz: xyz 模型导入 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/sdk/lib/core/loader/Loader.ts` | 尚未接入 | scene-memory / planned | 待补真实用例 | Loader 中有入口，尚未完成 MCP 接入和真实格式验收；不据此声称可用。 |
 | import.zip: zip 模型导入 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/sdk/lib/core/loader/Loader.ts` | 尚未接入 | scene-memory / planned | 待补真实用例 | Loader 中有入口，尚未完成 MCP 接入和真实格式验收；不据此声称可用。 |
 | import.project: 完整工程 JSON/ZIP 替换 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/editor/src/components/header/navigation/ImportExport.vue` | 尚未接入 | scene-memory / planned | 待补真实用例 |  |
-| import.prefab: 预制体包实例化 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/editor/src/utils/common/prefab.ts` | 尚未接入 | scene-memory / planned | 待补真实用例 |  |
+| import.prefab: 预制体包实例化 | partial | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/editor/src/utils/common/prefab.ts` | `h3d_import_prepare`, `h3d_model_job`, `h3d_scene_batch`, `h3d_history`, `insert-model` | scene-memory / batch-history | prefab-import.test.mjs, local-import.test.mjs, script-membership.test.mjs, verify-prefab-import.mjs | 已接本地 .h3dprefab.zip 与注册表内置预制体，复用 GUI preparePrefab；单测通过。真实生产页面/独立包/保存重载待验收；HTML 明示执行确认、复杂粒子/Tiles 预制体尚未验证，不宣称完整支持。 |
 | import.builtin: 内置模型实例化 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/editor/src/views/editor/components/extraPane/resource/builtin/Models.vue` | 尚未接入 | scene-memory / planned | 待补真实用例 |  |
 | import.asset: 服务资产实例化 | planned | `packages/editor/src/components/header/navigation/ImportExport.vue` → `packages/editor/src/views/editor/components/extraPane/resource/public/AssetsList.vue` | 尚未接入 | scene-memory / planned | 待补真实用例 |  |
 | resource.list: 真实资产列表 | available | `packages/editor/src/views/editor/components/extraPane/resource/public/AssetsList.vue` → `packages/editor/src/http/api/assetsInfo.ts` | `h3d_assets_list` | read / not-applicable | verify-live.mjs |  |

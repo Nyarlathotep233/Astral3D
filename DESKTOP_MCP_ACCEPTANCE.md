@@ -165,3 +165,15 @@ D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不�
 - 最小修正：三维向量由 JSON Schema 的 tuple items 改为等价的固定长度 number array，同一工具定义供所有客户端使用；数值、长度、参数名及业务含义不变。23 项单测通过，主进程重启后的真实客户端复测待完成。
 - DeepSeek Harness 0.2.1-rc.2 已真实调用 headless CLI + 临时 MCP overlay，但模型路由缺 DEEPSEEK_API_KEY，未发生模型工具调用，明确标记未通过。未读取其他凭据或改全局配置；已请用户配置。
 - 两客户端共用 tests/desktop-mcp/agent-readonly-task.txt；运行脚本、配置和完整边界见该目录 AGENT_ACCEPTANCE.md。该只读初测不能替代最终完整双 Agent 验收。
+
+## 阶段 2A：预制体共用准备及批次入场（实现与单测，真实页面待验收）
+
+- `h3d_import_prepare` 接本地绝对路径 `.h3dprefab.zip` 和 `h3d_prefabs_list` 返回的内置 key；不开放通用 ZIP/文件读取。两类来源共用 GUI `preparePrefab`、SDK ObjectLoader、既有 job 查询/取消与 `insert-model` 原子批次，没有第二套场景解析器。
+- 准备阶段不登记对象或运行普通场景 JS；插入时将预制体脚本随所属对象一起登记、撤销及重做。部分脚本通知失败会恢复入场前状态，失败 job 未消费，可继续查看/取消。
+- 修正必要数据缺口：实例化重新生成对象 UUID 后，UUID 绑定的动画轨道同步改名；共享几何/材质/贴图保持共享，不重复生成同一资源的 UUID。原普通脚本参数语义保留。
+- HTML 内容沿用现有解析器的执行行为，MCP 必须明确 `confirmEmbeddedContent: true`；准备/取消不能伪称撤回已经执行的 HTML。HTML、复杂粒子/Tiles 预制体尚未完成正向验收，不宣称全类型支持。
+- 28 项自动测试通过：实际 Three.js ZIP 解析、共享资源/纹理、脚本及动画绑定、GUI 共用入口、无隐式入场、取消清理、坏包/解析失败、HTML 解析前确认、批次通知失败恢复、引用身份及撤销重做；含新增工具的严格参数契约。
+- SDK、编辑器生产构建、Electron 主进程构建及项目原有 `tsc` 检查通过；不冒称独立 Vue 模板类型检查。构建日志前缀 `.codex-logs/desktop-mcp/prefab-`。编辑器仍有已有 Draco/Basis 相对资源构建提示，真实导入时须继续核验。
+- **真实生产页面/独立包/保存重载仍未通过**：用户已重启上一版 Electron，但此次新增工具还需重启新主进程；Windows 桌面锁屏阻断原生操作。没有绕过锁屏、读取 DSH 凭据或将单测当作真实导入证明。
+- 解锁后复测：启动最新源码 Electron、打开蓝色方块验收场景、原生菜单复制配置；运行 `Get-Clipboard -Raw | node tests/desktop-mcp/verify-prefab-import.mjs .codex-logs/desktop-mcp/prefab-live.json`。测试两类来源的准备/取消/去重、真实塔吊入场、材质修改、贴图引用、脚本归属、截图、撤销重做及最终恢复；只写该测试场景内存，不保存/上传。随后独立目视截图及浏览器运行错误检查，不仅看脚本退出码。
+- 此提交是阶段 2 的子步骤，不是阶段 2 或完整 MCP 接入完成；能力矩阵明确标记 `partial`。

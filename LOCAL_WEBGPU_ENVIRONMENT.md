@@ -184,3 +184,11 @@ D2 测试窗口现保留，等待用户点选导入目录；8098 MCP / 9231 临�
 - 本轮浏览器故障探针执行后已还原方法并删除页面探针；未保存/上传场景。自动 Electron 重启被执行环境拦截，新主进程功能需手动重启后验收。当前仍保留原测试窗口与 8098/9231，8080 业务副本服务未停止。
 
 - 双 Agent 初测新增 codex-readonly.jsonl / dsh-readonly.jsonl，仅调用证据，不是新服务/数据库副本；DSH 缺模型凭据未通过，Codex 只读已实跑，schema 修正须重启主进程后复测。连接凭据只经原生剪贴板和临时子进程环境传递，没有写到配置示例。
+
+### 阶段 2A 与 DSH 桌面调试
+
+- 用户手动重启同一源码 Electron/profile。DSH 桌面客户端由用户下载安装并打开，本轮只定位窗口、打开其插件页；未安装插件、未修改凭据/全局模型或安全设置，锁屏后停止原生 UI 输入，待用户解锁。
+- 继续复用同一数据库、资源目录和 profile。预制体真实测试复用仓库已有 `packages/editor/public/static/prefabs/tower-crane.h3dprefab.zip`，**不另复制塔吊包/模型库**。单元 ZIP 夹具仅在内存生成；路径测试仍只清理自己的系统临时微型目录。
+- 本轮新增 `desktop-mcp/prefab-unit.log`、`prefab-sdk-build.log`、`prefab-editor-tsc.log`、`prefab-editor-build.log`、`prefab-desktop-build.log`；生产构建复用原 dist，不建第二套开发服务。
+- `prefab-live.json` / `prefab-live-0.png` / `prefab-live-1.png` 是复测脚本的预定证据位置，未执行前不记为已生成或已通过。旧 release 独立 exe 没有更新。
+- 当前测试服务不自动清理，退出时仍核对 8098/9231；8080 副本业务服务保留。未创建新业务数据/备份，未保存、上传或删除场景资源。
