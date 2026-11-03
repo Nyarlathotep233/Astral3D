@@ -138,3 +138,12 @@ D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不�
 - 15 项测试通过；SDK/编辑器/桌面构建与 Vue 类型检查通过。全部场景操作仅内存，已撤销，无保存/上传。
 - 新增 create-import-fixtures.mjs 只从既有木凳生成微型测试派生文件，放在 .codex-logs/desktop-mcp/import-fixtures；不复制数据库、完整模型库或 profile。
 - 手测：源码客户端打开蓝色方块验收场景 → 原生菜单复制配置 → verify-local-import.mjs（默认 GLB 或传 glTF 绝对路径）→ verify-import-errors.mjs。旧独立 exe 未更新；全部格式、骨骼/动画、服务保存及双 Agent 完整验收仍未完成。
+
+## 新计划阶段 1A：能力目录与按需参数（2026-11-03）
+
+- 新增 h3d_capabilities，未打开编辑窗口也可调用。120 项目录中 available 11、partial 4、planned 105；这是按描述范围划分的实现状态，**不是完成率，也不是完整功能验收**。
+- 目录记录 GUI/源码共享入口、正式 MCP 操作、副作用、撤销、测试入口及限制；JSON 同源生成 H3D_MCP_CAPABILITY_MATRIX.md，自动测试检查路径、工具引用和生成文件一致。
+- 仅按需返回正式 Zod 定义生成的 JSON Schema；与 tools/list 的 schema 实测一致。不另造一份参数契约，不把 planned 广告为可调用工具。
+- 17 项桌面测试及桌面生产构建通过，含真实 SDK Streamable HTTP 初始化、发现、调用、校验错误及无窗口能力发现。
+- 当前运行的 Electron 仍是上一构建；自动重启命令被执行环境拦截，已给出用户手动重启命令。新目录的实际 Electron 进程验证待重启，不以 SDK 服务测试代替。
+- 阶段 1 的批次资源恢复、通用任务/确认语义尚在推进，不将此子提交称为阶段 1 完成。

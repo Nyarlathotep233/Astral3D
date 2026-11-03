@@ -39,6 +39,7 @@ userData 默认在 Windows `%APPDATA%/H3D Desktop`；「MCP → 连接信息」�
 不同 Agent 配置格式仍需分别验证，不承诺通用 JSON 可直接导入所有客户端。
 
 MCP 只监听 `127.0.0.1`，校验 Host/Origin/凭据。退出所有窗口后停止服务。
+可先调用 `h3d_capabilities` 分页发现能力，按 id/group/status 筛选；需要具体参数时设 includeSchemas=true。available/partial/planned 明确区分已接入范围和待实现项，planned 不能调用。完整目录见根目录 `H3D_MCP_CAPABILITY_MATRIX.md`；不把目录存在或测试文件存在当作验收通过。
 先调用 `h3d_sessions_list`，再把实际返回的 sessionId 与 sceneId 一起传入场景工具；无隐式活动窗口。
 当前工具：状态、分页对象查询、指定 UUID 详情、资产列表、内置预制体列表、视窗截图，以及 scene_batch/history/operation_status。
 写操作必须携带当前 sceneRevision、唯一 operationId；一批为一条历史，只允许操作指定历史顶端批次。修改只在内存，不自动保存。

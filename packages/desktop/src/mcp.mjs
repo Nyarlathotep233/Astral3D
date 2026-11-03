@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { authorizeMcp } from './security.mjs';
 import { WRITE_TOOLS } from './writeTools.mjs';
+import { capabilitySchema, discoverCapabilities } from './capabilities.mjs';
 
 const binding = { sessionId: z.string().uuid(), sceneId: z.string().min(1).max(128) };
 const paging = { offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(50) };
@@ -29,6 +30,16 @@ export const READ_TOOLS = {
 };
 
 export const EDITOR_TOOLS = { ...READ_TOOLS, ...WRITE_TOOLS };
+export const LOCAL_TOOLS = {
+  h3d_sessions_list: {
+    description: 'List available desktop editor windows. Bind subsequent calls with the exact returned sessionId and sceneId. No implicit active-window selection.',
+    schema: z.object({}).strict(),
+  },
+  h3d_capabilities: {
+    description: 'Discover implemented, partial and planned GUI/MCP capabilities, side effects and undo behavior. Page or filter by id/group/status. Request includeSchemas only for needed operations. Planned entries are NOT callable. No editor window required.',
+    schema: capabilitySchema,
+  },
+};
 
 function jsonResult(value) {
   const text = JSON.stringify(value);
@@ -38,10 +49,19 @@ function jsonResult(value) {
 
 function makeServer(bridge) {
   const server = new McpServer({ name: 'h3d-desktop', version: '0.1.0' });
-  server.registerTool('h3d_sessions_list', {
-    description: 'List available desktop editor windows. Bind subsequent calls with the exact returned sessionId and sceneId. No implicit active-window selection.',
-    inputSchema: z.object({}).strict(), annotations: { readOnlyHint: true, destructiveHint: false },
-  }, async () => jsonResult({ sessions: await bridge.list() }));
+  for (const [name, tool] of Object.entries(LOCAL_TOOLS)) {
+    server.registerTool(name, {
+      description: tool.description, inputSchema: tool.schema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    }, async args => {
+      try {
+        return jsonResult(name === 'h3d_sessions_list' ? { sessions: await bridge.list() }
+          : discoverCapabilities(args, { ...LOCAL_TOOLS, ...EDITOR_TOOLS }));
+      } catch (error) {
+        return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Capability discovery failed' }] };
+      }
+    });
+  }
   for (const [name, tool] of Object.entries(EDITOR_TOOLS)) {
     server.registerTool(name, {
       description: tool.description, inputSchema: tool.schema,

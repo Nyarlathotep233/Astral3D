@@ -16,7 +16,10 @@ const client = new Client({ name: 'h3d-local-acceptance-agent', version: '1.0.0'
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(config.url), { requestInit: { headers: config.headers } }));
   const tools = await client.listTools();
-  assert.ok(tools.tools.filter(tool => !['h3d_scene_batch','h3d_history'].includes(tool.name)).every(tool => tool.annotations.readOnlyHint));
+  assert.ok(tools.tools.filter(tool => ['h3d_sessions_list','h3d_capabilities','h3d_scene_status','h3d_scene_query','h3d_object_details','h3d_assets_list','h3d_prefabs_list','h3d_viewport_capture','h3d_operation_status'].includes(tool.name)).every(tool => tool.annotations.readOnlyHint));
+  const capabilityResponse = await client.callTool({ name: 'h3d_capabilities', arguments: { id: 'import.local-gltf', includeSchemas: true } });
+  assert.ok(!capabilityResponse.isError);
+  assert.ok(capabilityResponse.structuredContent.schemas.h3d_model_prepare);
   const list = await client.callTool({ name: 'h3d_sessions_list', arguments: {} });
   const session = list.structuredContent.sessions.find(item => item.sceneId === sceneId && item.state === 'ready');
   assert.ok(session, 'Expected scene must be open and ready');
@@ -39,7 +42,7 @@ try {
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, 'viewport.png'), Buffer.from(image.data, 'base64'));
   const evidence = {
-    date: new Date().toISOString(), toolCount: tools.tools.length, sceneId,
+    date: new Date().toISOString(), toolCount: tools.tools.length, sceneId, capability: capabilityResponse.structuredContent.items[0].id,
     renderingAPI: status.renderingAPI, state: status.state, writable: status.writable,
     objectCount: query.total, pageCount: query.items.length,
     detailsCount: details.objects.length, assetCount: assets.total, prefabCount: prefabs.items.length,

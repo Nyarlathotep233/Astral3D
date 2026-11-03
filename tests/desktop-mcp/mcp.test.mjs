@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Client } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
 import { StreamableHTTPClientTransport } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js';
-import { startMcp, READ_TOOLS, EDITOR_TOOLS } from '../../packages/desktop/src/mcp.mjs';
+import { startMcp, READ_TOOLS, EDITOR_TOOLS, LOCAL_TOOLS } from '../../packages/desktop/src/mcp.mjs';
 
 test('real SDK initialize/list/call; strict read/write tools and error propagation', async () => {
   const sessionId = randomUUID();
@@ -24,11 +24,16 @@ test('real SDK initialize/list/call; strict read/write tools and error propagati
     assert.equal((await fetch(endpoint, { headers: { Authorization: 'Bearer test-token' } })).status, 405);
     await client.connect(new StreamableHTTPClientTransport(endpoint, { requestInit: { headers: { Authorization: 'Bearer test-token' } } }));
     const listing = await client.listTools();
-    assert.deepEqual(listing.tools.map(tool => tool.name).sort(), ['h3d_sessions_list', ...Object.keys(EDITOR_TOOLS)].sort());
+    assert.deepEqual(listing.tools.map(tool => tool.name).sort(), [...Object.keys(LOCAL_TOOLS), ...Object.keys(EDITOR_TOOLS)].sort());
     assert.ok(listing.tools.filter(tool => Object.hasOwn(READ_TOOLS, tool.name)).every(tool => tool.annotations.readOnlyHint));
     assert.equal(listing.tools.find(tool => tool.name === 'h3d_scene_batch').annotations.readOnlyHint, false);
     const sessions = await client.callTool({ name: 'h3d_sessions_list', arguments: {} });
     assert.equal(sessions.structuredContent.sessions[0].sessionId, sessionId);
+    const capability = await client.callTool({ name: 'h3d_capabilities', arguments: { id: 'import.local-gltf', includeSchemas: true } });
+    assert.equal(capability.structuredContent.total, 1);
+    assert.equal(capability.structuredContent.items[0].status, 'available');
+    assert.deepEqual(capability.structuredContent.schemas.h3d_model_prepare.inputSchema, listing.tools.find(tool => tool.name === 'h3d_model_prepare').inputSchema);
+    assert.equal(calls.length, 0, 'discovery does not invoke the editor bridge');
     const success = await client.callTool({ name: 'h3d_scene_query', arguments: { sessionId, sceneId: 'test-scene', limit: 2 } });
     assert.equal(success.structuredContent.total, 0);
     assert.equal(calls[0].args.offset, 0);
