@@ -1,6 +1,6 @@
 # H3D Desktop（本地开发小样）
 
-基线：WebGPU，当前只有只读 MCP；批量编辑、撤销、保存和 Play 工具尚未接入。
+基线：WebGPU。当前源码提供只读 MCP 和基础对象内存批量编辑/撤销重做；资源导入、材质/脚本编辑、保存和 Play 工具尚未接入。
 Electron 加载随包生产页面，不依赖 Vite，不包含 Java 服务或数据库。
 
 ## 构建
@@ -40,7 +40,9 @@ userData 默认在 Windows `%APPDATA%/H3D Desktop`；「MCP → 连接信息」�
 
 MCP 只监听 `127.0.0.1`，校验 Host/Origin/凭据。退出所有窗口后停止服务。
 先调用 `h3d_sessions_list`，再把实际返回的 sessionId 与 sceneId 一起传入场景工具；无隐式活动窗口。
-当前工具：状态、分页对象查询、指定 UUID 详情、资产列表、内置预制体列表、视窗截图。
+当前工具：状态、分页对象查询、指定 UUID 详情、资产列表、内置预制体列表、视窗截图，以及 scene_batch/history/operation_status。
+写操作必须携带当前 sceneRevision、唯一 operationId；一批为一条历史，只允许操作指定历史顶端批次。修改只在内存，不自动保存。
+当前 batch 支持 group/box/sphere/plane、局部变换、名称/可见性/阴影属性和无脚本子树删除；具体以 tools/list schema 为准，不支持的操作直接失败。
 脚本与 userData 是不可信数据，详情默认不返回；截图不启动 Play、不保存，且不包含 CSS/HTML 覆盖层。
 工具错误保留真实失败，不返回假成功。没有任意 JS、文件系统或 Shell 执行工具。
 

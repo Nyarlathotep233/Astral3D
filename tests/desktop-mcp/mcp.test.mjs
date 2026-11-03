@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Client } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
 import { StreamableHTTPClientTransport } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js';
-import { startMcp, READ_TOOLS } from '../../packages/desktop/src/mcp.mjs';
+import { startMcp, READ_TOOLS, EDITOR_TOOLS } from '../../packages/desktop/src/mcp.mjs';
 
-test('real SDK initialize/list/call; strict read-only tools and error propagation', async () => {
+test('real SDK initialize/list/call; strict read/write tools and error propagation', async () => {
   const sessionId = randomUUID();
   const calls = [];
   const server = await startMcp({ port: 0, token: 'test-token', bridge: {
@@ -24,8 +24,9 @@ test('real SDK initialize/list/call; strict read-only tools and error propagatio
     assert.equal((await fetch(endpoint, { headers: { Authorization: 'Bearer test-token' } })).status, 405);
     await client.connect(new StreamableHTTPClientTransport(endpoint, { requestInit: { headers: { Authorization: 'Bearer test-token' } } }));
     const listing = await client.listTools();
-    assert.deepEqual(listing.tools.map(tool => tool.name).sort(), ['h3d_sessions_list', ...Object.keys(READ_TOOLS)].sort());
-    assert.ok(listing.tools.every(tool => tool.annotations.readOnlyHint));
+    assert.deepEqual(listing.tools.map(tool => tool.name).sort(), ['h3d_sessions_list', ...Object.keys(EDITOR_TOOLS)].sort());
+    assert.ok(listing.tools.filter(tool => Object.hasOwn(READ_TOOLS, tool.name)).every(tool => tool.annotations.readOnlyHint));
+    assert.equal(listing.tools.find(tool => tool.name === 'h3d_scene_batch').annotations.readOnlyHint, false);
     const sessions = await client.callTool({ name: 'h3d_sessions_list', arguments: {} });
     assert.equal(sessions.structuredContent.sessions[0].sessionId, sessionId);
     const success = await client.callTool({ name: 'h3d_scene_query', arguments: { sessionId, sceneId: 'test-scene', limit: 2 } });
@@ -37,8 +38,12 @@ test('real SDK initialize/list/call; strict read-only tools and error propagatio
     const malformed = await client.callTool({ name: 'h3d_scene_query', arguments: { sessionId, sceneId: 'test-scene', limit: 999 } });
     assert.equal(malformed.isError, true);
     assert.equal(calls.length, before);
+    const validBatch = await client.callTool({ name: 'h3d_scene_batch', arguments: { sessionId, sceneId: 'test-scene', expectedRevision: 0, operationId: randomUUID(), label: 'test', operations: [{ type: 'create', ref: 'box', kind: 'box', name: 'box' }] } });
+    assert.ok(!validBatch.isError);
+    const badBatch = await client.callTool({ name: 'h3d_scene_batch', arguments: { sessionId, sceneId: 'test-scene', expectedRevision: 0, operationId: randomUUID(), label: 'test', operations: [{ type: 'eval', source: 'doAnything()' }] } });
+    assert.equal(badBatch.isError, true);
     const write = await client.callTool({ name: 'h3d_scene_save', arguments: { sessionId, sceneId: 'test-scene' } });
     assert.equal(write.isError, true);
-    assert.equal(calls.length, before);
+    assert.equal(calls.length, before + 1);
   } finally { await client.close(); await server.close(); }
 });

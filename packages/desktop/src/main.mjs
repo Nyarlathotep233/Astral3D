@@ -4,7 +4,7 @@ import { access, readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_ORIGIN, isAppUrl, resolveAppRequest, validateSettings } from './security.mjs';
-import { READ_TOOLS, startMcp } from './mcp.mjs';
+import { EDITOR_TOOLS, startMcp } from './mcp.mjs';
 
 app.setName('H3D Desktop');
 if (process.env.H3D_DESKTOP_USER_DATA) app.setPath('userData', path.resolve(process.env.H3D_DESKTOP_USER_DATA));
@@ -140,7 +140,7 @@ function installMenu() {
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: '视图', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
     { label: 'MCP', submenu: [
-      { label: '连接信息', click: () => void dialog.showMessageBox({ type: mcp ? 'info' : 'error', title: 'H3D MCP', message: mcp ? `http://127.0.0.1:${mcp.port}/mcp` : 'MCP 未启动', detail: mcp ? `只读工具已启用\n配置目录：${app.getPath('userData')}` : mcpError }) },
+      { label: '连接信息', click: () => void dialog.showMessageBox({ type: mcp ? 'info' : 'error', title: 'H3D MCP', message: mcp ? `http://127.0.0.1:${mcp.port}/mcp` : 'MCP 未启动', detail: mcp ? `场景查询与内存批量编辑已启用（不自动保存）\n配置目录：${app.getPath('userData')}` : mcpError }) },
       { label: '复制配置', enabled: !!mcp, click: () => clipboard.writeText(JSON.stringify({ mcpServers: { h3d: { url: `http://127.0.0.1:${mcp.port}/mcp`, headers: { Authorization: `Bearer ${token}` } } } }, null, 2)) },
     ] },
   ]));
@@ -168,7 +168,7 @@ if (locked) {
     });
     try {
       mcp = await startMcp({ port: settings.mcpPort, token, bridge: { list: listWindows, call: (id, method, args) => {
-        if (!Object.hasOwn(READ_TOOLS, method)) throw new Error('Unknown read tool');
+        if (!Object.hasOwn(EDITOR_TOOLS, method)) throw new Error('Unknown editor tool');
         return callWindow(id, method, args);
       } } });
     } catch (error) { mcpError = error.message; console.error('[H3D Desktop] MCP start failed:', mcpError); }

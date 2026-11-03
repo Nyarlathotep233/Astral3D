@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { authorizeMcp } from './security.mjs';
+import { WRITE_TOOLS } from './writeTools.mjs';
 
 const binding = { sessionId: z.string().uuid(), sceneId: z.string().min(1).max(128) };
 const paging = { offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(50) };
@@ -27,6 +28,8 @@ export const READ_TOOLS = {
   },
 };
 
+export const EDITOR_TOOLS = { ...READ_TOOLS, ...WRITE_TOOLS };
+
 function jsonResult(value) {
   const text = JSON.stringify(value);
   if (Buffer.byteLength(text) > 2 * 1024 * 1024) throw new Error('Result exceeds 2 MiB; request fewer objects or omit scripts/userData');
@@ -39,10 +42,10 @@ function makeServer(bridge) {
     description: 'List available desktop editor windows. Bind subsequent calls with the exact returned sessionId and sceneId. No implicit active-window selection.',
     inputSchema: z.object({}).strict(), annotations: { readOnlyHint: true, destructiveHint: false },
   }, async () => jsonResult({ sessions: await bridge.list() }));
-  for (const [name, tool] of Object.entries(READ_TOOLS)) {
+  for (const [name, tool] of Object.entries(EDITOR_TOOLS)) {
     server.registerTool(name, {
       description: tool.description, inputSchema: tool.schema,
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: name === 'h3d_assets_list' },
+      annotations: { readOnlyHint: Object.hasOwn(READ_TOOLS, name) || name === 'h3d_operation_status', destructiveHint: Object.hasOwn(WRITE_TOOLS, name) && name !== 'h3d_operation_status', openWorldHint: name === 'h3d_assets_list' },
     }, async args => {
       try {
         const result = await bridge.call(args.sessionId, name, args);

@@ -1,0 +1,56 @@
+// Mutates only the already-authorized blue-box acceptance scene, in memory; never saves.
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { Client } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
+import { StreamableHTTPClientTransport } from '../../packages/desktop/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js';
+let input=''; for await(const chunk of process.stdin) input+=chunk;
+const config=JSON.parse(input).mcpServers.h3d;
+const sceneId='db24d798905d186dfb61505f9396d5b8';
+const client=new Client({name:'h3d-write-acceptance',version:'1.0.0'});
+try {
+  await client.connect(new StreamableHTTPClientTransport(new URL(config.url),{requestInit:{headers:config.headers}}));
+  const sessions=(await client.callTool({name:'h3d_sessions_list',arguments:{}})).structuredContent.sessions;
+  const session=sessions.find(s=>s.sceneId===sceneId&&s.state==='ready');assert.ok(session);
+  const binding={sessionId:session.sessionId,sceneId};
+  const raw=(name,args={})=>client.callTool({name,arguments:{...binding,...args}});
+  const call=async(name,args={})=>{const r=await raw(name,args);assert.ok(!r.isError,JSON.stringify(r.content));return r.structuredContent;};
+  const status=()=>call('h3d_scene_status');
+  const initial=await call('h3d_scene_query',{limit:100});
+  const count=Number(process.argv[3]||100);assert.ok([100,1000].includes(count));
+  // A group plus count-1 meshes, all added in one history entry.
+  const operations=[{type:'create',ref:'group',kind:'group',name:'MCP阶段验收-不保存'}];
+  for(let i=1;i<count;i++) operations.push({type:'create',ref:`box${i}`,kind:'box',name:`MCP-${i}`,parent:{ref:'group'},position:[i%10,Math.floor(i/10),0],scale:[0.5,0.5,0.5]});
+  const args={expectedRevision:(await status()).sceneRevision,operationId:randomUUID(),label:`MCP ${count} objects acceptance`,operations};
+  const started=performance.now();const result=await call('h3d_scene_batch',args);const roundTripMs=performance.now()-started;
+  assert.equal((await call('h3d_scene_query',{limit:1})).total,initial.total+count);
+  const capture=await raw('h3d_viewport_capture');assert.ok(!capture.isError);
+  const image=capture.content.find(item=>item.type==='image');assert.ok(image);
+  await writeFile(process.argv[2].replace(/\.json$/,'.png'),Buffer.from(image.data,'base64'));
+  const repeated=await call('h3d_scene_batch',args);assert.deepEqual(repeated,result);
+  const changed=await raw('h3d_scene_batch',{...args,label:'different'});assert.equal(changed.isError,true);
+  const stale=await raw('h3d_scene_batch',{...args,operationId:randomUUID()});assert.equal(stale.isError,true);
+  const state=await call('h3d_operation_status',{operationId:args.operationId});assert.equal(state.state,'completed');
+  const details=await call('h3d_object_details',{uuids:[result.refs.box1]});
+  assert.equal(details.objects[0].parentUuid,result.refs.group);
+  const edit=await call('h3d_scene_batch',{expectedRevision:(await status()).sceneRevision,operationId:randomUUID(),label:'Transform and rename',operations:[{type:'transform',target:{uuid:result.refs.box1},space:'local',position:[2,3,4]},{type:'attributes',target:{uuid:result.refs.box1},name:'MCP-edited'}]});
+  assert.equal((await call('h3d_object_details',{uuids:[result.refs.box1]})).objects[0].name,'MCP-edited');
+  const blocked=await raw('h3d_history',{expectedRevision:(await status()).sceneRevision,operationId:randomUUID(),action:'undo',batchId:result.batchId});assert.equal(blocked.isError,true);
+  const history=async(action,batchId)=>call('h3d_history',{expectedRevision:(await status()).sceneRevision,operationId:randomUUID(),action,batchId});
+  const removed=await call('h3d_scene_batch',{expectedRevision:(await status()).sceneRevision,operationId:randomUUID(),label:'Remove test subtree',operations:[{type:'remove',target:{uuid:result.refs.group}}]});
+  assert.equal((await call('h3d_scene_query',{limit:1})).total,initial.total);
+  await history('undo',removed.batchId);
+  assert.equal((await call('h3d_scene_query',{limit:1})).total,initial.total+count);
+  await history('undo',edit.batchId);await history('undo',result.batchId);
+  assert.equal((await call('h3d_scene_query',{limit:1})).total,initial.total);
+  await history('redo',result.batchId);await history('redo',edit.batchId);
+  assert.equal((await call('h3d_object_details',{uuids:[result.refs.box1]})).objects[0].name,'MCP-edited');
+  await history('undo',edit.batchId);await history('undo',result.batchId);
+  const beforeFailure=await status();
+  const invalid=await raw('h3d_scene_batch',{expectedRevision:beforeFailure.sceneRevision,operationId:randomUUID(),label:'Must not partially add',operations:[{type:'create',ref:'new',kind:'box',name:'must-not-exist'},{type:'transform',target:{uuid:randomUUID()},space:'local',position:[1,2,3]}]});
+  assert.equal(invalid.isError,true);
+  assert.deepEqual((await status()).history,beforeFailure.history);
+  assert.equal((await call('h3d_scene_query',{limit:1})).total,initial.total);
+  const evidence={sceneId,count,roundTripMs,initialCount:initial.total,finalCount:initial.total,oneBatchHistory:true,deduplication:true,revisionConflict:true,historyTipGuard:true,undoRedo:true,removeSubtreeUndo:true,invalidPreparationLeftNoObjects:true,saved:false};
+  await writeFile(process.argv[2],JSON.stringify(evidence,null,2));console.log(evidence);
+} finally {await client.close();}

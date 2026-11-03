@@ -8,6 +8,7 @@ import {DefaultScreenshot} from "@/utils/common/constant";
 
 // 保存可能由保存按钮或 bridge 同时触发，复用同一个 Promise 以避免重复递增 sceneVersion / 重复上传。
 let savingPromise: Promise<any> | null = null;
+export function isSceneSaving() { return savingPromise !== null; }
 
 export function saveSceneToService() {
   if (savingPromise) return savingPromise;

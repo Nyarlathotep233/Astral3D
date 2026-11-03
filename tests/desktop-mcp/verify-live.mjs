@@ -16,7 +16,7 @@ const client = new Client({ name: 'h3d-local-acceptance-agent', version: '1.0.0'
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(config.url), { requestInit: { headers: config.headers } }));
   const tools = await client.listTools();
-  assert.ok(tools.tools.every(tool => tool.annotations.readOnlyHint));
+  assert.ok(tools.tools.filter(tool => !['h3d_scene_batch','h3d_history'].includes(tool.name)).every(tool => tool.annotations.readOnlyHint));
   const list = await client.callTool({ name: 'h3d_sessions_list', arguments: {} });
   const session = list.structuredContent.sessions.find(item => item.sceneId === sceneId && item.state === 'ready');
   assert.ok(session, 'Expected scene must be open and ready');

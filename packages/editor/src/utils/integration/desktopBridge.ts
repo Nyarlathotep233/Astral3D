@@ -2,6 +2,7 @@ import { App } from '@astral3d/engine';
 import { fetchGetAssetsList } from '@/http/api/assetsInfo';
 import { BUILTIN_PREFAB_RESOURCES } from '@/views/editor/components/extraPane/resource/builtin/prefabRegistry';
 import { inspectObjects, queryObjects } from './desktopReadModel';
+import { applyDesktopEdit, desktopEditStatus, installDesktopEditTracking, resetDesktopEdits } from './desktopEdits';
 
 declare global {
   interface Window {
@@ -18,6 +19,7 @@ let generation = 0;
 
 export function setDesktopSceneState(state: typeof loadState, error?: unknown) {
   if (!window.h3dDesktop) return;
+  if (state === 'loading' || state === 'inactive') resetDesktopEdits();
   loadState = state;
   loadError = error ? (error instanceof Error ? error.message : String(error)) : null;
   generation++;
@@ -36,8 +38,9 @@ function status() {
     error: loadError || viewer?.renderError?.message || null,
     renderingAPI: backend?.isWebGPUBackend ? 'webgpu' : backend?.isWebGLBackend ? 'webgl2' : null,
     sceneUuid: route && loadState === 'ready' ? App.scene.uuid : null,
-    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture'],
-    writable: false,
+    capabilities: ['scene-query', 'object-details', 'assets-list', 'prefabs-list', 'viewport-capture', 'primitive-batch', 'local-transform', 'object-attributes', 'batch-history', 'operation-status'],
+    writable: true,
+    ...desktopEditStatus(),
   };
 }
 
@@ -49,6 +52,7 @@ function assertScene(args: Record<string, any>) {
 }
 
 export function installDesktopBridge() {
+  if (window.h3dDesktop) installDesktopEditTracking();
   window.h3dDesktop?.installReadHandler(async (method, args) => {
     if (method === 'status') return status();
     if (method === 'h3d_scene_status') {
@@ -57,6 +61,7 @@ export function installDesktopBridge() {
       return current;
     }
     assertScene(args);
+    if (['h3d_scene_batch', 'h3d_history', 'h3d_operation_status'].includes(method)) return applyDesktopEdit(method, args);
     const started = generation;
     let result: unknown;
     switch (method) {

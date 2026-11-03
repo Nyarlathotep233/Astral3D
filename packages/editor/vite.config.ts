@@ -93,6 +93,8 @@ export default defineConfig(async ({mode, command}) => {
             Unocss(),
             // cesium(),
             Components({
+                // Production builds consume checked-in declarations; avoid concurrent Windows writes.
+                dts: isBuild ? false : 'components.d.ts',
                 resolvers: [NaiveUiResolver()]
             }),
             // 本地开发https证书

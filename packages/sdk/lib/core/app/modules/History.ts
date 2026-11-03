@@ -2,10 +2,13 @@ import type { Object3D } from 'three';
 import * as Commands from '@/core/commands/Commands';
 import {useSignal} from "@/hooks";
 import App from "@/core/app/App";
+import { BatchRecoveryError } from '@/core/commands/AtomicBatchCommand';
 
 const {dispatch:useDispathSignal,setActive} = useSignal();
 
 interface Undos{
+	atomic?: boolean,
+	sessionOnly?: boolean,
 	id:number,
 	name?:string,
 	updatable:boolean,
@@ -36,6 +39,23 @@ class History {
 	}
 
 	execute( cmd, optionalName ) {
+		if (cmd.atomic) {
+			cmd.name = optionalName ?? cmd.name;
+			cmd.execute(); // Atomic command recovers partial mutations before throwing.
+			const redos = this.redos, time = this.lastCmdTime;
+			cmd.id = ++this.idCounter;
+			cmd.inMemory = true;
+			this.undos.push(cmd);
+			this.redos = [];
+			this.lastCmdTime = Date.now();
+			try { useDispathSignal('historyChanged', cmd); }
+			catch (error) {
+				this.undos.pop(); this.redos = redos; this.idCounter--; this.lastCmdTime = time;
+				try { cmd.undo(); } catch (rollbackError) { throw new BatchRecoveryError([error, rollbackError], 'History notification and batch recovery failed'); }
+				throw error;
+			}
+			return;
+		}
 		const lastCmd = this.undos[this.undos.length - 1];
 		const timeDifference = Date.now() - this.lastCmdTime;
 
@@ -77,6 +97,18 @@ class History {
 	}
 
 	undo() {
+		const atomic = this.undos[this.undos.length - 1];
+		if (atomic?.atomic) {
+			atomic.undo();
+			this.undos.pop(); this.redos.push(atomic);
+			try { useDispathSignal('historyChanged', atomic); }
+			catch (error) {
+				this.redos.pop(); this.undos.push(atomic);
+				try { atomic.execute(); } catch (rollbackError) { throw new BatchRecoveryError([error, rollbackError], 'Undo notification and recovery failed'); }
+				throw error;
+			}
+			return atomic;
+		}
 		let cmd:Undos | undefined = undefined;
 		if (this.undos.length > 0) {
 			cmd = this.undos.pop() as Undos;
@@ -94,6 +126,18 @@ class History {
 	}
 
 	redo():Undos |undefined {
+		const atomic = this.redos[this.redos.length - 1];
+		if (atomic?.atomic) {
+			atomic.execute();
+			this.redos.pop(); this.undos.push(atomic);
+			try { useDispathSignal('historyChanged', atomic); }
+			catch (error) {
+				this.undos.pop(); this.redos.push(atomic);
+				try { atomic.undo(); } catch (rollbackError) { throw new BatchRecoveryError([error, rollbackError], 'Redo notification and recovery failed'); }
+				throw error;
+			}
+			return atomic;
+		}
 		let cmd:Undos |undefined = undefined;
 		if ( this.redos.length > 0 ) {
 			cmd = this.redos.pop() as Undos;
@@ -116,6 +160,8 @@ class History {
 		history.undos = [];
 		history.redos = [];
 		if (!App.config.getKey('history')) return history;
+		// A partial history around a non-persistent transaction cannot be replayed safely.
+		if ([...this.undos, ...this.redos].some(cmd => cmd.sessionOnly)) return history;
 
 		//将Undos附加到历史记录
 		for ( let i = 0; i < this.undos.length; i ++ ) {
@@ -208,7 +254,7 @@ class History {
 
 		let cmd:Undos |undefined = this.redo();
 		while ( cmd !== undefined ) {
-			if (!cmd.hasOwnProperty('json')) {
+			if (!cmd.sessionOnly && !cmd.hasOwnProperty('json')) {
 				cmd.json = cmd.toJSON();
 			}
 			cmd = this.redo();
