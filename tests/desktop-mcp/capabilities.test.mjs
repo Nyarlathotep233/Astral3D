@@ -36,3 +36,17 @@ test('discovery pages, filters, rejects unknown keys and returns schemas only on
   const batch = discoverCapabilities({ id: 'object.primitives', includeSchemas: true }, tools);
   assert.ok(batch.schemas.h3d_scene_batch.inputSchema.properties.operations);
 });
+
+test('vector schemas use homogeneous arrays while retaining exactly three finite numbers', () => {
+  const schema = discoverCapabilities({ id: 'object.transform', includeSchemas: true }, tools).schemas.h3d_scene_batch.inputSchema;
+  const operation = tools.h3d_scene_batch.schema.shape.operations.element;
+  const transform = { type: 'transform', target: { ref: 'box' }, space: 'local', position: [1, 2, 3] };
+  assert.ok(operation.safeParse(transform).success);
+  for (const position of [[1, 2], [1, 2, 3, 4], [1, '2', 3], [1, Infinity, 3]]) assert.ok(!operation.safeParse({ ...transform, position }).success);
+  const walk = value => {
+    if (!value || typeof value !== 'object') return;
+    if (value.type === 'array') assert.ok(!Array.isArray(value.items), 'no tuple-style items in public tool schemas');
+    for (const child of Object.values(value)) walk(child);
+  };
+  walk(schema);
+});

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 const binding = { sessionId: z.string().uuid(), sceneId: z.string().min(1).max(128) };
-const vector = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+// Homogeneous array form keeps the same [x,y,z] contract without draft-07 tuple
+// items, which some MCP clients cannot expose to their model's tool schema.
+const vector = z.array(z.number().finite()).length(3);
 const target = z.union([z.object({ uuid: z.string().uuid() }).strict(), z.object({ ref: z.string().min(1).max(80) }).strict()]);
 const transform = { position: vector.optional(), rotation: vector.optional(), rotationOrder: z.enum(['XYZ','YXZ','ZXY','ZYX','YZX','XZY']).optional(), scale: vector.optional() };
 const operation = z.discriminatedUnion('type', [

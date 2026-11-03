@@ -158,3 +158,10 @@ D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不�
 - SDK/编辑器构建和项目原有 tsc 检查通过。仓库没有 vue-tsc 可执行项，未声称完成独立 Vue 模板类型检查。23 项桌面测试通过；最后补的既有 mixer cache 回收分支有真实 Three.js 单元覆盖，需随下一生产重建继续回归。
 - 手测入口：源码客户端 `h3d://app/#/editor/db24d798905d186dfb61505f9396d5b8`，确认只有原蓝色方块；复制 MCP 配置，运行 verify-local-import.mjs 和 verify-write.mjs，观察新增对象和历史后最终恢复。不要保存。
 - 故障复测：生成 import-fixtures；browser-harness 在该测试 tab 执行 registration-probe.py（H3D_PROBE_PHASE=arm），再运行 verify-registration-failure.mjs；最后 phase=check，确认真实状态恢复并移除探针。仅微型夹具，不针对共享上传目录。开发者手工验收及完整保存重载仍未完成，不合并。
+
+## 双 Agent 提前探测及 schema 兼容修正（未完成阶段 6）
+
+- Codex 已用正式 MCP 实跑只读任务（9 次 H3D 调用，未使用 Shell/CDP 改场景），读回与独立浏览器结果一致。发现 batch 工具 schema 被客户端拒绝，不能声称已具备正常编辑能力。
+- 最小修正：三维向量由 JSON Schema 的 tuple items 改为等价的固定长度 number array，同一工具定义供所有客户端使用；数值、长度、参数名及业务含义不变。23 项单测通过，主进程重启后的真实客户端复测待完成。
+- DeepSeek Harness 0.2.1-rc.2 已真实调用 headless CLI + 临时 MCP overlay，但模型路由缺 DEEPSEEK_API_KEY，未发生模型工具调用，明确标记未通过。未读取其他凭据或改全局配置；已请用户配置。
+- 两客户端共用 tests/desktop-mcp/agent-readonly-task.txt；运行脚本、配置和完整边界见该目录 AGENT_ACCEPTANCE.md。该只读初测不能替代最终完整双 Agent 验收。

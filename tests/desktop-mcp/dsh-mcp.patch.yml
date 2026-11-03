@@ -1,0 +1,11 @@
+# Per-run overlay. No credentials or global profile/model changes.
+- insert:
+    - id: h3d-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: h3d
+        transport: streamable-http
+        url: !!js process.env.H3D_MCP_URL
+        headers:
+          Authorization: !!js process.env.H3D_MCP_AUTH
+        failOnStartupError: true
