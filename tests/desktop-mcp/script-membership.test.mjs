@@ -7,10 +7,13 @@ import { build } from '../../packages/desktop/node_modules/esbuild/lib/main.js';
 import { AtomicBatchCommand, BatchRecoveryError } from '../../packages/sdk/lib/core/commands/AtomicBatchCommand.ts';
 
 const counts = new Map();
+class ObjectRegistrationError extends Error {}
+let failRegistration = false;
 const app = {
   scene: new Scene(), scripts: {}, geometries: {}, selected: null,
   history: { undos: [], redos: [] },
   addObject(object, parent, index) {
+    if (failRegistration) throw new ObjectRegistrationError('registration restored');
     if (object.material) counts.set(object.material, (counts.get(object.material) || 0) + 1);
     parent.children.splice(index, 0, object); object.parent = parent;
   },
@@ -21,7 +24,7 @@ const app = {
   execute(command) { command.execute(); command.id = this.history.undos.length + 1; this.history.undos.push(command); },
   deselect() {},
 };
-const fixture = { app, AtomicBatchCommand, BatchRecoveryError, notify() {} };
+const fixture = { app, AtomicBatchCommand, BatchRecoveryError, ObjectRegistrationError, notify() {} };
 globalThis.__h3dMembershipTest = fixture;
 globalThis.window = { viewer: { enableScript: false } };
 const output = await build({
@@ -34,11 +37,23 @@ const output = await build({
       ? 'export const isSceneSaving=()=>false;'
       : `const f=globalThis.__h3dMembershipTest; export const App=f.app, AtomicBatchCommand=f.AtomicBatchCommand, BatchRecoveryError=f.BatchRecoveryError;
          export const Hooks={useDispatchSignal:(...args)=>f.notify(...args),useAddSignal:()=>{}};
-         export class SetPositionCommand{} export class SetRotationCommand{} export class SetScaleCommand{} export class SetValueCommand{}`, loader: 'js' }));
+         export const ObjectRegistrationError=f.ObjectRegistrationError; export class SetPositionCommand{} export class SetRotationCommand{} export class SetScaleCommand{} export class SetValueCommand{}`, loader: 'js' }));
   } }],
 });
+
 const { applyDesktopEdit } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 
+test('atomic recovery does not remove a subtree whose registration already rolled back', () => {
+  const before = new Map(counts), children = [...app.scene.children], history = [...app.history.undos];
+  failRegistration = true;
+  assert.throws(() => applyDesktopEdit('h3d_scene_batch', { expectedRevision: 0, operationId: randomUUID(), label: 'failure', operations: [
+    { type: 'create', kind: 'box', ref: 'box', name: 'test' },
+  ] }), /registration restored/);
+  failRegistration = false;
+  assert.deepEqual(counts, before);
+  assert.deepEqual(app.scene.children, children);
+  assert.deepEqual(app.history.undos, history);
+});
 test('script-removal notification failure restores membership, script identity and material count', () => {
   const batch = operations => applyDesktopEdit('h3d_scene_batch', { expectedRevision: 0, operationId: randomUUID(), label: 'test', operations });
   const created = batch([

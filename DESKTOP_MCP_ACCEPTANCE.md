@@ -147,3 +147,14 @@ D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不�
 - 17 项桌面测试及桌面生产构建通过，含真实 SDK Streamable HTTP 初始化、发现、调用、校验错误及无窗口能力发现。
 - 当前运行的 Electron 仍是上一构建；自动重启命令被执行环境拦截，已给出用户手动重启命令。新目录的实际 Electron 进程验证待重启，不以 SDK 服务测试代替。
 - 阶段 1 的批次资源恢复、通用任务/确认语义尚在推进，不将此子提交称为阶段 1 完成。
+
+## 新计划阶段 1B：子树资源注册失败恢复（2026-11-03）
+
+- 修复实际缺口：子树注册/注销到一半失败，不能再对整棵子树做普通逆操作，否则未访问的共享材质会被扣计数或重复登记。
+- SDK App.addObject/removeObject 共用局部登记事务：只记录目标子树涉及的材质计数、几何、相机、辅助对象、动画及 HTML 位置，不对每个对象复制全场景。失败恢复后明确报错；MCP 当前步骤不重复逆操作，之前已完成步骤仍正常回滚。
+- 使用真实 App 方法的故障测试覆盖添加/删除、共享材质、相机辅助对象、动画 clips、新建及既有 mixer；持续观察者故障明确返回 recoveryFailed。MCP 另测已恢复步骤不重复扣资源。
+- 生产页面已重新加载最新编辑器构建（Electron 主进程仍旧）。真实木凳导入/材质/撤销重做回归和 100 对象批次通过，最终恢复原 4 个运行时对象。100 对象往返 594 ms，是 MCP/CPU/通知总往返，非 GPU 帧耗时。
+- 浏览器实际注入一次 material 注册中断，两个共享 mesh 的 glTF 导入失败；对象、历史及资源登记快照完全一致，job 未消费、原请求重试仍失败，可取消准备资源。证据 registration-failure.json、registration-browser.json、registration-import.json/.png、registration-batch100.json/.png；无未处理 JS 异常，实际 WebGPU、脚本未运行。此项是主验收方故障回归，**不是 Agent 自主验收**。
+- SDK/编辑器构建和项目原有 tsc 检查通过。仓库没有 vue-tsc 可执行项，未声称完成独立 Vue 模板类型检查。23 项桌面测试通过；最后补的既有 mixer cache 回收分支有真实 Three.js 单元覆盖，需随下一生产重建继续回归。
+- 手测入口：源码客户端 `h3d://app/#/editor/db24d798905d186dfb61505f9396d5b8`，确认只有原蓝色方块；复制 MCP 配置，运行 verify-local-import.mjs 和 verify-write.mjs，观察新增对象和历史后最终恢复。不要保存。
+- 故障复测：生成 import-fixtures；browser-harness 在该测试 tab 执行 registration-probe.py（H3D_PROBE_PHASE=arm），再运行 verify-registration-failure.mjs；最后 phase=check，确认真实状态恢复并移除探针。仅微型夹具，不针对共享上传目录。开发者手工验收及完整保存重载仍未完成，不合并。

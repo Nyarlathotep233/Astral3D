@@ -14,6 +14,7 @@ import {useAddSignal, useDispatchSignal, useSetSignalActive} from '@/hooks';
 import Loader from "@/core/loader/Loader.ts";
 import {AddScriptCommand,RemoveScriptCommand} from "@/core/commands/Commands.ts";
 import Viewer from "@/core/viewer/Viewer.ts";
+import { runObjectRegistration } from './ObjectRegistration';
 
 const _DEFAULT_CAMERA = new THREE.PerspectiveCamera(45, 1, 0.01, 100 * 1000);
 _DEFAULT_CAMERA.name = "默认相机";
@@ -249,6 +250,7 @@ export class App {
      * @param preserveShadow
      */
     addObject(object:THREE.Object3D, parent?:THREE.Object3D, index?:number, preserveShadow = false) {
+        runObjectRegistration(this, this.materialsRefCounter, object, () => {
         object.traverseByCondition((child) => {
             if (child.animations && child.animations.length > 0) this.clipAction(child);
             if (child.geometry !== undefined) this.addGeometry(child.geometry);
@@ -262,6 +264,7 @@ export class App {
             child.castShadow = true;
             child.receiveShadow = true;
         }, (child) => !child.ignore);
+        }, () => { useDispatchSignal('materialAdded'); useDispatchSignal('cameraAdded'); useDispatchSignal('sceneGraphChanged'); });
 
         if (parent === undefined) {
             this.scene.add(object);
@@ -316,12 +319,14 @@ export class App {
         // object.parent === null避免删除相机或场景
         if (object.parent === null || object.ignore) return;
 
+        runObjectRegistration(this, this.materialsRefCounter, object, () => {
         object.traverseByCondition((child:THREE.Object3D) => {
             this.removeCamera(child);
             this.removeHelper(child);
             if (child.material !== undefined) this.removeMaterial(child.material);
             if ((child.isHtmlPanel || child.isHtmlSprite) && child.element) child.element.remove();
         }, (child:THREE.Object3D) => !child.ignore);
+        }, () => { useDispatchSignal('materialRemoved'); useDispatchSignal('cameraRemoved'); useDispatchSignal('sceneGraphChanged'); });
 
         object.parent.remove(object);
 
@@ -499,8 +504,8 @@ export class App {
             helper.add(picker);
         }
 
-        this.sceneHelpers.add(helper);
         this.helpers[object.id] = helper;
+        this.sceneHelpers.add(helper);
     }
 
     /**

@@ -176,3 +176,10 @@ D2 测试窗口现保留，等待用户点选导入目录；8098 MCP / 9231 临�
 ### 最新阶段 0（取代上面的等待目录授权状态）
 
 目录授权已取消；已完成绝对路径 GLB/glTF 正向/失败验收，测试改动全部撤销，无保存/上传。现有测试客户端仍用于下一阶段开发，退出时核对 8098/9231 释放。新微型派生夹具 `desktop-mcp/import-fixtures/models/*.gltf` 与 `buffers/stool.bin` 来自既有木凳，由 tests/desktop-mcp/create-import-fixtures.mjs 可重复生成；不是新模型库/业务环境。沿用该目录，不重复创建副本；清理需确认。
+# 2026-11-03 MCP 阶段 1 补充台账
+
+- 继续复用 `.codex-logs/desktop-mcp/user-data`、既有副本数据库/资源目录；未新增业务库、profile 或完整资源副本。
+- `tests/desktop-mcp/create-import-fixtures.mjs` 在既有 `import-fixtures/models` 增加 `partial-registration.gltf`，复用原 `buffers/stool.bin`，仅添加第二个共享 mesh 节点用于局部注册失败验证。可重用，不需再次复制模型库。
+- `.codex-logs/desktop-mcp/registration-*` 是本轮小型故障/导入/批次证据；SDK、编辑器构建和 tsc 日志前缀为 `desktop-registration-`。未清理既有备份。
+- 本轮浏览器故障探针执行后已还原方法并删除页面探针；未保存/上传场景。自动 Electron 重启被执行环境拦截，新主进程功能需手动重启后验收。当前仍保留原测试窗口与 8098/9231，8080 业务副本服务未停止。
+

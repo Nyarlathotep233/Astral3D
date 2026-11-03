@@ -3,6 +3,7 @@ import Viewer from "./core/viewer/Viewer";
 import Preview from "./core/preview/Preview";
 import Loader from './core/loader/Loader';
 export * from './core/loader/Package';
+export { ObjectRegistrationError } from './core/app/ObjectRegistration';
 
 // export * as THREE from "three";
 // export * as THREEAddons from "three/examples/jsm/Addons.js";

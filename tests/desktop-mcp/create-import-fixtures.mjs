@@ -13,4 +13,9 @@ const missingBuffer=structuredClone(document);missingBuffer.buffers[0].uri='../b
 await writeFile(path.join(root,'models','missing-buffer.gltf'),JSON.stringify(missingBuffer));
 const missingTexture=structuredClone(document);delete missingTexture.images[0].bufferView;missingTexture.images[0].uri='missing-texture.png';
 await writeFile(path.join(root,'models','missing-texture.gltf'),JSON.stringify(missingTexture));
+const partialRegistration=structuredClone(document);
+const original=partialRegistration.nodes.find(node=>node.mesh!==undefined);
+const duplicate=partialRegistration.nodes.push({...original,name:'Shared material registration probe'})-1;
+partialRegistration.scenes[partialRegistration.scene||0].nodes.push(duplicate);
+await writeFile(path.join(root,'models','partial-registration.gltf'),JSON.stringify(partialRegistration));
 console.log(root);

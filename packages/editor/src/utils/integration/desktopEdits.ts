@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { App, AtomicBatchCommand, BatchRecoveryError, Hooks, SetPositionCommand, SetRotationCommand, SetScaleCommand, SetValueCommand } from '@astral3d/engine';
+import { App, AtomicBatchCommand, BatchRecoveryError, ObjectRegistrationError, Hooks, SetPositionCommand, SetRotationCommand, SetScaleCommand, SetValueCommand } from '@astral3d/engine';
 import { isSceneSaving } from '@/utils/common/saveSceneToService';
 import { materialAt, materialStep, scriptStep } from './desktopEditSteps';
 import { desktopModelJobs } from './desktopModels';
@@ -28,20 +28,24 @@ function membership(object: THREE.Object3D, parent: THREE.Object3D, index: numbe
   const scripts = new Map<THREE.Object3D, ISceneScript[]>();
   object.traverse(child => { if (App.scripts[child.uuid]) scripts.set(child, App.scripts[child.uuid]!); });
   const assertStopped = () => { if (scripts.size && window.viewer.enableScript) throw new Error('Scripted object edits require the editor runtime to be stopped'); };
+  let restoredFailure = false;
   const attach = () => {
-    assertStopped();
-    if (object.parent) object.parent.remove(object);
+    if (restoredFailure) { restoredFailure = false; return; }
+    try { assertStopped(); } catch (error) { restoredFailure = true; throw error; }
     try { App.addObject(object, parent, index, true); }
     catch (error) {
-      // Registration may fail before insertion; keep a reachable object for the inverse cleanup.
-      if (!object.parent) { parent.children.splice(Math.min(index, parent.children.length), 0, object); object.parent = parent; }
+      // Resource traversal already recovered without touching membership. Do not decrement
+      // the whole subtree again when AtomicBatchCommand invokes this step's inverse.
+      if (error instanceof ObjectRegistrationError || error instanceof BatchRecoveryError) restoredFailure = true;
       throw error;
     }
     for (const [child, list] of scripts) { App.scripts[child.uuid] = list; for (const script of list) Hooks.useDispatchSignal('scriptAdded', child, script); }
   };
   const detach = () => {
-    assertStopped();
-    if (object.parent) App.removeObject(object);
+    if (restoredFailure) { restoredFailure = false; return; }
+    try { assertStopped(); } catch (error) { restoredFailure = true; throw error; }
+    try { if (object.parent) App.removeObject(object); }
+    catch (error) { if (error instanceof ObjectRegistrationError || error instanceof BatchRecoveryError) restoredFailure = true; throw error; }
     for (const [child, list] of scripts) { delete App.scripts[child.uuid]; for (const script of list) Hooks.useDispatchSignal('scriptRemoved', child, script); }
   };
   return adding ? { execute: attach, undo: detach } : { execute: detach, undo: attach };
