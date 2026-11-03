@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_ORIGIN, isAppUrl, resolveAppRequest, validateSettings } from './security.mjs';
 import { EDITOR_TOOLS, startMcp } from './mcp.mjs';
+import { createLocalImportAccess, IMPORT_PREFIX } from './localImports.mjs';
 
 app.setName('H3D Desktop');
 if (process.env.H3D_DESKTOP_USER_DATA) app.setPath('userData', path.resolve(process.env.H3D_DESKTOP_USER_DATA));
@@ -14,6 +15,7 @@ if (!locked) app.quit();
 
 const windows = new Map();
 const pending = new Map();
+const localImports = createLocalImportAccess();
 let settings;
 let mcp;
 let token;
@@ -111,6 +113,7 @@ function createWindow(url = `${APP_ORIGIN}/#/`) {
 
 async function handleAppRequest(request) {
   try {
+    if (isAppUrl(request.url) && new URL(request.url).pathname.startsWith(IMPORT_PREFIX)) return await localImports.respond(request.url, request.method);
     const target = resolveAppRequest(request.url, root, settings.serviceUrl);
     if (target.kind === 'file') {
       if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', { status: 405 });
@@ -167,8 +170,9 @@ if (locked) {
       else request.reject(new Error(typeof message.error === 'string' ? message.error.slice(0, 2000) : 'Editor request failed'));
     });
     try {
-      mcp = await startMcp({ port: settings.mcpPort, token, bridge: { list: listWindows, call: (id, method, args) => {
+      mcp = await startMcp({ port: settings.mcpPort, token, bridge: { list: listWindows, call: async (id, method, args) => {
         if (!Object.hasOwn(EDITOR_TOOLS, method)) throw new Error('Unknown editor tool');
+        if (method === 'h3d_model_prepare') args = { ...args, resolvedLocal: await localImports.prepare(args.filePath) };
         return callWindow(id, method, args);
       } } });
     } catch (error) { mcpError = error.message; console.error('[H3D Desktop] MCP start failed:', mcpError); }

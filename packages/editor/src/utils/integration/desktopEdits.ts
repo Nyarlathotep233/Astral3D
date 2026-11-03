@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { App, AtomicBatchCommand, BatchRecoveryError, Hooks, SetPositionCommand, SetRotationCommand, SetScaleCommand, SetValueCommand } from '@astral3d/engine';
 import { isSceneSaving } from '@/utils/common/saveSceneToService';
 import { materialAt, materialStep, scriptStep } from './desktopEditSteps';
+import { desktopModelJobs } from './desktopModels';
 
 let revision = 0;
 const results = new Map<string, { request: string; result?: any; error?: string }>();
@@ -51,6 +52,7 @@ function prepare(operations: any[]) {
   const refs = new Map<string, THREE.Object3D>();
   const removed = new Set<string>();
   const created: THREE.Object3D[] = [];
+  const imported = new Set<string>();
   const parentOf = new Map<THREE.Object3D, THREE.Object3D>();
   const resolve = (target: any): THREE.Object3D => {
     const object = target?.ref ? refs.get(target.ref) : App.scene.getObjectByProperty('uuid', target?.uuid);
@@ -66,7 +68,15 @@ function prepare(operations: any[]) {
   };
   try {
     for (const op of operations) {
-      if (op.type === 'create') {
+      if(op.type==='insert-model') {
+        if(refs.has(op.ref))throw new Error(`Duplicate local ref: ${op.ref}`);
+        if(imported.has(op.jobId))throw new Error('A prepared model can only be inserted once');
+        const object=desktopModelJobs.ready(op.jobId), parent=op.parent?resolve(op.parent):App.scene;
+        imported.add(op.jobId); refs.set(op.ref,object); parentOf.set(object,parent);
+        factories.push(()=>membership(object,parent,parent.children.length,true));
+        if(op.name!==undefined)factories.push(()=>new SetValueCommand(object,'name',op.name));
+        transforms(object,op);
+      } else if (op.type === 'create') {
         if (refs.has(op.ref)) throw new Error(`Duplicate local ref: ${op.ref}`);
         const parent = op.parent ? resolve(op.parent) : App.scene;
         let object: THREE.Object3D;
@@ -108,7 +118,7 @@ function prepare(operations: any[]) {
         } else throw new Error(`Unsupported operation: ${op.type}`);
       }
     }
-    return { factories, refs: Object.fromEntries([...refs].map(([ref, object]) => [ref, object.uuid])), created };
+    return { factories, refs: Object.fromEntries([...refs].map(([ref, object]) => [ref, object.uuid])), created, imported };
   } catch (error) { disposeCreated(created); throw error; }
 }
 
@@ -149,6 +159,7 @@ export function applyDesktopEdit(method: string, args: any) {
       refs = prepared.refs;
       const command = new AtomicBatchCommand(prepared.factories, args.label);
       try { App.execute(command); } catch (error) { disposeCreated(prepared.created); throw error; }
+      for(const id of prepared.imported)desktopModelJobs.consume(id);
       batchId = command.id;
     } else if (method === 'h3d_history') {
       const stack = args.action === 'undo' ? App.history.undos : App.history.redos;

@@ -117,3 +117,24 @@ Get-Clipboard -Raw | node tests/desktop-mcp/verify-live.mjs 9600ea7d95189faa4acf
 手测：当前源码 Electron → 蓝色方块验收场景 → 复制 MCP 配置 → `Get-Clipboard -Raw | node tests/desktop-mcp/verify-material-script.mjs .codex-logs/desktop-mcp/material-script.json`。核对红色截图、历史中一批一项及最终恢复；不要保存。开发者手工验收及服务保存重载仍是后续门禁。
 
 D1 结束前再次执行 100 对象批次回归通过（往返约 426 ms，不是 GPU 耗时），恢复到原 4 个运行时对象；未处理 JS 错误为空，脚本探针仍未执行。正常关闭两扇测试窗口后 8098 / 9231 释放，只保留既有 8080 副本服务。
+
+## 历史 D2 草案：目录授权（已被用户取消，非当前行为）
+
+- 已确认采用「原生目录选择 + 相对路径」；不开放任意磁盘读取。原生菜单支持选择/查看/撤销，授权仅保存在主进程内存。
+- 新增 h3d_model_prepare / h3d_model_job、批次 insert-model。准备、取消与单次消费独立于场景；未成功解析不插入；仍无自动保存或上传。
+- 目录和依赖逐次 realpath 检查，测试覆盖绝对路径、路径穿越、URL 编码、Windows junction 越界、非模型文件、撤销/重授后旧 URL 失效。测试只使用自行创建的微型 OS 临时目录，结束已移除，不涉及业务资源目录。
+- 准备器复用 SDK GLTFLoader，独立 decoder 生命周期避免取消/清理误销毁其他加载器；不替换既有 UI 导入路径。缺失纹理/越界依赖作为失败，不接受 GLTFLoader 可能返回的残缺材质结果。
+- 15 项自动测试、SDK 构建、Vue 类型检查、编辑器及桌面生产构建通过。日志 desktop-import-sdk-build.log / desktop-import-typecheck.log / desktop-import-editor-build.log。
+- 可见 Electron 中已验证新增原生菜单、蓝色方块页面实际 WebGPU；未捕获页面未处理异常。真实 MCP 在尚未选择目录时明确拒绝准备请求，场景摘要和 revision 均未改变，证据 desktop-mcp/local-import-ungranted.json。
+- **尚未完成正向真实文件导入验收**：测试窗口已打开，等待用户在原生菜单点选授权目录。测试源拟使用仓库现有 public/static/model，不复制模型、不新建业务库/profile。用户允许只读使用该目录，权限点选本身交由用户完成。
+- 后续运行 tests/desktop-mcp/verify-local-import.mjs：验证木凳 GLB 的准备/取消、单次入场、UUID/层级、截图及 undo/redo，全部撤回、不保存。多文件 glTF 缺失依赖、撤销授权后的实际运行行为、复杂骨骼/动画仍需进一步浏览器验收；不能以单元测试替代。
+
+## 新计划阶段 0：绝对路径 GLB/glTF（2026-11-03）
+
+- 用户取消目录授权/白名单；原生菜单现只有连接信息/复制配置，已实际观察确认。绝对路径可来自工作区外目录，正常 ../ 依赖和目录链接不被当作越权。
+- 真实源码 Electron 加载生产构建：内置木凳 GLB 及由它生成的多文件 glTF（../buffers/stool.bin）均通过准备不入场、取消、去重、单次提交、位置/缩放/命名、材质独立修改、贴图引用保持、撤销重做及最终恢复。
+- 缺失 buffer / 贴图都返回 failed，场景摘要、revision 未变；没有白模或缺贴图对象入场。阶段证据 local-import.json/.png、local-import-gltf.json/.png、local-import-errors.json、local-import-browser.json。
+- 截图已目视确认原蓝色方块和带纹理木凳；实际 WebGPU，观测期无未处理 JS 异常、无业务写请求。预期的缺失资源日志保留，不记为“无错误日志”。
+- 15 项测试通过；SDK/编辑器/桌面构建与 Vue 类型检查通过。全部场景操作仅内存，已撤销，无保存/上传。
+- 新增 create-import-fixtures.mjs 只从既有木凳生成微型测试派生文件，放在 .codex-logs/desktop-mcp/import-fixtures；不复制数据库、完整模型库或 profile。
+- 手测：源码客户端打开蓝色方块验收场景 → 原生菜单复制配置 → verify-local-import.mjs（默认 GLB 或传 glTF 绝对路径）→ verify-import-errors.mjs。旧独立 exe 未更新；全部格式、骨骼/动画、服务保存及双 Agent 完整验收仍未完成。

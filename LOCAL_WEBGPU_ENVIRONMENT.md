@@ -167,3 +167,12 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
 
 继续复用上述唯一数据库、资源目录与 desktop profile；没有新增环境副本。用户授权可见测试窗口，仅操作 `db24d798905d186dfb61505f9396d5b8` 的内存对象，测试后全部撤销，无保存/上传。新增证据为 `desktop-mcp/write-*.json/.png`、`material-script*.json/.png`，构建日志为 `desktop-material-build.log` / `desktop-material-typecheck.log`。旧 `release/win-unpacked` 仍是 A/B 只读版本，不能用于验收 C1 / D1。
 D1 本轮结束已关闭源码测试窗口；8098 / 9231 监听释放，原 8080 业务服务保留。清理边界不变，未删除任何副本/profile/证据。
+
+### D2 授权目录导入验收（进行中）
+
+复用同一桌面 profile 与副本后端；测试源使用现有 `packages/editor/public/static/model`，不复制该模型目录。路径安全单元测试创建 `os.tmpdir()/h3d-import-security-*` 微型夹具（含目录链接），测试结束仅清理各自夹具。无新数据库、业务资源库或源码副本。
+D2 测试窗口现保留，等待用户点选导入目录；8098 MCP / 9231 临时调试仍仅本机监听，完成后应关闭并核对释放。证据 `desktop-mcp/local-import-ungranted.json`；后续正向证据计划 `local-import.json/.png`，未生成前不记为通过。旧解包 exe 未更新。
+
+### 最新阶段 0（取代上面的等待目录授权状态）
+
+目录授权已取消；已完成绝对路径 GLB/glTF 正向/失败验收，测试改动全部撤销，无保存/上传。现有测试客户端仍用于下一阶段开发，退出时核对 8098/9231 释放。新微型派生夹具 `desktop-mcp/import-fixtures/models/*.gltf` 与 `buffers/stool.bin` 来自既有木凳，由 tests/desktop-mcp/create-import-fixtures.mjs 可重复生成；不是新模型库/业务环境。沿用该目录，不重复创建副本；清理需确认。

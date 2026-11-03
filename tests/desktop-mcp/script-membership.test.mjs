@@ -28,8 +28,9 @@ const output = await build({
   entryPoints: [path.resolve(import.meta.dirname, '../../packages/editor/src/utils/integration/desktopEdits.ts')],
   bundle: true, write: false, format: 'esm', platform: 'node',
   plugins: [{ name: 'membership-fixture', setup(b) {
+    b.onResolve({ filter: /^\.\/desktopModels$/ }, () => ({ path:'models', namespace:'fixture' }));
     b.onResolve({ filter: /^@astral3d\/engine$|^@\/utils\/common\/saveSceneToService$/ }, args => ({ path: args.path, namespace: 'fixture' }));
-    b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path.endsWith('saveSceneToService')
+    b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path==='models' ? 'export const desktopModelJobs={};' : args.path.endsWith('saveSceneToService')
       ? 'export const isSceneSaving=()=>false;'
       : `const f=globalThis.__h3dMembershipTest; export const App=f.app, AtomicBatchCommand=f.AtomicBatchCommand, BatchRecoveryError=f.BatchRecoveryError;
          export const Hooks={useDispatchSignal:(...args)=>f.notify(...args),useAddSignal:()=>{}};
