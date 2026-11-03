@@ -45,7 +45,8 @@ export default defineConfig(async ({mode, command}) => {
 
     // 为@monaco-editor定义define
     const define:any = {
-        "process.env": process.env
+        // Browser dependencies only need NODE_ENV, never the build machine's credentials.
+        "process.env": { NODE_ENV: process.env.NODE_ENV || (isBuild ? 'production' : 'development') }
     };
     if (mode === "development") {
         dotenv.config({ path: ".env.development" });

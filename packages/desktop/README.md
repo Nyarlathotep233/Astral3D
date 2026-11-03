@@ -1,0 +1,50 @@
+# H3D Desktop（本地开发小样）
+
+基线：WebGPU，当前只有只读 MCP；批量编辑、撤销、保存和 Play 工具尚未接入。
+Electron 加载随包生产页面，不依赖 Vite，不包含 Java 服务或数据库。
+
+## 构建
+
+仓库根目录安装 workspace 依赖后：
+
+```powershell
+npm run editor:build
+npm run desktop:build
+npm run desktop:start
+npm run desktop:test
+npm run desktop:package
+npm run desktop:installer
+```
+
+后两条会先重建 SDK 和编辑器，分别生成 Windows 解包目录和 NSIS 安装包，输出在本目录 `release/`。
+初期未代码签名，不作为正式客户发行版。不得以源码模式启动成功代替安装验收。
+
+## 配置和连接
+
+首次启动在 Electron userData 创建 `settings.json`，默认仅连接本地服务：
+
+```json
+{
+  "serviceUrl": "http://127.0.0.1:8080",
+  "socketUrl": "ws://127.0.0.1:8080/api/sys/ws",
+  "mcpPort": 8098
+}
+```
+
+userData 默认在 Windows `%APPDATA%/H3D Desktop`；「MCP → 连接信息」显示实际目录。
+测试可显式设置 `H3D_DESKTOP_USER_DATA`；修改设置后重启。非回环业务地址必须 HTTPS/WSS，当前不连接线上。
+
+「MCP → 复制配置」复制带 Authorization 的 Streamable HTTP JSON 配置，供支持该传输和自定义请求头的本地 Agent 使用。
+此配置含访问凭据，不要提交仓库或发到公共聊天；磁盘凭据由 Electron safeStorage 加密，渲染页面拿不到凭据。
+不同 Agent 配置格式仍需分别验证，不承诺通用 JSON 可直接导入所有客户端。
+
+MCP 只监听 `127.0.0.1`，校验 Host/Origin/凭据。退出所有窗口后停止服务。
+先调用 `h3d_sessions_list`，再把实际返回的 sessionId 与 sceneId 一起传入场景工具；无隐式活动窗口。
+当前工具：状态、分页对象查询、指定 UUID 详情、资产列表、内置预制体列表、视窗截图。
+脚本与 userData 是不可信数据，详情默认不返回；截图不启动 Play、不保存，且不包含 CSS/HTML 覆盖层。
+工具错误保留真实失败，不返回假成功。没有任意 JS、文件系统或 Shell 执行工具。
+
+## 本地证据
+
+原仓库根目录 `DESKTOP_MCP_ACCEPTANCE.md` 记录通过项与缺口，`LOCAL_WEBGPU_ENVIRONMENT.md` 记录复用环境和清理边界。
+验收脚本 `tests/desktop-mcp/verify-live.mjs` 从 stdin 读取原生菜单复制的配置，不把凭据写入证据。

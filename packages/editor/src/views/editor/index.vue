@@ -12,6 +12,7 @@ import {
 import { useEditorLayoutMode } from "@/hooks/useEditorLayoutMode";
 import {fetchGetOneScene} from "@/http/api/scenes";
 import {t} from "@/language";
+import {setDesktopSceneState} from '@/utils/integration/desktopBridge';
 import {initializeConfig} from "@/utils/storage/config";
 import {
   installEditorObjectsBridge,
@@ -62,11 +63,12 @@ let rightResizeStartX = 0;
 let rightResizeStartWidth = 0;
 
 onMounted(() => {
+  setDesktopSceneState('loading');
   installEditorObjectsBridge();
   setEditorObjectsBridgeReady(false);
 
   // 启动websocket连接
-  connectWebSocket(import.meta.env.VITE_GLOB_SOCKET_URL);
+  connectWebSocket(window.h3dDesktop ? window.h3dDesktop.socketUrl : import.meta.env.VITE_GLOB_SOCKET_URL);
   window.addEventListener("resize", handleWindowResize);
   Hooks.useAddSignal("sceneCleared", applyPersistedSceneVisibility);
   Hooks.useAddSignal("sceneLoadComplete", applyPersistedSceneVisibility);
@@ -77,6 +79,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  setDesktopSceneState('inactive');
   stopLeftResize();
   stopRightResize();
   window.removeEventListener("resize", handleWindowResize);
@@ -210,6 +213,7 @@ async function init() {
     const res = await fetchGetOneScene(id);
 
     if (res.error !== null) {
+      setDesktopSceneState('failed', res.error.msg);
       window.$message?.error(t("scene.Failed to get scene data"))
       return;
     }
@@ -233,18 +237,20 @@ async function init() {
 
     getScene(res.data);
   }else{
+    setDesktopSceneState('failed', 'Missing scene ID');
     window.$message?.error(t("prompt['Parameter error!']"));
   }
 }
 
 //拉取场景
 async function getScene(sceneInfo) {
-  try { await window.viewer.ready; } catch { return; }
+  try { await window.viewer.ready; } catch (error) { setDesktopSceneState('failed', error); return; }
   // 如果创建的是空场景则无场景包
   if (!sceneInfo.zip) {
     window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";
     window.viewer.loadEnv(true);
     setEditorObjectsBridgeReady(true);
+    setDesktopSceneState('ready');
 
     return;
   }
@@ -260,7 +266,8 @@ async function getScene(sceneInfo) {
   const p = new Package(window.viewer);
   p.unpack({
     url: sceneInfo.zip,
-    onError: () => {
+    onError: (error) => {
+      setDesktopSceneState('failed', error);
       // Package/Viewer already reports the actual error and retains the scene.
       // Do not leave a permanent loading notice after a rejected package.
       notice.destroy();
@@ -274,6 +281,7 @@ async function getScene(sceneInfo) {
 
       Hooks.useDispatchSignal("sceneLoadComplete");
       setEditorObjectsBridgeReady(true);
+      setDesktopSceneState('ready');
 
       notice.destroy();
 

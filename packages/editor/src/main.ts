@@ -10,6 +10,7 @@ import '@/assets/less/index.less';
 
 import {setupI18n} from '@/language';
 import {setupRouter} from "@/router";
+import {installDesktopBridge} from '@/utils/integration/desktopBridge';
 
 // import DisableDevtool from 'disable-devtool';
 
@@ -60,6 +61,7 @@ async function main() {
     setupI18n(app);
 
     app.mount('#app');
+    installDesktopBridge();
 
     // 已禁用开发者工具阻止功能，允许使用 F12
     // if (import.meta.env.PROD){

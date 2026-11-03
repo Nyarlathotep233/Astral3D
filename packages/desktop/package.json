@@ -1,0 +1,36 @@
+{
+  "name": "@h3d/desktop",
+  "productName": "H3D Desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "H3D local editor and MCP bridge",
+  "author": "Haolink",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "test": "node --test ../../tests/desktop-mcp/*.test.mjs",
+    "prepackage": "npm --prefix ../.. run editor:build",
+    "preinstaller": "npm --prefix ../.. run editor:build",
+    "package": "npm run build && electron-builder --win dir --publish never",
+    "installer": "npm run build && electron-builder --win nsis --publish never"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "zod": "4.6.7"
+  },
+  "build": {
+    "appId": "cn.haolink.h3d.desktop",
+    "asar": true,
+    "directories": { "output": "release" },
+    "files": ["dist/**", "package.json"],
+    "extraResources": [{ "from": "../editor/dist", "to": "editor" }],
+    "win": { "target": "nsis", "signAndEditExecutable": false },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
+    "publish": null
+  }
+}

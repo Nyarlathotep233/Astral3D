@@ -136,6 +136,22 @@ $testRoot = 'C:/project/3D/Astral3D/Astral3D/.codex-logs/service-acceptance-2026
   `.codex-logs/rollback-regression-scratch`，编译文件复用 `.codex-logs/renderer-rollback-classes`。
   均不是新建业务环境，清理仍需用户确认。
 
+## 2026-11-03 Electron / MCP 本地小样
+
+- 前端在原仓库从 `8c8b7cf` 新建 `feature/desktop-mcp`，没有另建 worktree 或复制源码。
+- 复用 `astral_webgpu_acceptance_20261031` 与已有 `service-acceptance-20261031/static`；**未再次复制/导入数据库或业务资源**。
+- 复用现有修复后的 `astral-service/astral-web/target/astral-web.jar`，启动时明确传入副本 datasource、uploadDir、currentAbPath、temporaryFolder，监听本地 8080。
+  日志 `service-acceptance-20261031/service-desktop.stdout.log` / `service-desktop.stderr.log`，PID 文件 `service.pid`；PID 只是记录，清理前必须核对实际命令行。
+- Electron 加载生产 `packages/editor/dist`，未启动 8090/8091 Vite。桌面包在 `packages/desktop`，构建 `dist`，分发产物 `release`（Git 忽略）。生产资源复制进分发包是打包产物，不是第二套业务资源库。
+- 测试 profile **唯一复用** `.codex-logs/desktop-mcp/user-data`：设置、加密 MCP 凭据、浏览器缓存。常规启动不指定测试变量时使用 `%APPDATA%/H3D Desktop`，不要误当同一 profile。
+- 测试日志/截图/脱敏 JSON 在 `.codex-logs/desktop-mcp`；build 日志 `.codex-logs/desktop-editor-build.log`、`desktop-package.log`。不存明文 MCP token；原生复制配置会进入用户剪贴板，勿公开。
+- 依赖在现有 pnpm workspace/store 中增加 Electron/MCP/build 依赖；下载缓存由 Electron/electron-builder 管理。没有手工复制整个 node_modules。
+- 只读复用场景 `9600ea7d95189faa4acfa697c0a93d68`；此轮未创建/保存场景，没有修改原库或原资源。
+- 清理时先关闭对应 Electron/8080 服务，核对端口和进程；确认不再需要后才能删除桌面 release/dist、测试 profile 或日志。
+  不连带删除副本业务数据库、共享 static、既有恢复备份。不要为复测新建第二份数据库/profile。
+- 实施状态与已知缺口见 `DESKTOP_MCP_ACCEPTANCE.md`，不将只读小样记为完整批量编辑验收通过。
+- 同日已由用户手动启动独立解包 exe，继续复用同一测试 userData；实际只读 MCP、塔吊/蓝色方块及简单 Play 复测记录在 `desktop-mcp/live-packaged*`。验收后关闭客户端，8098 MCP / 9231 临时调试端口均已释放，8080 副本业务服务保留。未安装 NSIS、未增加数据库/业务资源副本。
+
 ## 复用与清理
 
 1. 先核对工作树、监听端口、运行进程的实际 datasource 和资源路径；不要只看配置文件。
