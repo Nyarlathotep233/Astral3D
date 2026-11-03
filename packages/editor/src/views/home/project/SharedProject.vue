@@ -208,6 +208,7 @@ onMounted(() => {
   grid-gap: 18px;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   grid-auto-flow: row;
+  grid-auto-rows: max-content;
   align-content: start;
 
   .project-empty {
