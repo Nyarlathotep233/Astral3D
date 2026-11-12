@@ -41,7 +41,7 @@ export const ASSET_UPLOAD_SUPPORT_TYPE = {
 }
 
 // 需要转换的BIM模型格式
-export const NEED_CONVERT_BIM_MODEL = ["rvt", "rfa"];
+export const NEED_CONVERT_BIM_MODEL = ["rvt"];
 
 // 支持的图纸文件类型
 export const DRAWING_SUPPORT_TYPE = ["dwg", "dxf", "png", "jpg", "jpeg"];

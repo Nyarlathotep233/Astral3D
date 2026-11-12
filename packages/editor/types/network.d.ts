@@ -96,5 +96,6 @@ declare interface WebSocketMessage<T>{
 
 declare interface Bim2GltfWsData{
     conversionStatus:"progress" | "completed" | "failed",
-    item:IBIMData
+    item:IBIMData,
+    message?:string
 }

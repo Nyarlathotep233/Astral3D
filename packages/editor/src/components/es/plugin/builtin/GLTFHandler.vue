@@ -198,6 +198,8 @@ function handleImportScene(){
     window.$message?.success(t("plugin.gltfHandler['Import success!']"));
     // outputFiles = [];
     // optimizeDone.value = false;
+  }).catch(error => {
+    window.$message?.error(error instanceof Error ? error.message : t("prompt['Load fail,Please try again later!']"));
   });
 
   // 关闭插件弹窗

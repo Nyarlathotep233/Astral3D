@@ -163,10 +163,12 @@ class Loader {
         this._exrLoader = value;
     }
 
-	loadItemList(items) {
-		LoaderUtils.getFilesFromItemList( items, ( files, filesMap )=>{
-			this.loadFiles( files, filesMap);
-		} );
+	loadItemList(items): Promise<THREE.Object3D[]> {
+        return new Promise((resolve, reject) => {
+            LoaderUtils.getFilesFromItemList(items, (files, filesMap) => {
+                this.loadFiles(files, filesMap).then(resolve, reject);
+            });
+        });
 	}
 
 	loadFiles(files, filesMap): Promise<THREE.Object3D[]> {
@@ -231,6 +233,8 @@ class Loader {
             const extension = filename.split('.').pop().toLowerCase();
 
             const reader = new FileReader();
+            reader.addEventListener('error', () => reject(reader.error || new Error('Failed to read model file')));
+            reader.addEventListener('abort', () => reject(new Error('Model file reading was aborted')));
             // reader.addEventListener( 'progress', function ( event ) {
             // 	const size = '(' + Math.floor( event.total / 1000 ).format() + ' KB)';
             // 	const progress = Math.floor( ( event.loaded / event.total ) * 100 ) + '%';
@@ -362,44 +366,25 @@ class Loader {
                     reader.readAsArrayBuffer(file);
                     break;
                 case 'glb':
-                    reader.addEventListener('load', async (event) => {
-                        const contents = event.target?.result as ArrayBuffer;
-
-                        const loader = await this.createGLTFLoader(manager);
-                        loader.parse(contents, '', (result) => {
-                            const scene = result.scene;
-                            scene.name = filename;
-
-                            scene.animations.push(...result.animations);
-                            addToScene && App.execute(new AddObjectCommand(scene));
-
-                            this.disposeGLTFLoaderEffects(loader);
-
-                            resolve(scene);
-                        });
-                    }, false);
-                    reader.readAsArrayBuffer(file);
-
-                    break;
                 case 'gltf':
                     reader.addEventListener('load', async (event) => {
-                        const contents = event.target?.result as ArrayBuffer;
-                        const loader = await this.createGLTFLoader(manager);
-
-                        loader.parse(contents, '', (result) => {
-                            const scene = result.scene;
-                            scene.name = filename;
-
-                            scene.animations.push(...result.animations);
-                            addToScene && App.execute(new AddObjectCommand(scene));
-
-                            this.disposeGLTFLoaderEffects(loader);
-
-                            resolve(scene);
-                        });
+                        try {
+                            const loader = await this.createGLTFLoader(manager, true);
+                            try {
+                                const result = await loader.parseAsync(event.target?.result as ArrayBuffer, '');
+                                const scene = result.scene;
+                                scene.name = filename;
+                                scene.animations.push(...result.animations);
+                                addToScene && App.execute(new AddObjectCommand(scene));
+                                resolve(scene);
+                            } finally {
+                                this.disposeGLTFLoaderEffects(loader);
+                            }
+                        } catch (error) {
+                            reject(error);
+                        }
                     }, false);
                     reader.readAsArrayBuffer(file);
-
                     break;
                 case 'js':
                 case 'json':
@@ -890,34 +875,18 @@ class Loader {
                                 break;
                             }
                         case 'glb':
-                            {
-                                const loader = await this.createGLTFLoader();
-
-                                loader.parse(file.buffer, '', (result) => {
-                                    const scene = result.scene;
-
-                                    scene.animations.push(...result.animations);
-                                    addToScene && App.execute(new AddObjectCommand(scene));
-
-                                    this.disposeGLTFLoaderEffects(loader);
-
-                                    resolve(scene);
-                                });
-                                break;
-                            }
                         case 'gltf':
                             {
-                                const loader = await this.createGLTFLoader(manager);
-
-                                loader.parse(strFromU8(file), '', (result)=> {
+                                const loader = await this.createGLTFLoader(manager, true);
+                                try {
+                                    const result = await loader.parseAsync(extension === 'glb' ? file.buffer : strFromU8(file), '');
                                     const scene = result.scene;
                                     scene.animations.push(...result.animations);
                                     addToScene && App.execute(new AddObjectCommand(scene));
-
-                                    this.disposeGLTFLoaderEffects(loader);
-
                                     resolve(scene);
-                                });
+                                } finally {
+                                    this.disposeGLTFLoaderEffects(loader);
+                                }
                                 break;
                             }
                     }

@@ -22,7 +22,7 @@ const splitSize = ref(Config.getKey("sceneSplitSize") || 0.8);
 /** 鼠标拖拽事件相关 **/
 const dragStore = useDragStore();
 
-function sceneDrop(event) {
+async function sceneDrop(event) {
   event.preventDefault();
 
   // 设置鼠标释放时的区域屏幕坐标
@@ -43,11 +43,15 @@ function sceneDrop(event) {
   //拖拽大纲视图
   if (dt.types[0] === 'text/plain') return;
 
-  if (dt.items) {
-    //支持文件夹
-    Loader.loadItemList(dt.items);
-  } else {
-    Loader.loadFiles(dt.files, undefined);
+  try {
+    if (dt.items) {
+      //支持文件夹
+      await Loader.loadItemList(dt.items);
+    } else {
+      await Loader.loadFiles(dt.files, undefined);
+    }
+  } catch (error) {
+    window.$message?.error(error instanceof Error ? error.message : window.$t("prompt['Load fail,Please try again later!']"));
   }
 }
 

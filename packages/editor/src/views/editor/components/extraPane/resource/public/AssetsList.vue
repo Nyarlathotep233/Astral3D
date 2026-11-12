@@ -115,7 +115,7 @@ function addToScene(asset: IAssets.Item,positionOrObject?: Vector3 | Object3D) {
           .then(blob => {
             // const file = new File([blob],`${asset.name}.${asset.file.split('/').pop()?.split('.')[1]}`);
             const file = new File([blob],`${asset.name}${asset.file.substring(asset.file.lastIndexOf('.'))}`);
-            Loader.loadFiles([file], undefined).then((models:any) => {
+            return Loader.loadFiles([file], undefined).then((models:any) => {
               if (positionOrObject) {
                 models[0].position.copy(positionOrObject);
                 Hooks.useDispatchSignal("sceneGraphChanged");

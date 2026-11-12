@@ -178,29 +178,18 @@ async function addToScene(item) {
     closable: false,
   })
 
-  // 从gltfFilePath字段去服务器获取gltf文件
-  fetch(`file/static/${item.gltfFilePath}`)
-      .then(res => res.blob())
-      .then(data => {
-        const file = new File([data as Blob], `${item.fileName}.glb`, {type: 'model/gltf-binary'});
-
-        notice.content = window.$t("scene['Parsing to editor']");
-
-        Loader.loadFiles([file], undefined).finally(() => {
-          setTimeout(() => {
-            notice.destroy();
-            Hooks.useDispatchSignal("sceneGraphChanged");
-          }, 800)
-          Hooks.useDispatchSignal("sceneGraphChanged");
-        })
-      })
-      .catch(() => {
-        notice.content = window.$t("scene['Failed to get scene data']");
-        setTimeout(() => {
-          notice.destroy();
-        }, 500)
-        return null;
-      })
+  try {
+    const response = await fetch(`file/static/${item.gltfFilePath}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const file = new File([await response.blob()], `${item.fileName}.glb`, {type: 'model/gltf-binary'});
+    notice.content = window.$t("scene['Parsing to editor']");
+    await Loader.loadFiles([file], undefined);
+    Hooks.useDispatchSignal("sceneGraphChanged");
+    setTimeout(() => notice.destroy(), 800);
+  } catch (error) {
+    notice.content = `${window.$t("scene['Failed to get scene data']")}${error instanceof Error ? `: ${error.message}` : ''}`;
+    notice.closable = true;
+  }
 }
 
 // 开始拖拽事件
@@ -227,7 +216,7 @@ function Bim2GltfWsHandle(data: WebSocketMessage<Bim2GltfWsData>) {
   if (data.type === "bim2gltf") {
     // 判断订阅者，以确定是自己还是别人轻量化的结果
     if (data.subscriber === websocketStore.uname) {
-      let wsNotice = uploadDialogRef.value?.getNotice();
+      let wsNotice = uploadDialogRef.value?.getNotice(data.data.item.id);
       // 如果是自己的轻量化结果，使用用户登录结果作为uname，则用户可能关闭页面再打开时接收到消息，应继续显示
       if (!wsNotice) {
         wsNotice = window.$notification.info({
@@ -238,9 +227,9 @@ function Bim2GltfWsHandle(data: WebSocketMessage<Bim2GltfWsData>) {
       }
 
       if (data.data.conversionStatus === "progress") {
-        wsNotice.content = t("bim['BIM lightweight is in progress']") + "...";
+        wsNotice.content = data.data.message || t("bim['BIM lightweight is in progress']") + "...";
       } else if (data.data.conversionStatus === "completed") {
-        wsNotice.content = `${t("bim['BIM lightweight completed']")},${t("bim.In")} ${data.data.item.conversionDuration} ${t("bim.seconds")}`;
+        wsNotice.content = data.data.message || `${t("bim['BIM lightweight completed']")},${t("bim.In")} ${data.data.item.conversionDuration} ${t("bim.seconds")}`;
         setTimeout(() => {
           wsNotice?.destroy();
           window.$dialog.info({
@@ -255,12 +244,11 @@ function Bim2GltfWsHandle(data: WebSocketMessage<Bim2GltfWsData>) {
         }, 800)
         getBim2GltfList();
       } else if (data.data.conversionStatus === "failed") {
-        wsNotice.content = t("bim['BIM lightweight failed']");
-        setTimeout(() => {
-          wsNotice?.destroy();
-        }, 1500)
+        wsNotice.content = data.data.message || t("bim['BIM lightweight failed']");
+        wsNotice.closable = true;
         getBim2GltfList();
       }
+      uploadDialogRef.value?.handleTaskResult(data.data);
     } else {
       if (data.data.conversionStatus !== "completed") return;
 

@@ -68,12 +68,14 @@ function loadModel(position?: { x: number, y: number, z: number }) {
       .then(res => res.blob())
       .then(blob => {
         const file = new File([blob], props.resource.path?.split('/').pop() as string || props.resource.name as string);
-        Astral3D.Loader.loadFiles([file], undefined).then((models:any) => {
+        return Astral3D.Loader.loadFiles([file], undefined).then((models:any) => {
           if (position) {
             models[0].position.copy(position);
             Astral3D.Hooks.useDispatchSignal("sceneGraphChanged");
           }
         });
+      }).catch(error => {
+        window.$message?.error(error instanceof Error ? error.message : window.$t("prompt['Load fail,Please try again later!']"));
       });
 }
 

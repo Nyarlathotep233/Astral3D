@@ -772,7 +772,7 @@ export default {
         "Please enter the conversion view name": "请输入转换视图名称",
         "Display style": "视觉样式",
         "Colour": "着色",
-        "Realistic": "真实",
+        "Textures": "贴图",
         "View default": "视图默认",
         "Coordinate reference": "坐标参考",
         "Origin": "原点",
