@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AgentConnection: typeof import('./src/components/header/right/AgentConnection.vue')['default']
     AssetPreview: typeof import('./src/components/preview/AssetPreview.vue')['default']
     CAD: typeof import('./src/components/drawing/toolbar/CAD.vue')['default']
     CadLayers: typeof import('./src/components/drawing/toolbar/CadLayers.vue')['default']

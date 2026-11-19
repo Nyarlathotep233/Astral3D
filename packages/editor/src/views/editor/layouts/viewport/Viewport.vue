@@ -33,6 +33,8 @@ const globalStore = useGlobalConfigStore();
 const pluginStore = usePluginStore();
 
 const viewportRef = ref();
+let ownedViewer: Viewer | undefined;
+let disposed = false;
 
 onMounted(async () => {
   App.setConfig({
@@ -50,8 +52,10 @@ onMounted(async () => {
       baseUrl:"/file/static/"
     }
   });
+  ownedViewer = window.viewer;
 
   await nextTick();
+  if (disposed) return;
 
   // 添加astral engine内置插件并监听插件注册
   pluginStore.setPlugins(Array.from(window.viewer.modules.plugin.plugins.values()));
@@ -66,8 +70,16 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true;
   Hooks.useRemoveSignal("pluginInstall",pluginStore.addPlugin);
   Hooks.useRemoveSignal("pluginUninstall",pluginStore.removePlugin);
+  // Routes own their viewer. Retained global signals would otherwise act on
+  // later projects and can attach the same loaded group more than once.
+  if (ownedViewer) {
+    App.clear();
+    ownedViewer.dispose();
+    ownedViewer = undefined;
+  }
 })
 
 function handleViewportPointerdown(){

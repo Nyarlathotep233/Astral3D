@@ -39,6 +39,16 @@
     </n-alert>
   </div>
 
+  <div v-if="recoveryAvailable && state === 'idle'" class="play-mode-error">
+    <n-alert type="warning" title="上次运行未正常结束">
+      运行前场景已保存在此浏览器。恢复不会执行脚本，恢复前的当前场景也会保留备份。
+      <n-space class="mt-2">
+        <n-button size="small" :loading="restoring" @click="restoreRecovery">恢复运行前场景</n-button>
+        <n-button size="small" :disabled="restoring" @click="dismissRecovery">忽略</n-button>
+      </n-space>
+    </n-alert>
+  </div>
+
   <Teleport to="body">
     <div v-if="state === 'packing'" class="play-mode-packing" role="status" aria-live="polite">
       <n-spin size="large" />
@@ -56,7 +66,11 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from "vue";
 import {PlayFilledAlt, StopFilledAlt} from "@vicons/carbon";
-import {App, Package} from "@astral3d/engine";
+import {App} from "@astral3d/engine";
+import {useRoute} from "vue-router";
+import {packAuthoringSnapshot, registerAgentPlayController, persistAgentRunSnapshot, getAgentRunRecovery,
+  dismissAgentRunRecovery, restoreAgentRunRecovery} from "@/utils/integration/agentRuntime";
+import {recordAgentDiagnostic} from "@/utils/integration/agentDiagnostics";
 import {t} from "@/language";
 import {
   isRuntimeEventMessage,
@@ -64,7 +78,6 @@ import {
   PLAY_MESSAGE_TYPE,
   RUNTIME_MESSAGE_TYPE,
   type PlayLoadMessage,
-  type PlayPackageFile,
 } from "@/utils/playMode";
 import {
   getAllowedEditorParentOrigin,
@@ -83,12 +96,18 @@ const iframeSrc = ref("");
 const errorMessage = ref("");
 const snapshotProgress = ref(0);
 const cancelling = ref(false);
+const recoveryAvailable = ref(false);
+const restoring = ref(false);
+const route = useRoute();
+const recoverySceneId = () => String(route.params.id || App.project.getKey('sceneInfo.id') || '');
 
 let activeSessionId = "";
 let pendingSnapshot: PlayLoadMessage | null = null;
 let loadTimer: number | undefined;
 let disposed = false;
 let runtimeErrorShown = false;
+let lastHeartbeat = 0;
+let unregisterPlay: (() => void) | undefined;
 
 function clearLoadTimer() {
   if (loadTimer !== undefined) {
@@ -120,7 +139,10 @@ function stopPlay() {
     return;
   }
 
+  const sceneId = recoverySceneId();
+  const runId = activeSessionId;
   resetPlaySession();
+  void dismissAgentRunRecovery(sceneId, runId).catch(error => console.warn('Could not update recovery status', error));
 }
 
 function togglePlay() {
@@ -133,45 +155,8 @@ function togglePlay() {
 }
 
 async function createSnapshot(sessionId: string): Promise<PlayLoadMessage> {
-  const packageInstance = new Package(window.viewer);
-  const packages: PlayPackageFile[] = [];
-
-  try {
-    const result = await packageInstance.pack({
-      name: `play-${sessionId}`,
-      layer: 2,
-      zipUploadFun: async (file: File) => {
-        if (activeSessionId !== sessionId) throw new Error(PACK_CANCELLED);
-
-        const buffer = await file.arrayBuffer();
-        if (activeSessionId !== sessionId) throw new Error(PACK_CANCELLED);
-
-        packages.push({
-          name: file.name,
-          mimeType: file.type || "application/zip",
-          buffer,
-        });
-        return file.name;
-      },
-      onProgress: (progress) => {
-        if (Number.isFinite(progress)) snapshotProgress.value = Math.round(progress);
-      },
-    });
-
-    const firstPackageName = String(result.firstUploadResult || "");
-    if (!firstPackageName || !packages.some((file) => file.name === firstPackageName)) {
-      throw new Error(t("playMode.First package missing"));
-    }
-
-    return {
-      type: PLAY_MESSAGE_TYPE.load,
-      sessionId,
-      firstPackageName,
-      packages,
-    };
-  } finally {
-    packageInstance.dispose();
-  }
+  return packAuthoringSnapshot(sessionId, { isCurrent: () => activeSessionId === sessionId,
+    onProgress: progress => { if (Number.isFinite(progress)) snapshotProgress.value = Math.round(progress); } });
 }
 
 async function startPlay() {
@@ -196,7 +181,10 @@ async function startPlay() {
       return;
     }
 
+    await persistAgentRunSnapshot(sceneId, snapshot);
+    if (activeSessionId !== sessionId || disposed) { if (!disposed) resetPlaySession(); return; }
     pendingSnapshot = snapshot;
+    lastHeartbeat = Date.now();
     const query = new URLSearchParams({editorPlay: "true", sessionId});
     iframeSrc.value = `${window.location.origin}/#/preview/${encodeURIComponent(sceneId)}?${query}`;
     state.value = "loading";
@@ -205,6 +193,7 @@ async function startPlay() {
       if (activeSessionId !== sessionId) return;
       errorMessage.value = t("playMode.Load timeout");
       state.value = "failed";
+      recordAgentDiagnostic({ kind: 'runtime', severity: 'error', runId: sessionId, sceneId, phase: 'load', message: errorMessage.value });
     }, PLAY_LOAD_TIMEOUT);
   } catch (error) {
     if (disposed) return;
@@ -215,6 +204,7 @@ async function startPlay() {
 
     errorMessage.value = error instanceof Error ? error.message : String(error);
     state.value = "failed";
+    recordAgentDiagnostic({ kind: 'runtime', severity: 'error', runId: sessionId, sceneId, phase: 'start', message: errorMessage.value });
   }
 }
 
@@ -230,6 +220,9 @@ function handlePlayStatus(event: MessageEvent) {
   ) return;
 
   switch (event.data.type) {
+    case PLAY_MESSAGE_TYPE.heartbeat:
+      lastHeartbeat = Date.now();
+      break;
     case PLAY_MESSAGE_TYPE.ready: {
       if (state.value !== "loading" || !pendingSnapshot) return;
 
@@ -242,14 +235,25 @@ function handlePlayStatus(event: MessageEvent) {
     case PLAY_MESSAGE_TYPE.started:
       clearLoadTimer();
       state.value = "running";
+      lastHeartbeat = Date.now();
+      recordAgentDiagnostic({ kind: 'runtime', severity: 'info', runId: activeSessionId, sceneId: recoverySceneId(), phase: 'started', message: 'Preview started from the authoring snapshot.' });
       postRuntimeReady();
       break;
     case PLAY_MESSAGE_TYPE.error:
       clearLoadTimer();
       errorMessage.value = event.data.message || t("playMode.Start failed");
       state.value = "failed";
+      recordAgentDiagnostic({ kind: 'runtime', severity: 'error', runId: activeSessionId, sceneId: recoverySceneId(), phase: 'load', message: errorMessage.value });
       break;
     case PLAY_MESSAGE_TYPE.runtimeError:
+      recordAgentDiagnostic({ kind: event.data.diagnostic?.kind || 'runtime', severity: 'error',
+        ...event.data.diagnostic, runId: activeSessionId, sceneId: recoverySceneId(), message: event.data.message || t('playMode.Runtime error') });
+      if (state.value === 'loading' && event.data.diagnostic?.kind === 'script'
+        && ['initialize', 'loaded'].includes(event.data.diagnostic.phase || '')) {
+        clearLoadTimer();
+        errorMessage.value = event.data.message || t('playMode.Runtime error');
+        state.value = 'failed';
+      }
       console.error(`[Play Mode] ${event.data.message || t("playMode.Runtime error")}`);
       if (!runtimeErrorShown) {
         runtimeErrorShown = true;
@@ -303,10 +307,30 @@ function handleWindowMessage(event: MessageEvent) {
 
 onMounted(() => {
   window.addEventListener("message", handleWindowMessage);
+  unregisterPlay = registerAgentPlayController({ start: startPlay, stop: stopPlay,
+    status: () => ({ state: state.value === 'running' && Date.now() - lastHeartbeat > 15_000 ? 'unresponsive' : state.value,
+      runId: activeSessionId, error: errorMessage.value, lastHeartbeat }),
+    runtimeViewer: () => (iframeRef.value?.contentWindow as (Window & { viewer?: typeof window.viewer }) | null)?.viewer,
+  });
+  void getAgentRunRecovery(recoverySceneId()).then(saved => { recoveryAvailable.value = saved?.state === 'active'; })
+    .catch(error => console.warn('Could not inspect recovery snapshots', error));
 });
+
+async function dismissRecovery() {
+  await dismissAgentRunRecovery(recoverySceneId());
+  recoveryAvailable.value = false;
+}
+
+async function restoreRecovery() {
+  restoring.value = true;
+  try { await restoreAgentRunRecovery(recoverySceneId()); recoveryAvailable.value = false; window.$message?.success('已恢复运行前场景，脚本未执行'); }
+  catch (error) { window.$message?.error(String(error)); }
+  finally { restoring.value = false; }
+}
 
 onBeforeUnmount(() => {
   disposed = true;
+  unregisterPlay?.();
   activeSessionId = "";
   clearLoadTimer();
   pendingSnapshot = null;

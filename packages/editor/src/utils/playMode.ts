@@ -4,6 +4,7 @@ export const PLAY_MESSAGE_TYPE = {
   started: "h3d:play:started",
   error: "h3d:play:error",
   runtimeError: "h3d:play:runtime-error",
+  heartbeat: "h3d:play:heartbeat",
 } as const;
 
 export const RUNTIME_MESSAGE_TYPE = "h3d:runtime:event" as const;
@@ -33,9 +34,11 @@ export type PlayStatusMessage = {
     | typeof PLAY_MESSAGE_TYPE.ready
     | typeof PLAY_MESSAGE_TYPE.started
     | typeof PLAY_MESSAGE_TYPE.error
-    | typeof PLAY_MESSAGE_TYPE.runtimeError;
+    | typeof PLAY_MESSAGE_TYPE.runtimeError
+    | typeof PLAY_MESSAGE_TYPE.heartbeat;
   sessionId: string;
   message?: string;
+  diagnostic?: { kind?: 'script' | 'shader' | 'runtime'; objectUuid?: string; scriptName?: string; materialUuid?: string; phase?: string; stack?: string };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,6 +67,7 @@ export function isPlayStatusMessage(value: unknown): value is PlayStatusMessage 
     PLAY_MESSAGE_TYPE.started,
     PLAY_MESSAGE_TYPE.error,
     PLAY_MESSAGE_TYPE.runtimeError,
+    PLAY_MESSAGE_TYPE.heartbeat,
   ].includes(value.type as PlayStatusMessage["type"]);
 }
 

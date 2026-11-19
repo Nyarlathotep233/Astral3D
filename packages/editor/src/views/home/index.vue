@@ -5,6 +5,7 @@ import { Cube, Sprout, Settings, DataCenter } from '@vicons/carbon';
 import { t } from "@/language";
 import { useGlobalConfigStore } from "@/store/modules/globalConfig";
 import Setting from "@/components/setting/Setting.vue";
+import AgentConnection from '@/components/header/right/AgentConnection.vue';
 import Project from "./container/Project.vue";
 import DataCenterComponents from "./container/DataCenter.vue";
 import AssetsCenter from "./container/AssetsCenter.vue";
@@ -136,6 +137,7 @@ function handleSelectMenu(key: string, item: HomeMenuOption){
           <span class="home-active-dot"></span>
           {{ getMenuLabel(activeMenu) }}
         </div>
+        <AgentConnection />
         <Setting :show-setting="false" />
       </div>
     </header>

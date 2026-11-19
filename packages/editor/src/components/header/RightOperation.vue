@@ -5,6 +5,7 @@ import {App,Hooks} from "@astral3d/engine";
 import Setting from "@/components/setting/Setting.vue";
 import SaveToService from "@/components/header/right/SaveToService.vue";
 import LayoutModeToggle from "@/components/header/LayoutModeToggle.vue";
+import AgentConnection from "@/components/header/right/AgentConnection.vue";
 import {t} from "@/language";
 import {Airplay} from "@vicons/carbon";
 
@@ -32,6 +33,7 @@ function handlePreview(){
 <template>
   <div id="rightOperation">
     <LayoutModeToggle />
+    <AgentConnection />
 
     <!--  保存至服务器  -->
     <SaveToService class="mr-2" />
