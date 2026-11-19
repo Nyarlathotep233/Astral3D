@@ -21,6 +21,7 @@ import {
 import EsCubeLoading from "@/components/es/EsCubeLoading.vue";
 import EsPlugin from "@/components/es/EsPlugin.vue";
 import ObjectScript from "@/components/code/Script.vue";
+import {setAgentSceneState} from '@/utils/integration/agentState';
 
 initializeConfig(App.storage);
 
@@ -60,10 +61,14 @@ let resizeStartX = 0;
 let resizeStartWidth = 0;
 let rightResizeStartX = 0;
 let rightResizeStartWidth = 0;
+let disposed = false;
+let scenePackage: Package | undefined;
+let loadNotice: {destroy():void} | undefined;
 
 onMounted(() => {
   installEditorObjectsBridge();
   setEditorObjectsBridgeReady(false);
+  setAgentSceneState('loading', route.params.id as string);
 
   // 启动websocket连接
   connectWebSocket(import.meta.env.VITE_GLOB_SOCKET_URL);
@@ -77,6 +82,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true;
+  scenePackage?.dispose();
+  scenePackage = undefined;
+  loadNotice?.destroy();
+  loadNotice = undefined;
+  setAgentSceneState('inactive');
   stopLeftResize();
   stopRightResize();
   window.removeEventListener("resize", handleWindowResize);
@@ -208,8 +219,10 @@ async function init() {
   const id = route.params.id as string;
   if (id) {
     const res = await fetchGetOneScene(id);
+    if (disposed) return;
 
     if (res.error !== null) {
+      setAgentSceneState('failed');
       window.$message?.error(t("scene.Failed to get scene data"))
       return;
     }
@@ -230,7 +243,7 @@ async function init() {
     initLoading.value = false;
 
     await nextTick();
-
+    if (disposed) return;
     getScene(res.data);
   }else{
     window.$message?.error(t("prompt['Parameter error!']"));
@@ -244,6 +257,7 @@ function getScene(sceneInfo) {
     window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";
     window.viewer.loadEnv(true);
     setEditorObjectsBridgeReady(true);
+    setAgentSceneState('ready');
 
     return;
   }
@@ -255,22 +269,39 @@ function getScene(sceneInfo) {
     content: t("other.Loading") + "...",
     closable: false,
   })
+  loadNotice = notice;
 
   const p = new Package(window.viewer);
+  scenePackage = p;
   p.unpack({
     url: sceneInfo.zip,
     onSceneLoad: () => {
+      if (disposed || scenePackage !== p) return;
       drawingInfo.value = App.project.getKey("drawing");
     },
     onComplete: () => {
+      if (disposed || scenePackage !== p) return;
       window.$message?.success(t("scene['Loading completed!']"));
 
       Hooks.useDispatchSignal("sceneLoadComplete");
       setEditorObjectsBridgeReady(true);
+      setAgentSceneState('ready');
 
       notice.destroy();
 
       p.dispose();
+      scenePackage = undefined;
+      loadNotice = undefined;
+    },
+    onError: (error) => {
+      if (disposed || scenePackage !== p) return;
+      setAgentSceneState('failed');
+      setEditorObjectsBridgeReady(false);
+      notice.destroy();
+      loadNotice = undefined;
+      scenePackage = undefined;
+      p.dispose();
+      window.$message?.error(`场景加载失败：${error.message}`);
     }
   })
   return;

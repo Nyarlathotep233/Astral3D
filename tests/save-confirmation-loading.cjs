@@ -48,6 +48,9 @@ async function waitForUpload(started) {
     if (url.pathname === `/api/editor3d/scenes/get/${scene.id}`) {
       return route.fulfill({json: result(scene)});
     }
+    if (request.method() === 'GET' && url.pathname.startsWith(`/api/editor3d/scenes/save/${scene.id}/operations/`)) {
+      return route.fulfill({json: result(null)});
+    }
     if (request.method() === 'GET') return route.continue();
     if (url.pathname === '/api/common/upload') {
       uploads++;
@@ -62,11 +65,33 @@ async function waitForUpload(started) {
       Object.assign(scene, request.postDataJSON());
       return route.fulfill({json: result(scene)});
     }
+    if (url.pathname === `/api/editor3d/scenes/save/${scene.id}` && request.method() === 'POST') {
+      updates++;
+      const body = request.postDataJSON();
+      Object.assign(scene, body.scene);
+      return route.fulfill({json: result({scene, operationId: body.operationId, expectedVersion: body.expectedVersion, replayed: false})});
+    }
     throw new Error(`Unexpected write blocked: ${request.method()} ${url.pathname}`);
   });
   await page.route('**/file/static/save-ui-test/cover.png', route => route.fulfill({contentType: 'image/png', body: png}));
 
   try {
+    scene.zip = 'save-ui-test/incomplete.zip';
+    await page.route('**/file/static/save-ui-test/incomplete.zip', route => route.fulfill({status: 404, body: 'fixture'}));
+    await page.goto(`${baseURL}/#/editor/${scene.id}`);
+    const state = await page.evaluateHandle(async () => (await import('/src/utils/integration/agentState.ts')).agentState);
+    await page.waitForFunction(s => s.sceneState === 'failed', state);
+    await state.dispose();
+    assert.equal(await page.getByRole('button', {name: '保存', exact: true}).isDisabled(), true);
+    const prevented = await page.evaluate(async () => {
+      const {saveSceneToService} = await import('/src/utils/common/saveSceneToService.ts');
+      return saveSceneToService().then(() => false, () => true);
+    });
+    assert.equal(prevented, true);
+    assert.equal(uploads, 0);
+    assert.equal(updates, 0);
+    scene.zip = '';
+    await page.reload();
     await page.goto(`${baseURL}/#/editor/${scene.id}`, {waitUntil: 'networkidle'});
     const save = page.getByRole('button', {name: '保存', exact: true});
     await save.waitFor();

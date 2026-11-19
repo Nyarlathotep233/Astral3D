@@ -25,11 +25,13 @@ import {onMounted, ref} from "vue";
 import {DocumentImport, DocumentExport} from "@vicons/carbon";
 import JSZip from "jszip";
 import {t} from "@/language";
-import {App, Export, Loader, Package} from "@astral3d/engine";
+import {App, Loader} from "@astral3d/engine";
 import {useGlobalConfigStore} from "@/store/modules/globalConfig";
-import {createPrefabFile, instantiatePrefab} from "@/utils/common/prefab";
+import {agentState} from "@/utils/integration/agentState";
+import {loadAuthoringPackage, replaceAuthoringScene} from "@/utils/common/loadAuthoringScene";
+import {instantiatePrefab} from "@/utils/common/prefab";
 
-const exportClass = new Export();
+import { createSceneExport, downloadSceneExport, type SceneExportFormat } from "@/utils/common/sceneExport";
 const globalConfigStore = useGlobalConfigStore();
 const exportingProjectBundle = ref(false);
 const importingProjectBundle = ref(false);
@@ -85,16 +87,6 @@ interface SceneProjectZipManifest {
       packageContentHint: string[];
     };
   };
-}
-
-interface SceneStandaloneManifest {
-  signature: string;
-  version: number;
-  exportedAt: string;
-  sourceSceneId: string;
-  sourceSceneInfo: ISceneInfo;
-  firstPackageName: string;
-  packageFiles: string[];
 }
 
 const exportOptions = [
@@ -200,49 +192,9 @@ const exportOptions = [
   }
 ]
 
-function downloadBlobFile(file: File | Blob, filename: string) {
-  const url = URL.createObjectURL(file);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function readAsDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("readAsDataUrl failed"));
-    reader.readAsDataURL(file);
-  });
-}
-
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
   return await res.blob();
-}
-
-async function resolveCoverImageDataUrl(coverPicture: string): Promise<string | undefined> {
-  if (!coverPicture) return;
-
-  try {
-    // blob/data/http 链接直接读取，其余路径按服务静态目录读取
-    const coverUrl = /^(blob:|data:|https?:)/.test(coverPicture) ? coverPicture : `/file/static/${coverPicture}`;
-    const res = await fetch(coverUrl);
-    if (!res.ok) return;
-
-    const blob = await res.blob();
-    return await readAsDataUrl(blob);
-  } catch {
-    return;
-  }
-}
-
-function safeFilename(input: string) {
-  return input.replace(/[\\/:*?"<>|]/g, "_");
 }
 
 function isProjectBundlePayload(payload: unknown): payload is SceneProjectBundle {
@@ -285,548 +237,81 @@ function validateBundleFiles(bundleData: SceneProjectBundle, packageBlobMap: Map
   }
 }
 
-async function restoreSceneAfterImportFailure(sceneInfo: ISceneInfo) {
+async function restoreSceneAfterImportFailure(sceneInfo: ISceneInfo, signal: AbortSignal) {
+  signal.throwIfAborted();
   globalConfigStore.loadingText = "导入失败，正在恢复原场景...";
-
   App.clear();
-  if (!sceneInfo.zip) {
+  if (sceneInfo.zip) {
+    window.viewer.options.hdr = "";
+    await loadAuthoringPackage({url:sceneInfo.zip}, signal);
+  } else {
     window.viewer.options.hdr = "/static/resource/hdr/cloudy.hdr";
     window.viewer.loadEnv(true);
-    App.project.setKey("sceneInfo", sceneInfo);
-    return;
   }
-
-  window.viewer.options.hdr = "";
-  let restorePackage: Package | null = new Package(window.viewer);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        reject(new Error("restore timeout"));
-      }, 180000);
-
-      restorePackage!.unpack({
-        url: sceneInfo.zip,
-        onComplete: () => {
-          window.clearTimeout(timeout);
-          resolve();
-        }
-      });
-    });
-  } finally {
-    if (restorePackage) {
-      restorePackage.dispose();
-      restorePackage = null;
-    }
-  }
-
   App.project.setKey("sceneInfo", sceneInfo);
 }
 
-async function exportProjectBundle() {
-  const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
-  if (!sceneInfo?.id) {
-    window.$message?.error(window.$t("scene['The project does not exist!']"));
-    return;
-  }
-
+async function exportShared(format: SceneExportFormat, object = undefined) {
   exportingProjectBundle.value = true;
   globalConfigStore.loading = true;
-  globalConfigStore.loadingText = "正在生成项目包...";
-
-  const packageInstance = new Package(window.viewer);
-  const packageFiles: File[] = [];
-
+  globalConfigStore.loadingText = "正在导出...";
   try {
-    const exported = await packageInstance.pack({
-      name: `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}`,
-      layer: 2,
-      zipUploadFun: async (zipFile: File) => {
-        const cloned = new File([await zipFile.arrayBuffer()], zipFile.name, {type: zipFile.type});
-        packageFiles.push(cloned);
-        return cloned.name;
-      },
-      onProgress: (progress) => {
-        globalConfigStore.loadingText = `${progress}%`;
-      }
-    });
-
-    const packageFilesMap: Record<string, string> = {};
-    for (const file of packageFiles) {
-      packageFilesMap[file.name] = await readAsDataUrl(file);
-    }
-
-    const firstPackageName = String(exported.firstUploadResult || packageFiles[0]?.name || "");
-    if (!firstPackageName || !packageFilesMap[firstPackageName]) {
-      throw new Error("Failed to find first package");
-    }
-
-    const coverImageDataUrl = await resolveCoverImageDataUrl(sceneInfo.coverPicture || "");
-    const groupPackages = packageFiles.map(file => file.name).filter(name => name !== firstPackageName);
-
-    const bundlePayload: SceneProjectBundle = {
-      signature: BUNDLE_SIGNATURE,
-      version: BUNDLE_VERSION,
-      exportedAt: new Date().toISOString(),
-      sourceSceneId: sceneInfo.id,
-      sourceSceneInfo: JSON.parse(JSON.stringify(sceneInfo)),
-      firstPackageName,
-      packageFiles: packageFilesMap,
-      coverImageDataUrl,
-      initRequirements: {
-        apis: [
-          {
-            name: "fetchGetOneScene",
-            method: "GET",
-            path: "/api/editor3d/scenes/get/{sceneId}",
-            purpose: "读取 sceneInfo（包含 zip 路径与基础配置）"
-          },
-          {
-            name: "fetchSceneFirstPackage",
-            method: "GET",
-            path: "/file/static/{sceneInfo.zip}",
-            purpose: "读取首包（scene.json/config.json/纹理/图纸等）"
-          },
-          {
-            name: "fetchSceneGroupPackages",
-            method: "GET",
-            path: "/file/static/{zipPrefix}/{groupUuid}.zip",
-            purpose: "按分组加载剩余场景资源包"
-          }
-        ],
-        resources: {
-          firstPackage: firstPackageName,
-          groupPackages,
-          packageFileCount: packageFiles.length,
-          coverPicture: sceneInfo.coverPicture || "",
-          packageContentHint: ["scene.json", "config.json", "Textures/*", "Geometries/*", "Drawing/*"]
-        }
-      }
-    };
-
-    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}${PROJECT_JSON_SUFFIX}`;
-    const jsonBlob = new Blob([JSON.stringify(bundlePayload, null, 2)], {type: "application/json;charset=utf-8"});
-    downloadBlobFile(jsonBlob, fileName);
-
-    window.$message?.success("项目包导出成功");
-  } catch (err) {
-    console.error(err);
-    window.$message?.error("项目包导出失败");
+    const result = await createSceneExport({format, object, onProgress: progress => {
+      globalConfigStore.loadingText = `${Number.isFinite(progress) ? progress : 100}%`;
+    }});
+    downloadSceneExport(result);
+    window.$message?.success("导出成功");
+  } catch (error) {
+    console.error(error);
+    window.$message?.error(error instanceof Error ? error.message : "导出失败");
   } finally {
-    packageInstance.dispose();
     exportingProjectBundle.value = false;
     globalConfigStore.loading = false;
   }
 }
+async function exportProjectBundle() { return exportShared('project-json'); }
+async function exportProjectBundleZip() { return exportShared('project-zip'); }
+async function exportStandalonePreviewZip() { return exportShared('standalone'); }
 
-async function exportProjectBundleZip() {
-  const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
-  if (!sceneInfo?.id) {
-    window.$message?.error(window.$t("scene['The project does not exist!']"));
-    return;
-  }
-
-  exportingProjectBundle.value = true;
-  globalConfigStore.loading = true;
-  globalConfigStore.loadingText = "正在生成项目包(.zip)...";
-
-  const packageInstance = new Package(window.viewer);
-  const packageFiles: File[] = [];
-
-  try {
-    const exported = await packageInstance.pack({
-      name: `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}`,
-      layer: 2,
-      zipUploadFun: async (zipFile: File) => {
-        const cloned = new File([await zipFile.arrayBuffer()], zipFile.name, {type: zipFile.type});
-        packageFiles.push(cloned);
-        return cloned.name;
-      },
-      onProgress: (progress) => {
-        globalConfigStore.loadingText = `${progress}%`;
-      }
-    });
-
-    const firstPackageName = String(exported.firstUploadResult || packageFiles[0]?.name || "");
-    if (!firstPackageName) {
-      throw new Error("Failed to find first package");
-    }
-
-    const archive = new JSZip();
-    const packageFolder = archive.folder("packages") as JSZip;
-
-    for (const pkg of packageFiles) {
-      packageFolder.file(pkg.name, await pkg.arrayBuffer());
-    }
-
-    const groupPackages = packageFiles.map(file => file.name).filter(name => name !== firstPackageName);
-    const manifest: SceneProjectZipManifest = {
-      signature: ZIP_BUNDLE_SIGNATURE,
-      version: BUNDLE_VERSION,
-      exportedAt: new Date().toISOString(),
-      sourceSceneId: sceneInfo.id,
-      sourceSceneInfo: JSON.parse(JSON.stringify(sceneInfo)),
-      firstPackageName,
-      packageFiles: packageFiles.map(file => file.name),
-      initRequirements: {
-        resources: {
-          firstPackage: firstPackageName,
-          groupPackages,
-          packageFileCount: packageFiles.length,
-          packageContentHint: ["scene.json", "config.json", "Textures/*", "Geometries/*", "Drawing/*"]
-        }
-      }
-    };
-
-    archive.file("project.json", JSON.stringify(manifest, null, 2));
-
-    const zipBlob = await archive.generateAsync({type: "blob"});
-    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}${PROJECT_ZIP_SUFFIX}`;
-    downloadBlobFile(zipBlob, fileName);
-
-    window.$message?.success("项目包(.zip)导出成功");
-  } catch (err) {
-    console.error(err);
-    window.$message?.error("项目包(.zip)导出失败");
-  } finally {
-    packageInstance.dispose();
-    exportingProjectBundle.value = false;
-    globalConfigStore.loading = false;
-  }
-}
-
-function buildStandalonePreviewHtml(sceneName: string) {
-  const escapedTitle = (sceneName || "Astral3D Standalone Preview")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-  const closeScriptTag = "</scr" + "ipt>";
-
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapedTitle}</title>
-  <style>
-    :root, :root > body, #app {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background: #0b1020;
-      color: #dbe7ff;
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-
-    /* 防止全局样式污染 HtmlPanel 注入的嵌套 html/body，导致黑底方块 */
-    .css3d-imported-content,
-    .css3d-imported-content html,
-    .css3d-imported-content body {
-      background: transparent !important;
-    }
-
-    #status {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      z-index: 10;
-      padding: 8px 12px;
-      border-radius: 8px;
-      background: rgba(16, 24, 48, 0.8);
-      border: 1px solid rgba(130, 180, 255, 0.35);
-      font-size: 12px;
-      line-height: 1.5;
-      max-width: calc(100vw - 24px);
-      box-sizing: border-box;
-      white-space: pre-wrap;
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <div id="status">正在初始化 Standalone 预览...</div>
-
-  <script src="./runtime/astral3d.umd.js">${closeScriptTag}
-  <script>
-    (async function () {
-      const statusEl = document.getElementById("status");
-      const setStatus = function (text) {
-        if (statusEl) statusEl.textContent = String(text || "");
-      };
-
-      const ensure = function (value, message) {
-        if (!value) throw new Error(message);
-        return value;
-      };
-
-      try {
-        const sdk = ensure(window.Astral3D, "Astral3D runtime 未加载");
-        const manifestRes = await fetch("./project.json");
-        if (!manifestRes.ok) throw new Error("读取 project.json 失败: HTTP " + manifestRes.status);
-        const manifest = await manifestRes.json();
-        const firstPackageName = ensure(manifest.firstPackageName, "project.json 缺少 firstPackageName");
-
-        const viewer = new sdk.Viewer({
-          container: ensure(document.getElementById("app"), "容器不存在"),
-          edit: { enabled: false },
-          grid: { enabled: false },
-          request: { baseUrl: "" }
-        });
-
-        window.viewer = viewer;
-
-        setStatus("正在加载场景首包...");
-        const loader = new sdk.Package(viewer);
-        await new Promise(function (resolve, reject) {
-          const timer = window.setTimeout(function () {
-            reject(new Error("场景加载超时（180s）"));
-          }, 180000);
-
-          loader.unpack({
-            url: "./packages/" + firstPackageName,
-            onProgress: function (progress) {
-              const p = Number(progress || 0).toFixed(2);
-              setStatus("正在加载场景... " + p + "%");
-            },
-            onComplete: function () {
-              window.clearTimeout(timer);
-              loader.dispose();
-              resolve();
-            }
-          });
-        });
-
-        setStatus("场景加载完成");
-        window.setTimeout(function () {
-          if (statusEl) statusEl.style.display = "none";
-        }, 1200);
-      } catch (err) {
-        console.error(err);
-        setStatus("Standalone 预览初始化失败:\\n" + (err && err.message ? err.message : String(err)));
-      }
-    })();
-  ${closeScriptTag}
-</body>
-</html>`;
-}
-
-async function fetchRuntimeFile(path: string) {
-  const res = await fetch(path);
-  if (!res.ok) {
-    throw new Error(`读取运行时文件失败: ${path} (HTTP ${res.status})`);
-  }
-  return await res.arrayBuffer();
-}
-
-async function exportStandalonePreviewZip() {
-  const sceneInfo = App.project.getKey("sceneInfo") as ISceneInfo | undefined;
-  if (!sceneInfo?.id) {
-    window.$message?.error(window.$t("scene['The project does not exist!']"));
-    return;
-  }
-
-  exportingProjectBundle.value = true;
-  globalConfigStore.loading = true;
-  globalConfigStore.loadingText = "正在生成 Standalone 预览包(.zip)...";
-
-  const packageInstance = new Package(window.viewer);
-  const packageFiles: File[] = [];
-
-  try {
-    const exported = await packageInstance.pack({
-      name: `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}`,
-      layer: 2,
-      zipUploadFun: async (zipFile: File) => {
-        const cloned = new File([await zipFile.arrayBuffer()], zipFile.name, {type: zipFile.type});
-        packageFiles.push(cloned);
-        return cloned.name;
-      },
-      onProgress: (progress) => {
-        globalConfigStore.loadingText = `${progress}%`;
-      }
-    });
-
-    const firstPackageName = String(exported.firstUploadResult || packageFiles[0]?.name || "");
-    if (!firstPackageName) {
-      throw new Error("Failed to find first package");
-    }
-
-    const archive = new JSZip();
-    const packageFolder = archive.folder("packages") as JSZip;
-    const runtimeFolder = archive.folder("runtime") as JSZip;
-
-    for (const pkg of packageFiles) {
-      packageFolder.file(pkg.name, await pkg.arrayBuffer());
-    }
-
-    const manifest: SceneStandaloneManifest = {
-      signature: "h3d-scene-standalone-preview-package-zip",
-      version: BUNDLE_VERSION,
-      exportedAt: new Date().toISOString(),
-      sourceSceneId: sceneInfo.id,
-      sourceSceneInfo: JSON.parse(JSON.stringify(sceneInfo)),
-      firstPackageName,
-      packageFiles: packageFiles.map(file => file.name),
-    };
-
-    // 运行时资源：MVP 仅注入核心 SDK UMD
-    const runtimeUmd = await fetchRuntimeFile("/standalone-runtime/astral3d.umd.js");
-    runtimeFolder.file("astral3d.umd.js", runtimeUmd);
-    archive.file("project.json", JSON.stringify(manifest, null, 2));
-    archive.file("index.html", buildStandalonePreviewHtml(sceneInfo.sceneName || sceneInfo.id));
-    archive.file("README.txt", [
-      "Standalone 预览包（MVP）",
-      "",
-      "打开方式：",
-      "1. 解压后在该目录启动一个静态文件服务（例如 npx serve .）",
-      "2. 浏览器访问 http://127.0.0.1:3000/index.html（或实际端口）",
-      "",
-      "说明：",
-      "- 该包仅用于预览，不包含编辑能力。",
-      "- 该包不依赖 astral 后端接口。",
-      "- 若场景脚本主动调用外部接口，离线环境下可能失败。",
-      "",
-    ].join("\n"));
-
-    const zipBlob = await archive.generateAsync({type: "blob"});
-    const fileName = `${safeFilename(sceneInfo.sceneName || sceneInfo.id)}-${Date.now()}.h3d-standalone-preview.zip`;
-    downloadBlobFile(zipBlob, fileName);
-
-    window.$message?.success("Standalone 预览包导出成功");
-  } catch (err) {
-    console.error(err);
-    window.$message?.error(err instanceof Error ? err.message : "Standalone 预览包导出失败");
-  } finally {
-    packageInstance.dispose();
-    exportingProjectBundle.value = false;
-    globalConfigStore.loading = false;
-  }
-}
-
-async function importProjectBundleFile(bundleData: SceneProjectBundle) {
+async function importProjectBundleFile(bundleData: SceneProjectBundle, epoch = agentState.documentEpoch, zipFiles?: Map<string, Blob>) {
   importingProjectBundle.value = true;
   globalConfigStore.loading = true;
   globalConfigStore.loadingText = "正在导入项目包...";
-
-  let firstPackageUrl = "";
-  let packageInstance: Package | null = null;
-  const createdObjectUrls: string[] = [];
-
-  const previousRequest = (window.viewer.options.request || {}) as Record<string, any>;
-  const previousBaseUrl = String(previousRequest.baseUrl || "");
-  const previousPackageFetch = Package._fetch;
-  const currentSceneInfo = JSON.parse(JSON.stringify((App.project.getKey("sceneInfo") || {}) as ISceneInfo));
-  let sceneCleared = false;
-
+  const currentSceneInfo = structuredClone(App.project.getKey("sceneInfo"));
   try {
-    const packageBlobMap = new Map<string, Blob>();
-    for (const [name, dataUrl] of Object.entries(bundleData.packageFiles)) {
-      packageBlobMap.set(name, await dataUrlToBlob(dataUrl));
+    const files = zipFiles ?? new Map<string, Blob>();
+    if (!zipFiles) {
+      for (const [name, dataUrl] of Object.entries(bundleData.packageFiles)) files.set(name, await dataUrlToBlob(dataUrl));
     }
-
-    validateBundleFiles(bundleData, packageBlobMap);
-
-    const firstBlob = packageBlobMap.get(bundleData.firstPackageName);
-    if (!firstBlob) {
-      throw new Error("first package missing");
-    }
-
-    firstPackageUrl = URL.createObjectURL(firstBlob);
-    createdObjectUrls.push(firstPackageUrl);
-
-    const lookupPackageBlob = (url: string) => {
-      const filename = decodeURIComponent(url.split("/").pop() || "");
-      return packageBlobMap.get(filename);
-    };
-
-    Package._fetch = (url: string, options: { onSuccess?: (res: { blob: () => Blob }) => void, onError?: (err: unknown) => void } = {}) => {
-      const blob = lookupPackageBlob(url);
-      if (!blob) {
-        options.onError?.(new Error(`missing package file: ${url}`));
-        return;
-      }
-      options.onSuccess?.({
-        blob: () => blob
-      });
-    };
-
-    // 用对象URL导入首包，需要临时禁用 baseUrl 前缀拼接
-    if (!window.viewer.options.request) {
-      window.viewer.options.request = {baseUrl: ""};
-    } else {
-      window.viewer.options.request.baseUrl = "";
-    }
-
-    // 清空当前场景后导入
-    App.clear();
-    window.viewer.options.hdr = "";
-    sceneCleared = true;
-
-    packageInstance = new Package(window.viewer);
-    await new Promise<void>((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        reject(new Error("import timeout"));
-      }, 180000);
-
-      packageInstance!.unpack({
-        url: firstPackageUrl,
-        onProgress: (progress) => {
-          globalConfigStore.loadingText = `${progress.toFixed(2)}%`;
-        },
-        onComplete: () => {
-          window.clearTimeout(timeout);
-          resolve();
-        }
-      });
-    });
-
-    // 导入到“当前场景”：保持当前场景元数据，避免污染后续保存参数
-    App.project.setKey("sceneInfo", currentSceneInfo);
-
-    window.$message?.success(t("plugin.gltfHandler['Import success!']"));
-  } catch (err) {
-    console.error(err);
-
-    // 先恢复 fetch/baseUrl，再尝试回滚场景，避免 import 失败后影响保存链路
-    Package._fetch = previousPackageFetch;
-    if (!window.viewer.options.request) {
-      window.viewer.options.request = {baseUrl: previousBaseUrl};
-    } else {
-      window.viewer.options.request.baseUrl = previousBaseUrl;
-    }
-
-    if (sceneCleared) {
+    validateBundleFiles(bundleData, files);
+    if (!files.has(bundleData.firstPackageName)) throw new Error("项目包缺少首包");
+    await replaceAuthoringScene(currentSceneInfo.id, epoch, async signal => {
       try {
-        await restoreSceneAfterImportFailure(currentSceneInfo);
-        window.$message?.error("项目包导入失败，已恢复到导入前场景");
-      } catch (restoreErr) {
-        console.error(restoreErr);
+        window.viewer.options.hdr = "";
+        await loadAuthoringPackage({
+          url:bundleData.firstPackageName, files,
+          onProgress: progress => { globalConfigStore.loadingText = `${progress.toFixed(2)}%`; },
+        }, signal);
         App.project.setKey("sceneInfo", currentSceneInfo);
-        window.$message?.error("项目包导入失败，且恢复原场景失败，请刷新页面后重试");
+        window.$message?.success(t("plugin.gltfHandler['Import success!']"));
+        return true;
+      } catch (error) {
+        signal.throwIfAborted();
+        await restoreSceneAfterImportFailure(currentSceneInfo, signal);
+        window.$message?.error(`项目包导入失败，已恢复最近保存的场景：${String(error)}`);
+        return false;
       }
-    } else {
-      App.project.setKey("sceneInfo", currentSceneInfo);
-      window.$message?.error("项目包导入失败");
-    }
+    });
+  } catch (error) {
+    window.$message?.error(`项目包导入失败：${String(error)}`);
   } finally {
-    if (packageInstance) {
-      packageInstance.dispose();
-    }
-    createdObjectUrls.forEach(url => URL.revokeObjectURL(url));
-    Package._fetch = previousPackageFetch;
-    if (!window.viewer.options.request) {
-      window.viewer.options.request = {baseUrl: previousBaseUrl};
-    } else {
-      window.viewer.options.request.baseUrl = previousBaseUrl;
-    }
     importingProjectBundle.value = false;
     globalConfigStore.loading = false;
   }
 }
 
 async function importProjectBundleZipFile(zipFile: File) {
+  const epoch = agentState.documentEpoch;
   const zipContent = await new JSZip().loadAsync(zipFile);
   const manifestFile = zipContent.file("project.json");
   if (!manifestFile) {
@@ -838,15 +323,14 @@ async function importProjectBundleZipFile(zipFile: File) {
     throw new Error("不是有效的项目包(.zip)");
   }
 
-  const packageFilesMap: Record<string, string> = {};
+  const files = new Map<string, Blob>();
   for (const fileName of manifest.packageFiles) {
     const packageFile = zipContent.file(`packages/${fileName}`);
     if (!packageFile) {
       throw new Error(`项目包缺少分包文件：${fileName}`);
     }
 
-    const blob = await packageFile.async("blob");
-    packageFilesMap[fileName] = await readAsDataUrl(blob);
+    files.set(fileName, await packageFile.async("blob"));
   }
 
   const firstPackageName = manifest.firstPackageName;
@@ -863,7 +347,7 @@ async function importProjectBundleZipFile(zipFile: File) {
     sourceSceneId: manifest.sourceSceneId || sourceSceneInfo.id || "",
     sourceSceneInfo: sourceSceneInfo,
     firstPackageName,
-    packageFiles: packageFilesMap,
+    packageFiles: {},
     initRequirements: {
       apis: [],
       resources: {
@@ -878,7 +362,7 @@ async function importProjectBundleZipFile(zipFile: File) {
     }
   };
 
-  await importProjectBundleFile(bundleData);
+  await importProjectBundleFile(bundleData, epoch, files);
 }
 
 function handleImport() {
@@ -977,15 +461,14 @@ async function handleExportSelect(key: string) {
     }
 
     if (key === "exportObjectToPrefab") {
-      const prefabFile = await createPrefabFile(App.selected);
-      downloadBlobFile(prefabFile, prefabFile.name);
-      window.$message?.success("Prefab 导出成功");
+      await exportShared('prefab', App.selected as any);
       return;
     }
   }
-
-  // @ts-ignore
-  exportClass[key]?.();
+  const suffix = key.replace(/^export(?:Object|Scene)To/, '');
+  const formats: Record<string, SceneExportFormat> = {JSON:'json',Glb:'glb',Gltf:'gltf',Obj:'obj',Ply:'ply',PlyBinary:'ply-binary',Stl:'stl',StlBinary:'stl-binary',USDZ:'usdz'};
+  const format = formats[suffix];
+  if (format) await exportShared(format, key.startsWith('exportObject') ? App.selected as any : undefined);
 }
 
 onMounted(() => {

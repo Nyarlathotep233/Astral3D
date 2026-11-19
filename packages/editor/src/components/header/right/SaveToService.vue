@@ -6,6 +6,7 @@ import {t} from "@/language";
 import {App} from "@astral3d/engine";
 import {useGlobalConfigStore} from "@/store/modules/globalConfig";
 import {saveSceneToService} from "@/utils/common/saveSceneToService";
+import {agentState} from "@/utils/integration/agentState";
 
 const globalConfigStore = useGlobalConfigStore();
 const dialogOpen = ref(false);
@@ -65,7 +66,7 @@ function save(){
 </script>
 
 <template>
-  <n-button type="primary" :disabled="dialogOpen || globalConfigStore.loading" @click="save">
+  <n-button type="primary" :disabled="dialogOpen || globalConfigStore.loading || agentState.sceneState !== 'ready' || agentState.recoveryRequired" @click="save">
     <template #icon>
       <n-icon>
         <Save />

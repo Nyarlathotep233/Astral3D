@@ -28,6 +28,25 @@ export function fetchUpdateScene(id:string,data:ISceneFetchData) {
     return request.put<ISceneFetchData>(`/editor3d/scenes/update/${id}`,data);
 }
 
+export interface SceneSaveReceipt {
+    scene: ISceneFetchData;
+    operationId: string;
+    expectedVersion: number;
+    replayed: boolean;
+    warnings?: string[];
+}
+
+/** 原子版本检查与持久 operationId 去重。 */
+export function fetchSaveScene(id: string, scene: Omit<ISceneFetchData, "hasDrawing"> & {hasDrawing: number | boolean}, expectedVersion: number, operationId: string) {
+    return request.post<SceneSaveReceipt>(`/editor3d/scenes/save/${encodeURIComponent(id)}`, {
+        scene, expectedVersion, operationId,
+    });
+}
+
+export function fetchSceneSaveOperation(id: string, operationId: string) {
+    return request.get<SceneSaveReceipt | null>(`/editor3d/scenes/save/${encodeURIComponent(id)}/operations/${encodeURIComponent(operationId)}`);
+}
+
 /**
  * 删除工程
  * @param {number} id
