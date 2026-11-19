@@ -72,7 +72,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import * as THREE from "three";
-import { App, Hooks, SetScriptValueCommand, SetMaterialValueCommand } from "@astral3d/engine";
+import { App, Hooks } from "@astral3d/engine";
+import { applyGuiMaterialEdit } from '@/utils/integration/agentMaterials';
+import { applyGuiScriptEdit } from '@/utils/integration/agentScripts';
 import { t } from "@/language";
 import CodeEditor from "@/components/code/CodeEditor.vue";
 import ScriptAiAgentPanel from "@/components/code/ScriptAiAgentPanel.vue";
@@ -106,6 +108,7 @@ const isAiDiffMode = computed(() => {
 
 let currentScript: IScript.IStruct | string | null = null;
 let currentObject: THREE.Mesh | null = null;
+let currentMaterialSlot = 0;
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
@@ -137,8 +140,10 @@ function scriptRemoved(_: THREE.Object3D, sc: IScript.IStruct) {
   }
 }
 
-function editScript(object: THREE.Object3D, sc: IScript.IStruct | string) {
+function editScript(object: THREE.Object3D, sc: IScript.IStruct | string, slot = 0) {
   resetAiState();
+  currentMaterialSlot = slot;
+  const material = App.getObjectMaterial(object, slot) as THREE.ShaderMaterial;
 
   if (typeof sc === "object") {
     mode.value = "javascript";
@@ -152,14 +157,14 @@ function editScript(object: THREE.Object3D, sc: IScript.IStruct | string) {
         mode.value = "glsl";
         script.name = "Vertex Shader";
         // @ts-ignore
-        script.source = object.material.vertexShader || "";
+        script.source = material.vertexShader || "";
         break;
 
       case "fragmentShader":
         mode.value = "glsl";
         script.name = "Fragment Shader";
         // @ts-ignore
-        script.source = object.material.fragmentShader || "";
+        script.source = material.fragmentShader || "";
         break;
 
       case "programInfo":
@@ -168,17 +173,15 @@ function editScript(object: THREE.Object3D, sc: IScript.IStruct | string) {
         // @ts-ignore
         script.source = JSON.stringify({
           // @ts-ignore
-          defines: object.material.defines,
+          defines: material.defines,
           // @ts-ignore
-          uniforms: object.material.uniforms,
-          // @ts-ignore
-          attributes: object.material.attributes,
+          uniforms: material.uniforms,
         }, null, "\t");
         break;
     }
 
     // @ts-ignore
-    title.value = object.material.name + " / " + script.name;
+    title.value = material.name + " / " + script.name;
   }
 
   currentScript = sc;
@@ -250,17 +253,16 @@ function submit(e: Event) {
 
   if (typeof currentScript === "object") {
     if (value !== currentScript?.source) {
-      App.execute(new SetScriptValueCommand(currentObject as THREE.Object3D, currentScript as IScript.IStruct, "source", value));
+      try { applyGuiScriptEdit(currentObject, (currentScript as IScript.IStruct).name, value); }
+      catch (error) { errors.value = [error instanceof Error ? error.message : String(error)]; return; }
     }
     show.value = false;
     return;
   }
 
   if (mode.value === "glsl" && currentObject.material) {
-    // @ts-ignore
-    currentObject.material[currentScript] = value;
-    (currentObject.material as THREE.Material).needsUpdate = true;
-    Hooks.useDispatchSignal("materialChanged", currentObject, 0);
+    try { applyGuiMaterialEdit(currentObject, currentMaterialSlot, { [currentScript as string]: value }); }
+    catch (error) { errors.value = [error instanceof Error ? error.message : String(error)]; return; }
     show.value = false;
     return;
   }
@@ -272,27 +274,10 @@ function submit(e: Event) {
 
   if (!currentObject.material) return;
 
-  const json = JSON.parse(value);
-
-  if (JSON.stringify((currentObject.material as THREE.Material).defines) !== JSON.stringify(json.defines)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "defines", json.defines);
-    cmd.updatable = false;
-    App.execute(cmd);
-  }
-
-  // @ts-ignore
-  if (JSON.stringify(currentObject.material.uniforms) !== JSON.stringify(json.uniforms)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "uniforms", json.uniforms);
-    cmd.updatable = false;
-    App.execute(cmd);
-  }
-
-  // @ts-ignore
-  if (JSON.stringify(currentObject.material.attributes) !== JSON.stringify(json.attributes)) {
-    const cmd = new SetMaterialValueCommand(currentObject, "attributes", json.attributes);
-    cmd.updatable = false;
-    App.execute(cmd);
-  }
+  try {
+    const json = JSON.parse(value);
+    applyGuiMaterialEdit(currentObject, currentMaterialSlot, { defines: json.defines || {}, uniforms: json.uniforms || {} });
+  } catch (error) { errors.value = [error instanceof Error ? error.message : String(error)]; return; }
 
   show.value = false;
 }

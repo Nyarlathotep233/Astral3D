@@ -21,12 +21,19 @@ let currentParametersComponent: any = null;
 
 onMounted(() => {
   Hooks.useAddSignal("objectSelected", build);
-  Hooks.useAddSignal("geometryChanged", build);
+  Hooks.useAddSignal("geometryChanged", onGeometryChanged);
+  build(App.selected);
 })
 onBeforeUnmount(() => {
   Hooks.useRemoveSignal("objectSelected", build);
-  Hooks.useRemoveSignal("geometryChanged", build);
+  Hooks.useRemoveSignal("geometryChanged", onGeometryChanged);
 })
+
+function onGeometryChanged(object) {
+  // Commands can change an unselected object (including an entire agent batch).
+  // The parameter panels read App.selected, so only rebuild its geometry panel.
+  if (object === App.selected) build(object);
+}
 
 async function build(object) {
   if (object && object.geometry) {
@@ -131,11 +138,11 @@ const update = (method: string) => {
     </div>
 
     <!-- parameters -->
-    <div>
+    <div v-if="hasGeometry">
       <SidebarGeometryModifiers v-if="geometryData.type === 'BufferGeometry'"/>
       <Suspense v-else>
         <template #default>
-          <currentParametersComponent></currentParametersComponent>
+          <currentParametersComponent :key="geometryData.uuid"></currentParametersComponent>
         </template>
         <template #fallback>
           <p> Loading... </p>

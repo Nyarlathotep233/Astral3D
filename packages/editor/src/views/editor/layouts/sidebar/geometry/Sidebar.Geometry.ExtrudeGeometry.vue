@@ -19,6 +19,8 @@ let shapes;
 
 onMounted(() => {
   const geometry = App.selected?.geometry;
+  // Selection can change while this asynchronous panel is loading.
+  if (geometry?.type !== 'ExtrudeGeometry' || !geometry.parameters) return;
   const parameters = geometry.parameters;
   shapes = parameters.shapes;
   options = parameters.options;

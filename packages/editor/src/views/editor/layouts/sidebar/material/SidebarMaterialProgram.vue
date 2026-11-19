@@ -38,7 +38,7 @@ function handleObjectSelected(selected) {
 }
 
 function programClick(key) {
-  Hooks.useDispatchSignal("editScript", object, key);
+  Hooks.useDispatchSignal("editScript", object, key, materialSlot);
 }
 
 function update() {
