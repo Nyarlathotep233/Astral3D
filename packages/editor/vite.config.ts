@@ -41,7 +41,9 @@ export default defineConfig(async ({mode, command}) => {
 
     // 为@monaco-editor定义define
     const define:any = {
-        "process.env": process.env
+        // Browser bundles must never capture server/MCP credentials from the
+        // build shell. Monaco only needs the environment mode compatibility shim.
+        "process.env": { NODE_ENV: mode === 'production' ? 'production' : 'development' }
     };
     if (mode === "development") {
         dotenv.config({ path: ".env.development" });
@@ -158,7 +160,11 @@ export default defineConfig(async ({mode, command}) => {
             // }),
             viteStaticCopy({
                 targets: [
-                    { src: 'node_modules/@astral3d/engine/dist/libs/*', dest: 'assets/libs' }
+                    { src: 'node_modules/@astral3d/engine/dist/libs/*', dest: 'assets/libs' },
+                    { src: '../sdk/dist/astral3d.umd.js', dest: 'standalone-runtime' },
+                    { src: '../sdk/public/*', dest: 'standalone-runtime' },
+                    { src: 'node_modules/rhino3dm/rhino3dm.js', dest: 'assets/libs/rhino3dm' },
+                    { src: 'node_modules/rhino3dm/rhino3dm.wasm', dest: 'assets/libs/rhino3dm' }
                 ],
             }),
             ...plugins
@@ -187,6 +193,15 @@ export default defineConfig(async ({mode, command}) => {
                 credentials: true
             },
             proxy: {
+                '/agent': {
+                    target: env.VITE_MCP_BRIDGE_URL || 'http://127.0.0.1:8098',
+                    changeOrigin: true,
+                    ws: true,
+                },
+                '/mcp': {
+                    target: env.VITE_MCP_BRIDGE_URL || 'http://127.0.0.1:8098',
+                    changeOrigin: true,
+                },
                 '^/api': {
                     target: env.VITE_PROXY_URL,
                     changeOrigin: true,

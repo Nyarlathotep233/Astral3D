@@ -1,0 +1,8 @@
+{
+  "name": "@h3d/agent-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.mjs" },
+  "dependencies": { "zod": "4.6.7" }
+}

@@ -13,6 +13,10 @@
     "node": ">=23.11.0"
   },
   "dependencies": {
+    "@h3d/agent-contracts": "workspace:*",
+    "localforage": "^1.10.0",
+    "web-ifc-three": "^0.0.126",
+    "rhino3dm": "8.35.0",
     "@ant-design/colors": "^7.0.2",
     "@astral3d/engine": "workspace:^",
     "@gltf-transform/core": "^4.2.1",

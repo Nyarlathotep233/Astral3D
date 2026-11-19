@@ -4,6 +4,8 @@
     "description": "Astral3D Engine",
     "author": "ErSan <mlt131220@163.com>",
     "scripts": {
+        "mcp:dev": "pnpm --filter @h3d/mcp-bridge start",
+        "mcp:test": "node --test tests/web-mcp/*.test.mjs",
         "docs:dev": "pnpm run -C packages/docs docs:dev",
         "docs:dev-clean": "pnpm run -C packages/docs docs:dev-clean",
         "docs:build": "pnpm run -C packages/docs docs:build",
