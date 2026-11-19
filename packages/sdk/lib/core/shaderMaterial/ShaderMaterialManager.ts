@@ -8,6 +8,9 @@ import {StreamerWallShaderMaterial} from "@/core/shaderMaterial/modules/Streamer
 import { SnowingShaderMaterial } from "@/core/shaderMaterial/modules/SnowingShaderMaterial";
 import App from "@/core/app/App";
 
+const builtins = { CircleGridShaderMaterial, DynamicCheckerboardShaderMaterial, FlickerShaderMaterial,
+    SlowSmokeShaderMaterial, SnowingShaderMaterial, StreamerWallShaderMaterial };
+
 interface IShaderMaterialClass {
     Name: string,
     _ShaderMaterial: ShaderMaterial,
@@ -28,6 +31,12 @@ export class ShaderMaterialManager {
             this.shaderMaterials.forEach(sm => {
                 sm.Resolution = resolution;
             })
+            for (const material of Object.values(App.materials)) {
+                const shader = material as ShaderMaterial;
+                if (shader.userData.h3dBuiltinMaterial && shader.uniforms?.uResolution?.value?.isVector2) {
+                    shader.uniforms.uResolution.value.copy(resolution);
+                }
+            }
         })
         useAddSignal("sceneLoadComplete", () => {
             this.init();
@@ -35,16 +44,18 @@ export class ShaderMaterialManager {
     }
 
     get needRender() {
-        return this.shaderMaterials.length > 0;
+        return this.shaderMaterials.length > 0 || Object.values(App.materials).some(material => material.userData.h3dBuiltinMaterial);
     }
 
     init() {
+        this.shaderMaterials = [];
         if(!App.metadata._ShaderMaterialClassMap) return;
 
         this.classMap = App.metadata._ShaderMaterialClassMap;
         if (this.classMap) {
             for (let className in this.classMap) {
                 const material = App.materials[this.classMap[className]] as ShaderMaterial;
+                if (!material) continue;
 
                 switch (className) {
                     case "CircleGridShaderMaterial":
@@ -86,6 +97,13 @@ export class ShaderMaterialManager {
     update() {
         for (let i = 0; i < this.shaderMaterials.length; i++) {
             this.shaderMaterials[i].Update();
+        }
+        // Independently created materials keep their kind in serialized userData;
+        // unlike the historical static singleton, every instance updates after reload.
+        for (const material of Object.values(App.materials)) {
+            const kind = material.userData.h3dBuiltinMaterial as keyof typeof builtins;
+            const shader = material as ShaderMaterial;
+            if (kind && builtins[kind] && shader.uniforms?.uTime) builtins[kind].UpdatePreview(shader);
         }
     }
 }

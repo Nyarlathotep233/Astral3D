@@ -18,6 +18,7 @@ import type Viewer from "@/core/viewer/Viewer";
 interface IPackConfig {
     name: string; // 首包名称
     layer?: number; // 拆分的最深层级 0:拆分至最深层
+    sceneInfo?: Partial<IAppProject.SceneInfo>; // 本次快照元数据，不修改编辑中的 App.project
     zipUploadFun: (zip: File) => Promise<any>; // 压缩包上传接口函数，多压缩包
     onProgress?: (progress: number) => void; // 打包进度回调
     onComplete?: (_: { firstUploadResult: any, totalSize: number, totalZipNumber: number }) => void; // 打包完成回调
@@ -25,9 +26,12 @@ interface IPackConfig {
 
 interface IUnpackConfig {
     url: string, // 首包url
+    files?: ReadonlyMap<string, Blob>; // In-memory project package, keyed by file name including the first package.
+    deferHtmlPanels?: boolean; // Restore authored HTML options without mounting active content.
     onSceneLoad?: (sceneJson: ISceneJson, configJson: IAppProject.Config) => void, // 场景首包加载完成回调
     onProgress?: (progress: number) => void; // 场景加载进度回调
-    onComplete?: () => void // 场景加载完成回调.
+    onComplete?: () => void; // 场景加载完成回调.
+    onError?: (error: Error) => void; // 下载、解析或资源依赖失败；不会继续触发完成回调
 }
 
 interface SourceData {
@@ -36,15 +40,6 @@ interface SourceData {
     texture?: string | ArrayBuffer;
     geometry?: string;
     drawing?: string;
-}
-
-interface GroupJson {
-    images: any[];
-    geometries: any[];
-    object: {
-        children: any[],
-        //groupChildren: string[]
-    };
 }
 
 export class Package {
@@ -70,6 +65,20 @@ export class Package {
     private textureMap: Map<string, any>;
     private callFunNum: { value: number; };
     private skeletonClass: PackageSkeleton;
+    private groupJsonPromises = new Map<string, Promise<any>>();
+    private unpackAbort = new AbortController();
+    private unpackFailed = false;
+    private unpackErrorHandler?: (error: Error) => void;
+    private packageFiles?: ReadonlyMap<string, Blob>;
+
+    private failUnpack = (error: unknown) => {
+        if (this.unpackFailed || this.unpackAbort.signal.aborted) return;
+        this.unpackFailed = true;
+        this.unpackAbort.abort();
+        const failure = error instanceof Error ? error : new Error(String(error));
+        if (this.unpackErrorHandler) this.unpackErrorHandler(failure);
+        else console.error('Package unpack failed:', failure);
+    };
 
     constructor(viewer:Viewer) {
         this.viewer = viewer;
@@ -161,7 +170,7 @@ export class Package {
      * @param json group json
      * @param zipData 存储待压缩数据
      */
-    handleMesh(mesh: Mesh, json:ITHREEScene.SceneJSON, zipData:SourceData[]) {
+    handleMesh(mesh: Mesh, json:ITHREEScene.SceneJSON, zipData:SourceData[], includeObject = true) {
         const meshJson: any = mesh.toJSON() as unknown as ITHREEScene.MeshJSON;
 
         // 处理几何数据
@@ -176,6 +185,16 @@ export class Package {
 
             !json.geometries && (json.geometries = []);
             json.geometries.push(...this.handleGeometryJson(geometries));
+        }
+
+        // Shape/Extrude parameters refer to Shape UUIDs. Shapes are parsed per
+        // package, so deduplicate within this JSON rather than across packages.
+        if (meshJson.shapes) {
+            const output = json as any;
+            output.shapes ||= [];
+            for (const shape of meshJson.shapes) {
+                if (!output.shapes.some((existing) => existing.uuid === shape.uuid)) output.shapes.push(shape);
+            }
         }
 
         // 处理贴图image
@@ -241,7 +260,7 @@ export class Package {
         }
 
         // object 字段存入group json(parent json)
-        if (meshJson.object) {
+        if (includeObject && meshJson.object) {
             !json.object.children && (json.object.children = []);
 
             json.object.children.push(meshJson.object);
@@ -255,6 +274,14 @@ export class Package {
      * @remarks 前面已打包的几何数据和材质贴图不会再次打包
      */
     async pack(packConfig: IPackConfig) {
+        const objectUuids = new Set<string>();
+        const validate = (object) => {
+            if (object.ignore) return;
+            if (objectUuids.has(object.uuid)) throw new Error(`Cannot save duplicate object UUID: ${object.uuid} (${object.name || object.type})`);
+            objectUuids.add(object.uuid);
+            for (const child of object.children) validate(child);
+        };
+        validate(this.viewer.scene);
         const maxGroupLayer = packConfig.layer || 0;
 
         this.totalSize = 0;
@@ -335,7 +362,7 @@ export class Package {
         }
 
         const drawingInfo = App.project.getKey("drawing");
-        const sceneInfo = Object.assign({}, App.project.getKey("sceneInfo"),{
+        const sceneInfo = Object.assign({}, App.project.getKey("sceneInfo"), packConfig.sceneInfo, {
             // 覆盖原zip包位置
             zip:"",
             hasDrawing: drawingInfo.isUploaded ? 1 : 0,
@@ -411,11 +438,18 @@ export class Package {
             json.images = [];
             json.textures = [];
             json.materials = [];
+            json.shapes = [];
+            json.skeletons = [];
+            json.animations = [];
             json.object.uuid = group.uuid;
             json.object.children = [];
 
             // 存储待压缩数据
             const zipData: SourceData[] = [];
+
+            // A Mesh/Line/Points with children is also a package root. Its own
+            // resource references must survive alongside the child resources.
+            this.handleMesh(g as unknown as Mesh, json, zipData, false);
 
             group.children.forEach((child) => {
                 // 被groupArr包含的子级后面会单独处理，此处仅引用其uuid
@@ -617,6 +651,14 @@ export class Package {
      * @param {IUnpackConfig} unpackConfig
      */
     public unpack(unpackConfig: IUnpackConfig) {
+        this.unpackAbort.abort();
+        this.unpackAbort = new AbortController();
+        this.unpackFailed = false;
+        this.unpackErrorHandler = unpackConfig.onError;
+        this.packageFiles = unpackConfig.files;
+        this.loader.deferHtmlPanels = unpackConfig.deferHtmlPanels === true;
+        this.groupJsonPromises.clear();
+        const signal = this.unpackAbort.signal;
         unpackConfig.onProgress && unpackConfig.onProgress(0);
         let totalZipNumber = 0, progress = 0;
 
@@ -630,6 +672,7 @@ export class Package {
         const that = this;
         this.callFunNum = new Proxy({ value: 0 }, {
             set(target, p, value) {
+                if (signal.aborted || that.unpackFailed) return true;
                 if (target[p] < value) {
                     progress += (value - target[p]) / totalZipNumber * 100;
                     unpackConfig.onProgress && unpackConfig.onProgress(progress);
@@ -663,7 +706,7 @@ export class Package {
                         unpackConfig.onComplete && unpackConfig.onComplete();
                     }
 
-                    complete();
+                    try { complete(); } catch (error) { that.failUnpack(error); }
                 }
                 return true;
             }
@@ -673,7 +716,9 @@ export class Package {
         const funcMap = new Map<string, Function>();
 
         const loadScene = (sceneJson: ISceneJson,drawingInfo:IDrawingInfo | null, configJson: IAppProject.Config) => {
-            App.fromJSON(sceneJson).then(async (scene) => {
+            if (signal.aborted) return;
+            App.fromJSON(sceneJson, signal, unpackConfig.deferHtmlPanels ? this.loader : undefined).then(async (scene) => {
+                if (signal.aborted) return;
                 // 还原控制器
                 if (sceneJson.controls?.state) {
                     this.viewer.modules.controls.fromJSON(sceneJson.controls.state, true);
@@ -769,13 +814,16 @@ export class Package {
                 funcMap.forEach((func, uuid) => {
                     func.call(this, uuid, scene, uuid);
                 })
-            })
+            }).catch(this.failUnpack)
         }
 
         const networkGet = () => {
             // 下载场景包
-            fetch(this.viewer.options.request?.baseUrl + unpackConfig.url)
-                .then(zipRes => zipRes.blob())
+            const first = this.packageFiles
+                ? this.readPackageFile(unpackConfig.url)
+                : fetch(this.viewer.options.request?.baseUrl + unpackConfig.url, {signal})
+                    .then(zipRes => { if (!zipRes.ok) throw new Error(`Package request failed: HTTP ${zipRes.status}`); return zipRes.blob(); });
+            first
                 .then(async (file) => {
                     unpackConfig.onProgress && unpackConfig.onProgress(1);
 
@@ -863,6 +911,8 @@ export class Package {
                         }
                     }
 
+                    signal.throwIfAborted();
+                    if (!sceneJson?.scene?.object) throw new Error('Package is missing scene.json');
                     totalZipNumber = sceneJson.totalZipNumber || 0;
 
                     // 贴图还原至sceneJson
@@ -880,6 +930,14 @@ export class Package {
                     sceneJson.scene.geometries = geometries;
 
                     this.recordUuid(sceneJson.scene);
+
+                    // Shared resources can be authored in any sibling/nested package.
+                    // Read their resource tables before parsing to avoid dependency deadlocks.
+                    const groupIds = (sceneJson.scene.object.children || []).filter((child) => typeof child === 'string') as string[];
+                    if (new Set(groupIds).size !== groupIds.length) throw new Error('Package contains duplicate group UUID references');
+                    await Promise.all(groupIds.map((uuid) => this.fetchGroupJson(uuid)));
+                    signal.throwIfAborted();
+                    this.resolveGroupResources(sceneJson.scene);
 
                     const newChildren: any = [];
                     // 遍历sceneJson.object.children,拉取group zip还原
@@ -903,7 +961,7 @@ export class Package {
 
                     // 解压处理好的数据添加至 indexDB -> Msy3D -> scene
                     // db.setItem(dbKey, sceneJson);
-                })
+                }).catch(this.failUnpack)
         }
 
         // db.getItem(dbKey).then((dbData) => {
@@ -934,242 +992,124 @@ export class Package {
      * @param parent
      * @param rootGroupUuid
      */
-    private unpackGroup(uuid: string, parent, rootGroupUuid) {
-        //const db = window.VIEWPORT.modules["db"];
-        //const dbTable = `${useProjectState.getState().sceneId}-${useProjectState.getState().info.id}`;
-
-        // map 存储 json 解析完成后执行的 function; key 为 uuid
-        const funcMap = new Map<string, Function>();
-
-        const check = (object, group) => {
-            // 检查数据是否已完善
-            let isDone = true;
-            object.children.forEach((child) => {
-                // 检查几何数据是否都已拥有
-                if (child.geometry && group.geometries?.findIndex((geometry) => geometry.uuid === child.geometry) === -1) {
-                    if (!this.geometryMap.has(child.geometry)) {
-                        isDone = false;
-                    } else {
-                        group.geometries.push(this.geometryMap.get(child.geometry));
-                    }
-                }
-
-                // material->texture->image
-                if (child.material && group.materials?.findIndex((material) => material.uuid === child.material) === -1) {
-                    if (!this.materialsMap.has(child.material)) {
-                        isDone = false;
-                    } else {
-                        group.materials.push(this.materialsMap.get(child.material));
-
-                        const material = this.materialsMap.get(child.material);
-                        if (material.map && group.textures?.findIndex((texture) => texture.uuid === material.map) === -1) {
-                            if (!this.textureMap.has(material.map)) {
-                                isDone = false;
-                            } else {
-                                group.textures.push(this.textureMap.get(material.map));
-
-                                const texture = this.textureMap.get(material.map);
-                                if (texture.image && group.images?.findIndex((image) => image.uuid === texture.image) === -1) {
-                                    if (!this.imagesMap.has(texture.image)) {
-                                        isDone = false;
-                                    } else {
-                                        group.images.push(this.imagesMap.get(texture.image));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (child.children?.length > 0 && isDone) {
-                    isDone = check(child, group);
-                }
-            })
-
-            return isDone;
-        }
-
-        const parse = (json) => {
-            if (check(json.object, json)) {
-                this.loader.parse(json, (group) => {
-                    const bones: Bone[] = [];
-                    group.getObjectsByProperty("type", "Bone", bones);
-                    if (bones.length > 0) {
-                        this.skeletonClass.addBones(bones);
-                    }
-
-                    // 如果存在Skeleton（骨架），须存下来后面替换回原骨骼。
-                    // 因为loader.parse时如果对应骨骼（Bone）还未加载，会生成新的空骨骼替代，
-                    if (json.skeletons) {
-                        this.skeletonClass.handleSkeletons(json.skeletons, group);
-                    }
-
-                    group.uuid = uuid;
-
-                    // requestIdleCallback(()=>{
-                    App.addObject(group, parent, undefined, true);
-
-                    // 管理3DTiles
-                    group.traverseByCondition((c) => {
-                        if (c.isTilesGroup || c.type === "TilesGroup") {
-                            this.viewer.addTiles(c,"none");
-                        }
-                    }, (c) => !c.ignore)
-
-                    this.callFunNum.value--;
-                    // })
-
-                    // 开始执行funcMap中的function
-                    funcMap.forEach((func, uuid) => {
-                        func.call(this, uuid, group, rootGroupUuid);
-                    })
-                })
-            } else {
-                const timer = setTimeout(() => {
-                    clearTimeout(timer);
-                    parse(json);
-                }, 200)
+    /** Read complete dependency tables before parsing to avoid cross-package deadlocks. */
+    private fetchGroupJson(uuid: string, ancestors = new Set<string>()): Promise<any> {
+        if (ancestors.has(uuid)) return Promise.reject(new Error(`Package ${uuid} contains a cyclic group reference`));
+        const existing = this.groupJsonPromises.get(uuid);
+        if (existing) return existing;
+        const signal = this.unpackAbort.signal;
+        const blob = this.packageFiles ? this.readPackageFile(uuid + '.zip') : new Promise<any>((resolve, reject) => {
+            Package._fetch(`${this.prefix_url}/${uuid}.zip`, {signal, onSuccess: resolve, onError: reject});
+        }).then(async response => {
+            if (response.ok === false) throw new Error(`Package ${uuid}: HTTP ${response.status}`);
+            return response.blob();
+        });
+        const pending = blob.then(async file => {
+            signal.throwIfAborted();
+            const archive = await JSZip.loadAsync(file);
+            let json: any;
+            const geometries: any[] = [];
+            for (const entry of Object.values(archive.files)) {
+                if (entry.dir) continue;
+                if (entry.name === `${uuid}.json`) json = JSON.parse(await entry.async('string'));
+                else if (entry.name.startsWith('Textures/')) this.unGzipImage(entry.name.slice(9), await entry.async(entry.name.endsWith('.env') ? 'arraybuffer' : 'string'));
+                else if (/^Geometries\/geometries_\d*\.json$/.test(entry.name)) geometries.push(...this.unGzipGeometryJson(JSON.parse(await entry.async('string'))));
             }
-        }
-
-        const getByNetwork = () => {
-            Package._fetch(`${this.prefix_url}/${uuid}.zip`, {
-                onSuccess: (zipRes) => {
-                    const file = zipRes.blob();
-
-                    const zip = new JSZip();
-                    let json: GroupJson;
-
-                    // 几何数据数组
-                    let geometries: Array<any> = [];
-
-                    const unzipDone = () => {
-                        // 贴图还原至sceneJson
-                        json.images = json.images.map((item) => {
-                            const nameSplit = item.split(".");
-                            if (nameSplit[1] === "env") {
-                                const urlSplit = nameSplit[0].split("!");
-                                return this.imagesMap.get(urlSplit[3])
-                            } else {
-                                return this.imagesMap.get(nameSplit[0])
-                            }
-                        });
-
-                        // 几何数据还原至sceneJson
-                        json.geometries = geometries;
-
-                        this.recordUuid(json);
-
-                        // 遍历children,拉取group zip还原
-                        const children: any = [];
-                        json.object.children.forEach((uuid) => {
-                            if (typeof uuid === "string") {
-                                // 保存uuid对应的function
-                                funcMap.set(uuid, this.unpackGroup);
-
-                                this.callFunNum.value++;
-                            } else {
-                                children.push(uuid)
-                            }
-                        })
-                        json.object.children = children;
-
-                        //json.object.groupChildren = [...funcMap.keys()];
-
-                        // 解压处理好的数据添加至 indexDB -> Msy3D -> ${dbTable}
-                        // db.setItem(`${uuid}.zip`, json,dbTable);
-
-                        parse(json);
-                    }
-
-                    zip.loadAsync(file as Blob).then(res => {
-                        let num = new Proxy({ value: Object.keys(res.files).length }, {
-                            set(target, p, value) {
-                                target[p] = value;
-                                if (value === 0) {
-                                    unzipDone();
-                                }
-                                return true;
-                            }
-                        })
-                        for (let key in res.files) {
-                            //判断是否是目录
-                            if (!res.files[key].dir) {
-                                const fileName = res.files[key].name;
-
-                                //找到我们压缩包所需要的json文件
-                                if (fileName === `${uuid}.json`) { // 场景json
-                                    res.file(fileName)?.async('string').then(content => {
-                                        //得到scene.json文件的内容
-                                        json = JSON.parse(content);
-
-                                        num.value--;
-                                    })
-                                } else if (fileName.substring(0, 9) === "Textures/") {
-                                    /**
-                                     * 贴图
-                                     * 分为两种情况：
-                                     * 1.贴图为env格式（type!width!height!uuid.env），转换为arraybuffer格式，存入map
-                                     * 2.贴图为普通图片格式，直接存入map
-                                     **/
-                                    if (/\.env$/.test(fileName)) {
-                                        // 转换回贴图原始信息，存入map
-                                        res.file(fileName)?.async('arraybuffer').then(content => {
-                                            this.unGzipImage(fileName.replace("Textures/", ""), content);
-
-                                            num.value--;
-                                        })
-                                    } else {
-                                        res.file(fileName)?.async('string').then(content => {
-                                            this.unGzipImage(fileName.replace("Textures/", ""), content);
-
-                                            num.value--;
-                                        })
-                                    }
-                                } else if (/^Geometries\/geometries_\d*\.json$/.test(fileName)) {
-                                    res.file(fileName)?.async('string').then(content => {
-                                        geometries.push(...this.unGzipGeometryJson(JSON.parse(content)));
-
-                                        num.value--;
-                                    })
-                                }
-                            } else {
-                                num.value--;
-                            }
-                        }
-                    })
-                }
+            signal.throwIfAborted();
+            if (!json?.object) throw new Error(`Package ${uuid} is missing ${uuid}.json`);
+            json.geometries = geometries;
+            json.images = (json.images || []).map(item => {
+                if (typeof item !== 'string') return item;
+                const stem = item.slice(0, item.lastIndexOf('.'));
+                const imageId = item.endsWith('.env') ? stem.split('!')[3] : stem;
+                const image = this.imagesMap.get(imageId);
+                if (!image) throw new Error(`Package ${uuid}: missing image ${item}`);
+                return image;
             });
-        }
+            this.recordUuid(json);
+            const children = (json.object.children || []).filter(child => typeof child === 'string');
+            if (new Set(children).size !== children.length) throw new Error(`Package ${uuid} contains duplicate group references`);
+            const nextAncestors = new Set(ancestors); nextAncestors.add(uuid);
+            await Promise.all(children.map(child => this.fetchGroupJson(child, nextAncestors)));
+            signal.throwIfAborted();
+            return json;
+        });
+        this.groupJsonPromises.set(uuid, pending);
+        return pending;
+    }
 
-        // db.getItem(`${uuid}.zip`, dbTable).then((dbData:GroupJson | undefined) => {
-        //     if (dbData === undefined) {
-        getByNetwork();
-        //     } else {
-        //         this.recordUuid(dbData);
-        //
-        //         dbData.images.forEach((image) => {
-        //             this.imagesMap.set(image.uuid, image);
-        //         })
-        //
-        //         dbData.object.groupChildren.forEach((uuid) => {
-        //             // 保存uuid对应的function
-        //             funcMap.set(uuid, this.unpackGroup);
-        //
-        //             this.callFunNum.value++;
-        //         })
-        //
-        //         parse(dbData);
-        //     }
-        // }).catch((err: string) => {
-        //     console.log("err:", err)
-        // })
+    /** Resolve the root and embedded descendants, material arrays, all texture slots and uniforms. */
+    private resolveGroupResources(group: any) {
+        group.geometries ||= []; group.materials ||= []; group.textures ||= []; group.images ||= [];
+        const requireEntry = (field: string, id: string, map: Map<string, any>) => {
+            let value = group[field].find(item => item?.uuid === id);
+            if (!value) {
+                value = map.get(id);
+                if (!value) throw new Error(`Package ${group.object?.uuid || ''}: missing ${field} ${id}`);
+                group[field].push(value);
+            }
+            return value;
+        };
+        const texture = (id: string) => {
+            const value = requireEntry('textures', id, this.textureMap);
+            if (value.image) requireEntry('images', value.image, this.imagesMap);
+        };
+        const material = (id: string) => {
+            const value = requireEntry('materials', id, this.materialsMap);
+            for (const [key, item] of Object.entries(value)) if (typeof item === 'string' && (key === 'map' || key === 'matcap' || /Map$/.test(key))) texture(item);
+            for (const uniform of Object.values(value.uniforms || {}) as any[]) if (uniform?.type === 't' && uniform.value) texture(uniform.value);
+        };
+        const visit = (object: any) => {
+            if (!object || typeof object !== 'object') return;
+            if (object.geometry) requireEntry('geometries', object.geometry, this.geometryMap);
+            for (const id of Array.isArray(object.material) ? object.material : object.material ? [object.material] : []) material(id);
+            for (const child of object.children || []) visit(child);
+        };
+        visit(group.object);
+    }
+
+    private unpackGroup(uuid: string, parent, rootGroupUuid) {
+        const signal = this.unpackAbort.signal;
+        void this.fetchGroupJson(uuid).then(async source => {
+            signal.throwIfAborted();
+            const json = { ...source, object: { ...source.object } };
+            const children: string[] = [];
+            json.object.children = (source.object.children || []).filter(child => {
+                if (typeof child !== 'string') return true;
+                children.push(child); this.callFunNum.value++; return false;
+            });
+            this.resolveGroupResources(json);
+            const group = await this.loader.parseAsync(json);
+            signal.throwIfAborted();
+            const bones: Bone[] = [];
+            group.getObjectsByProperty('type', 'Bone', bones);
+            if (bones.length) this.skeletonClass.addBones(bones);
+            if (json.skeletons) this.skeletonClass.handleSkeletons(json.skeletons, group);
+            group.uuid = uuid;
+            App.addObject(group, parent, undefined, true);
+            group.traverseByCondition(object => {
+                if (object.isTilesGroup || object.type === 'TilesGroup') this.viewer.addTiles(object, 'none');
+            }, object => !object.ignore);
+            this.callFunNum.value--;
+            for (const child of children) this.unpackGroup(child, group, rootGroupUuid);
+        }).catch(this.failUnpack);
     }
 
     /**
      * 销毁此类
      */
+    private async readPackageFile(name: string): Promise<Blob> {
+        const file = this.packageFiles?.get(name);
+        if (!file) throw new Error(`Missing package file: ${name}`);
+        return file;
+    }
+
     dispose(){
+        this.packageFiles = undefined;
+        this.unpackFailed = true;
+        this.unpackAbort.abort();
+        this.groupJsonPromises.clear();
+        this.unpackErrorHandler = undefined;
         // 1. 清空所有数组
         this.geometryArr = [];
         this.imagesArr = [];

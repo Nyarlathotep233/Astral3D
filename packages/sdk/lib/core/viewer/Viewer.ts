@@ -194,6 +194,9 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
     public timer = new Timer();
     //整个主场景的box3
     public sceneBox3 = new THREE.Box3();
+    private disposed = false;
+    private resizeObserver?: ResizeObserver;
+    private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(options: IViewerSetting) {
         super();
@@ -240,14 +243,15 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.initEvent();
 
         //监听视窗变化（节流）
-        let timer: NodeJS.Timeout | null = null;
         const resizeObserver = new ResizeObserver(() => {
-            if (timer) return;
-            timer = setTimeout(() => {
+            if (this.disposed || this.resizeTimer) return;
+            this.resizeTimer = setTimeout(() => {
+                if (this.disposed) return;
                 useDispatchSignal("sceneResize", this.container.offsetWidth, this.container.offsetHeight);
-                timer = null;
+                this.resizeTimer = null;
             }, 16)
         });
+        this.resizeObserver = resizeObserver;
         resizeObserver.observe(this.container);
 
         useDispatchSignal("viewerInitCompleted", this);
@@ -570,6 +574,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         if (!this.options.hdr) return;
 
         App.resource.loadURLTexture(this.options.hdr, (texture: THREE.Texture) => {
+            if (this.disposed) return;
             texture.mapping = THREE.EquirectangularReflectionMapping;
             this.scene.environment = texture;
             setBg && (this.scene.background = texture);
@@ -650,13 +655,23 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                 if (scriptParamsError) {
                     App.log.warn(`[Script] ${script.name} 参数声明解析失败：${scriptParamsError}`);
                 }
-                const functions = new Function(
-                    scriptWrapParams,
-                    `${script.source}\nreturn ${scriptWrapResult};`
-                ).bind(object)(
-                    THREE, helper, scriptParams, this.renderer, this.scene,
-                    this.camera, this.modules.controls, this.timer, fns.render
-                );
+                const reportScriptError = (error: unknown, phase: string) => {
+                    window.dispatchEvent(new CustomEvent('h3d-script-error', { detail: {
+                        objectUuid: object.uuid, scriptName: script.name, phase,
+                        message: error instanceof Error ? error.message : String(error),
+                        stack: error instanceof Error ? error.stack : undefined,
+                    } }));
+                };
+                let functions: Record<string, unknown>;
+                try {
+                    functions = new Function(
+                        scriptWrapParams,
+                        `${script.source}\nreturn ${scriptWrapResult};\n//# sourceURL=h3d-script/${object.uuid}/${encodeURIComponent(script.name)}.js`
+                    ).bind(object)(
+                        THREE, helper, scriptParams, this.renderer, this.scene,
+                        this.camera, this.modules.controls, this.timer, fns.render
+                    );
+                } catch (error) { reportScriptError(error, 'initialize'); throw error; }
                 const loadedFns: Function[] = [];
 
                 Object.entries(functions).forEach(([name, fn]) => {
@@ -668,6 +683,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                     }
 
                     const boundFn = (e: any) => {
+                        try {
                         const {type, target, ...params} = e;
 
                         // 点击事件只分发给对应模型
@@ -684,6 +700,7 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
                                 (fn as Function).bind(object)(...Object.values(params));
                             }
                         }
+                        } catch (error) { reportScriptError(error, name); throw error; }
                     }
 
                     // 添加到全局事件集合
@@ -1151,16 +1168,27 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
      * 销毁
      */
     dispose() {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.resizeObserver?.disconnect();
+        if (this.resizeTimer) clearTimeout(this.resizeTimer);
+        this.resizeTimer = null;
+        this.renderer.setAnimationLoop(null);
         this.dispatchEvent({type: "beforeDestroy"});
 
-        this.container.removeEventListener('mousedown', Fn.mousedown);
-        Fn.mousedown = null;
+        this.container.removeEventListener('pointerdown', Fn.pointerdown);
+        Fn.pointerdown = null;
         this.container.removeEventListener('pointermove', Fn.pointermove);
         Fn.pointermove = null;
         this.container.removeEventListener('touchstart', Fn.touchstart);
         Fn.touchstart = null;
         this.container.removeEventListener('dblclick', Fn.dblclick);
         Fn.dblclick = null;
+        if (Fn.pointerup) {
+            document.removeEventListener('pointerup', Fn.pointerup);
+            document.removeEventListener('touchend', Fn.pointerup);
+            Fn.pointerup = null;
+        }
 
         Object.keys(this.modules).forEach(key => {
             if (this.modules[key].dispose) {
@@ -1171,6 +1199,11 @@ export default class Viewer extends THREE.EventDispatcher<ViewerEventMap> {
         this.dispatchEvent({type: "afterDestroy"});
 
         this.unInstallScripts();
+        this.pmremGenerator?.dispose();
+        this.pathtracer?.pathTracer?.dispose();
+        this.renderer.dispose();
+        this.css2DRenderer.domElement.remove();
+        this.css3DRenderer.domElement.remove();
     }
 
     /* -----------------暂时放在Viewer下的工具方法-------------------- */

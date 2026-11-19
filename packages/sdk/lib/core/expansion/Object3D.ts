@@ -193,7 +193,7 @@ THREE.Object3D.prototype.toJSON = function(meta:any) {
         // 创建新变量替代，不然正在使用的材质被还原回this.metaData.material会造成播放异常
         let _material = this.material;
         if(this.metaData?.material){
-            if (this.metaData.material instanceof THREE.Material){
+            if ((this.metaData.material as THREE.Material).isMaterial){
                 _material = this.metaData.material;
             }
         }
@@ -223,9 +223,9 @@ THREE.Object3D.prototype.toJSON = function(meta:any) {
         object.animations = [];
 
         for (let i = 0; i < this.animations.length; i++) {
-            let animation = this.animations[i];
+            let animation:any = this.animations[i];
             // 20250306 修复动画导出问题(代码中处理了object3D.animations,此属性下是AnimationAction数组)
-            if(animation instanceof THREE.AnimationAction){
+            if(typeof animation?.getClip === 'function'){
                 animation = animation.getClip();
             }
             if(!animation) continue;
@@ -278,4 +278,19 @@ THREE.Object3D.prototype.toJSON = function(meta:any) {
 
         return values;
     }
+}
+
+/** App also accepts objects made by a host application's separate Three bundle. */
+export function ensureObject3DExtensions(root: THREE.Object3D) {
+    root.traverse((object) => {
+        let prototype = Object.getPrototypeOf(object);
+        while (prototype && !Object.prototype.hasOwnProperty.call(prototype, 'traverse')) prototype = Object.getPrototypeOf(prototype);
+        if (!prototype || prototype === THREE.Object3D.prototype || prototype.traverseByCondition) return;
+        // Patch the Object3D base, preserving derived Camera/Light/SDK serializers.
+        Object.assign(prototype, {
+            traverseByCondition: THREE.Object3D.prototype.traverseByCondition,
+            isAncestor: THREE.Object3D.prototype.isAncestor,
+            toJSON: THREE.Object3D.prototype.toJSON,
+        });
+    });
 }

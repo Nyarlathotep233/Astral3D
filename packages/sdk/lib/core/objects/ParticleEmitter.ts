@@ -149,9 +149,11 @@ export const getDefaultParticleConfig = (): IParticle.Config => ({
   },
 })
 
-let _handleAddToParticleSystemFn, _handleParticleCreatedFn;
 class ParticleEmitter extends THREE.Object3D {
   emitter: Particle.Emitter;
+  particleSystemName = 'spriteSystem';
+  private _handleAddToParticleSystemFn: any;
+  private _handleParticleCreatedFn: any;
   
   isEmitterProxy = true;
 
@@ -171,20 +173,21 @@ class ParticleEmitter extends THREE.Object3D {
   }
 
   initEvent(){
+    this.disposeEvents();
     /**
       * 需要做粒子的选中，选中时定位到这个粒子发射器的代理对象上
       * 如果后续不需要做粒子选中了，就把下方代码删除
       * 对应的particleSystemAddEmitter signal也删除
       */
-    _handleAddToParticleSystemFn = this.handleAddToParticleSystem.bind(this);
-    useAddSignal('particleSystemAddEmitter', _handleAddToParticleSystemFn)
+    this._handleAddToParticleSystemFn = this.handleAddToParticleSystem.bind(this);
+    useAddSignal('particleSystemAddEmitter', this._handleAddToParticleSystemFn)
     this.emitter.particles.forEach(particle => {
       if (!particle.target) return;
 
       particle.target.proxy = this;
     })
-    _handleParticleCreatedFn = this.handleParticleCreated.bind(this);
-    this.emitter.parent?.eventDispatcher.addEventListener('PARTICLE_CREATED', _handleParticleCreatedFn, true)
+    this._handleParticleCreatedFn = this.handleParticleCreated.bind(this);
+    this.emitter.parent?.eventDispatcher.addEventListener('PARTICLE_CREATED', this._handleParticleCreatedFn, true)
   }
 
   /**
@@ -207,7 +210,7 @@ class ParticleEmitter extends THREE.Object3D {
    */
   handleAddToParticleSystem(_emitter: Particle.Emitter){
     if (_emitter === this.emitter) {
-      this.emitter.parent?.eventDispatcher.addEventListener('PARTICLE_CREATED', _handleParticleCreatedFn,true)
+      this.emitter.parent?.eventDispatcher.addEventListener('PARTICLE_CREATED', this._handleParticleCreatedFn,true)
     }
   }
 
@@ -554,7 +557,7 @@ class ParticleEmitter extends THREE.Object3D {
   /**
    * 从json配置解析
    */
-  static fromJSON(json: IParticle.Object3DJSON) {
+  static fromJSON(json: IParticle.Object3DJSON, attach = true, loader?: ObjectLoader) {
     const emitterConfig = json.emitter.config;
 
     const emitter = new Particle.Emitter({
@@ -713,7 +716,7 @@ class ParticleEmitter extends THREE.Object3D {
           switch (emitterConfig.init.body.body.type) {
             case "Sprite":
             case "Mesh":
-              new ObjectLoader().parse(json.emitter.bodyObjectJSON, (object3D => {
+              (loader || new ObjectLoader()).parse(json.emitter.bodyObjectJSON, (object3D => {
                 emitter.addInitializer(
                   new Particle.Body(
                     object3D,
@@ -858,11 +861,12 @@ class ParticleEmitter extends THREE.Object3D {
       }
     })
 
-    useDispatchSignal("emitterAdd2ParticleSystem",emitter,json.emitter.system)
+    if (attach) useDispatchSignal("emitterAdd2ParticleSystem",emitter,json.emitter.system)
 
     const particleEmitter = new ParticleEmitter(emitter);
     particleEmitter.name = json.name;
     particleEmitter.uuid = json.uuid;
+    particleEmitter.particleSystemName = json.emitter.system || 'spriteSystem';
 
     return particleEmitter;
   }
@@ -884,7 +888,7 @@ class ParticleEmitter extends THREE.Object3D {
       name: this.name,
       emitter: {
         config:this.getEmitterJSON(),
-        system: this.emitter.parent.name,
+        system: this.emitter.parent?.name || this.particleSystemName,
         useInitializers: this.emitter.initializers.map(initializer => initializer.type),
         bodyObjectJSON: ParticleSystem.Body3DMap.get(this.uuid)?.toJSON() || null,
         useBehaviours: this.emitter.behaviours.map(behaviour => behaviour.type)
@@ -921,13 +925,17 @@ class ParticleEmitter extends THREE.Object3D {
       p.target.removeFromParent();
     })
 
-    useRemoveSignal('particleSystemAddEmitter', _handleAddToParticleSystemFn);
-    _handleAddToParticleSystemFn = null;
-
-    this.emitter.parent?.eventDispatcher.removeEventListener('PARTICLE_CREATED', _handleParticleCreatedFn);
-    _handleParticleCreatedFn = null;
+    this.disposeEvents();
 
     this.emitter.destroy();  
+  }
+
+  /** Detach listeners without destroying an emitter transferred to an existing proxy. */
+  disposeEvents() {
+    if (this._handleAddToParticleSystemFn) useRemoveSignal('particleSystemAddEmitter', this._handleAddToParticleSystemFn);
+    this._handleAddToParticleSystemFn = null;
+    if (this._handleParticleCreatedFn) this.emitter.parent?.eventDispatcher.removeEventListener('PARTICLE_CREATED', this._handleParticleCreatedFn);
+    this._handleParticleCreatedFn = null;
   }
 }
 

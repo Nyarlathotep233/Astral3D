@@ -22,13 +22,12 @@ import {LUT3dlLoader} from 'three/examples/jsm/loaders/LUT3dlLoader.js';
 import {LUTImageLoader} from 'three/examples/jsm/loaders/LUTImageLoader.js';
 import { AfterimagePass } from 'three/examples/jsm/postprocessing/AfterimagePass.js';
 // import {OutputPass} from "three/examples/jsm/postprocessing/OutputPass.js";
-import {useAddSignal} from "@/hooks";
+import {useAddSignal, useRemoveSignal} from "@/hooks";
 import Viewer from "../Viewer";
 import App from "@/core/app/App";
 
 type supportPass = Pass | OutlinePass | ShaderPass | UnrealBloomPass | BokehPass | RenderPixelatedPass | HalftonePass;
 
-let _passConfigChangeFn: any = null;
 
 export const LUTEffectMap = {
     'Bourbon 64.CUBE': null,
@@ -44,6 +43,7 @@ export const LUTEffectMap = {
 
 export class Effect {
     private viewer: Viewer;
+    private passConfigChangeFn: any;
 
     composer: EffectComposer | undefined;
     outlinePass: OutlinePass | undefined;
@@ -54,8 +54,8 @@ export class Effect {
     constructor(viewer: Viewer) {
         this.viewer = viewer;
 
-        _passConfigChangeFn = this.handlePassConfigChange.bind(this);
-        useAddSignal("effectPassConfigChange", _passConfigChangeFn)
+        this.passConfigChangeFn = this.handlePassConfigChange.bind(this);
+        useAddSignal("effectPassConfigChange", this.passConfigChangeFn)
     }
 
     get enabled() {
@@ -447,8 +447,9 @@ export class Effect {
     }
 
     dispose() {
+        useRemoveSignal("effectPassConfigChange", this.passConfigChangeFn);
         this.clear();
 
-        _passConfigChangeFn = null;
+        this.passConfigChangeFn = null;
     }
 }

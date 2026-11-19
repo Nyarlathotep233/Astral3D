@@ -3,8 +3,10 @@ import Viewer from "./core/viewer/Viewer";
 import Preview from "./core/preview/Preview";
 import Loader from './core/loader/Loader';
 export * from './core/loader/Package';
+export { ObjectRegistrationError } from './core/app/ObjectRegistration';
 
-// export * as THREE from "three";
+// Use the SDK's Three instance when constructing objects for App (including its serialization extensions).
+export * as THREE from "three";
 // export * as THREEAddons from "three/examples/jsm/Addons.js";
 // 导出App&Viewer下的所有模块，可提供于前端用作类型声明
 export * from "./core/app/modules";

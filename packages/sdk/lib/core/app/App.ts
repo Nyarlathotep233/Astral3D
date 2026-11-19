@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 // 原生three的扩展
 import '../expansion';
+import { ensureObject3DExtensions } from '../expansion/Object3D';
 import Logger from "@/utils/log/Logger";
 import {Config,Storage,Project,Selector,History as _History,Resource,CSM} from "./modules";
 import { AnimationManager } from "../animation/AnimationManager";
@@ -14,6 +15,7 @@ import {useAddSignal, useDispatchSignal, useSetSignalActive} from '@/hooks';
 import Loader from "@/core/loader/Loader.ts";
 import {AddScriptCommand,RemoveScriptCommand} from "@/core/commands/Commands.ts";
 import Viewer from "@/core/viewer/Viewer.ts";
+import { runObjectRegistration } from './ObjectRegistration';
 
 const _DEFAULT_CAMERA = new THREE.PerspectiveCamera(45, 1, 0.01, 100 * 1000);
 _DEFAULT_CAMERA.name = "默认相机";
@@ -220,14 +222,14 @@ export class App {
             this.animationManager.mixerMap.set(object.uuid, mixer);
         }
 
-        object.animations.forEach((animation,index) => {
-            if ((animation instanceof THREE.AnimationAction) && animation.getClip()) {
+        object.animations.forEach((animation:any,index) => {
+            if ((typeof animation?.getClip === 'function') && animation.getClip()) {
                 this.animationManager.actionMap.set(animation.getClip().uuid, animation)
 
                 return;
             }
 
-            if(!(animation instanceof THREE.AnimationClip)) return;
+            if(!animation || !Array.isArray(animation.tracks) || typeof animation.uuid !== 'string') return;
 
             const action = (<THREE.AnimationMixer>mixer).clipAction(animation, object);
             // @ts-ignore
@@ -245,6 +247,17 @@ export class App {
      * @param preserveShadow
      */
     addObject(object:THREE.Object3D, parent?:THREE.Object3D, index?:number, preserveShadow = false) {
+        const incoming = new Map<string, THREE.Object3D>();
+        object.traverse(child => {
+            if (incoming.has(child.uuid)) throw new Error(`Duplicate object UUID in subtree: ${child.uuid}`);
+            incoming.set(child.uuid, child);
+        });
+        this.scene.traverse(existing => {
+            const candidate = incoming.get(existing.uuid);
+            if (candidate && candidate !== existing) throw new Error(`Object UUID already exists in scene: ${existing.uuid}`);
+        });
+        ensureObject3DExtensions(object);
+        runObjectRegistration(this, this.materialsRefCounter, object, () => {
         object.traverseByCondition((child) => {
             if (child.animations && child.animations.length > 0) this.clipAction(child);
             if (child.geometry !== undefined) this.addGeometry(child.geometry);
@@ -258,6 +271,7 @@ export class App {
             child.castShadow = true;
             child.receiveShadow = true;
         }, (child) => !child.ignore);
+        }, () => { useDispatchSignal('materialAdded'); useDispatchSignal('cameraAdded'); useDispatchSignal('sceneGraphChanged'); });
 
         if (parent === undefined) {
             this.scene.add(object);
@@ -312,12 +326,14 @@ export class App {
         // object.parent === null避免删除相机或场景
         if (object.parent === null || object.ignore) return;
 
+        runObjectRegistration(this, this.materialsRefCounter, object, () => {
         object.traverseByCondition((child:THREE.Object3D) => {
             this.removeCamera(child);
             this.removeHelper(child);
             if (child.material !== undefined) this.removeMaterial(child.material);
             if ((child.isHtmlPanel || child.isHtmlSprite) && child.element) child.element.remove();
         }, (child:THREE.Object3D) => !child.ignore);
+        }, () => { useDispatchSignal('materialRemoved'); useDispatchSignal('cameraRemoved'); useDispatchSignal('sceneGraphChanged'); });
 
         object.parent.remove(object);
 
@@ -495,8 +511,8 @@ export class App {
             helper.add(picker);
         }
 
-        this.sceneHelpers.add(helper);
         this.helpers[object.id] = helper;
+        this.sceneHelpers.add(helper);
     }
 
     /**
@@ -921,7 +937,8 @@ export class App {
      * 从json数据生成场景
      * @param sceneJson
      */
-    async fromJSON(sceneJson: ISceneJson) {
+    async fromJSON(sceneJson: ISceneJson, signal?: AbortSignal, loader = Loader.objectLoader) {
+        signal?.throwIfAborted();
         //先清空场景
         this.clear();
 
@@ -931,8 +948,8 @@ export class App {
         this.metadata = sceneJson.metadata || {};
         sceneJson.metadata = {};
 
-        let loader = Loader.objectLoader;
         let camera = await loader.parseAsync(sceneJson.camera) as THREE.Camera;
+        signal?.throwIfAborted();
 
         this.camera.copy(camera as THREE.PerspectiveCamera);
         useDispatchSignal('cameraReset');
@@ -941,7 +958,9 @@ export class App {
             this.scripts = sceneJson.scripts;
         }
 
-        const scene = this.setScene(await loader.parseAsync(sceneJson.scene) as THREE.Scene);
+        const decodedScene = await loader.parseAsync(sceneJson.scene) as THREE.Scene;
+        signal?.throwIfAborted();
+        const scene = this.setScene(decodedScene);
 
         // 20250718: 环境类型是ModelViewer时需要手动设置，因为scene.toJSON()不会处理renderTargetTexture
         switch(sceneJson.scene.object.environmentType){

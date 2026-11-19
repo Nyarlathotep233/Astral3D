@@ -10,8 +10,10 @@ import ParticleEmitter from "@/core/objects/ParticleEmitter";
 import Billboard from "@/core/objects/Billboard";
 import {HtmlPanel, HtmlSprite} from "@/core/objects/HtmlPanel";
 import Tiles from "../objects/Tile.js";
+import { TeapotGeometry } from '../geometries/TeapotGeometry';
 
 class ObjectLoader extends THREE.Loader {
+    deferHtmlPanels = false;
     constructor(manager) {
         super(manager);
     }
@@ -228,6 +230,10 @@ class ObjectLoader extends THREE.Loader {
                         geometry = bufferGeometryLoader.parse(data);
                         break;
 
+                    case 'TeapotGeometry':
+                        geometry = TeapotGeometry.fromJSON(data);
+                        break;
+
                     default:
 
                         if (data.type in THREE) {
@@ -236,7 +242,7 @@ class ObjectLoader extends THREE.Loader {
 
                         } else {
 
-                            console.warn(`THREE.ObjectLoader: Unsupported geometry type "${data.type}"`);
+                            throw new Error(`THREE.ObjectLoader: Unsupported geometry type "${data.type}"`);
 
                         }
 
@@ -928,7 +934,7 @@ class ObjectLoader extends THREE.Loader {
 
             // 粒子对象
             case 'Particle':
-                object = ParticleEmitter.fromJSON(data);
+                object = ParticleEmitter.fromJSON(data, false, this);
                 break;
 
             // 广告牌
@@ -941,12 +947,12 @@ class ObjectLoader extends THREE.Loader {
 
             // HtmlPanel
             case 'HtmlPanel':
-                object = HtmlPanel.fromJSON(data);
+                object = this.deferHtmlPanels ? new HtmlPanel(document.createElement('div'), data.options) : HtmlPanel.fromJSON(data);
                 break;
 
             // HtmlSprite
             case 'HtmlSprite':
-                object = HtmlSprite.fromJSON(data);
+                object = this.deferHtmlPanels ? new HtmlSprite(document.createElement('div'), data.options) : HtmlSprite.fromJSON(data);
                 break;
 
             // 3DTiles

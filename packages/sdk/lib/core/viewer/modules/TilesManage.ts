@@ -35,6 +35,7 @@ export class TilesManage {
     processNodeQueue:PriorityQueue | null = null;
 
     needRender = false;
+    private initializedTiles = new WeakSet<Tiles>();
 
     constructor(scene:Scene,camera:PerspectiveCamera,renderer:WebGLRenderer) {
         this.scene = scene;
@@ -67,6 +68,15 @@ export class TilesManage {
     }
 
     addTiles(tiles: Tiles):Promise<Tiles> {
+        const registered = this.tilesMap.get(tiles.options.url) || [];
+        if (registered.includes(tiles)) return Promise.resolve(tiles);
+        if (this.initializedTiles.has(tiles)) {
+            this.tilesMap.set(tiles.options.url, [...registered, tiles]);
+            this.needRender = true;
+            if (this._tilesMergeMesh) this.monitorComputeMergeMesh();
+            return Promise.resolve(tiles);
+        }
+        this.initializedTiles.add(tiles);
         return new Promise(resolve => {
             // 设置共享队列(正确确定下载优先级)
             if(!this.parseQueue){
@@ -114,7 +124,7 @@ export class TilesManage {
         })
     }
 
-    removeTiles(tiles: Tiles) {
+    removeTiles(tiles: Tiles, dispose = true) {
         if (!tiles) return;
 
         const _tiles = this.tilesMap.get(tiles.options.url);
@@ -137,7 +147,7 @@ export class TilesManage {
             this.monitorComputeMergeMesh();
         }
 
-        tiles.dispose();
+        if (dispose) { tiles.dispose(); this.initializedTiles.delete(tiles); }
     }
 
     resize(){
