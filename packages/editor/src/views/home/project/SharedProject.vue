@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {onMounted, reactive, ref} from "vue";
+import {onMounted, onUnmounted, ref} from "vue";
+import {useIntersectionObserver} from "@vueuse/core";
 import {t} from "@/language";
 import {fetchGetAllScenes} from "@/http/api/scenes";
 import CardAction from "@/views/home/project/components/CardAction.vue";
@@ -16,68 +17,60 @@ const props = withDefaults(defineProps<{
 const emits = defineEmits(["totalChange"]);
 
 const data = ref<ISceneFetchData[]>([]);
-const paginationReactive = reactive({
-  page: 1,
-  pageSize: 20,
-  pageCount: 1,
-  total: 0
-});
-const pageSizeOptions = [8, 10, 20, 40];
+const batchSize = 20;
+const hasMore = ref(false);
+const loadMoreTrigger = ref<HTMLElement | null>(null);
+const failedRequest = ref<{ offset: number; limit: number } | null>(null);
+let nextOffset = 0;
+let requestId = 0;
 const loading = ref(false);
 const showCreateModal =  ref(false);
 const loadingProjectId = ref(-1);
 
-async function fetchProjectList() {
+async function fetchProjectList(offset: number, limit = batchSize) {
+  const id = ++requestId;
   loading.value = true;
+  failedRequest.value = null;
   const res = await fetchGetAllScenes({
-    offset: (paginationReactive.page - 1) * paginationReactive.pageSize,
-    limit: paginationReactive.pageSize,
-    sortby:"updateTime",
-    order:"desc",
-    query:`sceneSource:${props.sceneSource}`
+    offset,
+    limit,
+    sortby: "updateTime,id",
+    order: "desc",
+    query: `sceneSource:${props.sceneSource}`
   });
-  if(res.data !== null){
-    data.value = res.data.items || [];
-    paginationReactive.pageCount = Math.max(res.data.pages || 1, 1);
-    paginationReactive.total = res.data.total || 0;
-    emits("totalChange", {
-      sceneSource: props.sceneSource,
-      total: paginationReactive.total
-    });
-
-    if (paginationReactive.page > paginationReactive.pageCount) {
-      paginationReactive.page = paginationReactive.pageCount;
-      loading.value = false;
-      await fetchProjectList();
-      return;
-    }
-  }
-
+  if (id !== requestId) return;
   loading.value = false;
-}
-
-function refresh(options: { resetPage?: boolean } = {}) {
-  if (options.resetPage) {
-    paginationReactive.page = 1;
+  if (!res.data) {
+    failedRequest.value = {offset, limit};
+    return;
   }
 
-  fetchProjectList();
+  const items = res.data.items ?? [];
+  const total = res.data.total ?? 0;
+  if (offset === 0) {
+    data.value = items;
+  } else {
+    const knownIds = new Set(data.value.map(project => project.id));
+    data.value.push(...items.filter(project => !knownIds.has(project.id)));
+  }
+  nextOffset = offset + limit;
+  hasMore.value = items.length > 0 && nextOffset < total;
+  emits("totalChange", {sceneSource: props.sceneSource, total});
 }
 
-function handlePageChange(page: number){
-  if (paginationReactive.page === page) return;
-
-  paginationReactive.page = page;
-  fetchProjectList();
+function refresh() {
+  return fetchProjectList(0, Math.max(nextOffset, batchSize));
 }
 
-function handlePageSizeChange(pageSize: number){
-  if (paginationReactive.pageSize === pageSize) return;
-
-  paginationReactive.pageSize = pageSize;
-  paginationReactive.page = 1;
-  fetchProjectList();
+function loadMore() {
+  if (hasMore.value && !loading.value && !failedRequest.value) {
+    return fetchProjectList(nextOffset);
+  }
 }
+
+useIntersectionObserver(loadMoreTrigger, ([entry]) => {
+  if (entry?.isIntersecting) loadMore();
+});
 
 function setLoadingProjectId(id:number){
   loadingProjectId.value = id;
@@ -99,126 +92,82 @@ defineExpose({
   refresh
 });
 
-onMounted(() => {
-  fetchProjectList();
-});
+onMounted(refresh);
+onUnmounted(() => { requestId++; });
 </script>
 
 <template>
   <div class="project-page">
-    <div class="project-cards-scroll">
-      <n-spin class="project-list-spin" :show="loading">
-        <div class="project-cards-list">
-          <button v-if="props.showCreate" type="button" class="project-create-card" @click="openCreateModal">
-            <span class="create-card-glow"></span>
-            <div class="create-card-plus">+</div>
-            <div>
-              <h3>{{ t('home.New project') }}</h3>
-              <p>{{ t("home.Create from template") }}</p>
-            </div>
-          </button>
-
-          <n-card hoverable v-for="project in data" :key="project.id" :bordered="false" content-class="!p-0" class="project-card">
-            <template #cover>
-              <n-skeleton v-if="loadingProjectId === Number(project.id)" height="220px" width="100%" />
-              <template v-else>
-                <div class="project-cover">
-                  <div class="project-tags">
-                    <n-tag v-if="project.sceneSource === 'EXTERNAL'" type="warning" :bordered="false" size="small">
-                      EXTERNAL
-                    </n-tag>
-                    <n-tag type="success" :bordered="false" size="small">
-                      {{ project.projectType === 0 ? "Web3D" : "WebGIS" }}
-                    </n-tag>
-                    <n-tag type="success" :bordered="false" size="small">
-                      {{ project.sceneType }}
-                    </n-tag>
-                  </div>
-
-                  <n-image preview-disabled object-fit="cover"
-                      :src="getServiceStaticFile(project.coverPicture) || '/static/images/carousel/H3DEditor.svg'"
-                      class="project-cover-image" @click="editScene(project.id)"
-                  />
-                </div>
-              </template>
-            </template>
-
-            <template #action>
-              <n-skeleton v-if="loadingProjectId === Number(project.id)" text :repeat="1" />
-              <CardAction v-show="loadingProjectId !== Number(project.id)" :data="project" @refresh="refresh" @setLoadingProjectId="setLoadingProjectId" />
-            </template>
-          </n-card>
-
-          <div v-if="!loading && data.length === 0" class="project-empty">
-            <n-empty />
-          </div>
+    <div class="project-cards-list">
+      <button v-if="props.showCreate" type="button" class="project-create-card" @click="openCreateModal">
+        <span class="create-card-glow"></span>
+        <div class="create-card-plus">+</div>
+        <div>
+          <h3>{{ t('home.New project') }}</h3>
+          <p>{{ t("home.Create from template") }}</p>
         </div>
-      </n-spin>
-    </div>
+      </button>
 
-    <div class="project-pagination">
-      <n-pagination
-          :page="paginationReactive.page"
-          :page-size="paginationReactive.pageSize"
-          :item-count="paginationReactive.total"
-          :page-sizes="pageSizeOptions"
-          :disabled="loading"
-          show-size-picker
-          show-quick-jumper
-          @update:page="handlePageChange"
-          @update:page-size="handlePageSizeChange"
-      />
+      <n-card hoverable v-for="project in data" :key="project.id" :bordered="false" content-class="!p-0" class="project-card">
+        <template #cover>
+          <n-skeleton v-if="loadingProjectId === Number(project.id)" height="220px" width="100%" />
+          <template v-else>
+            <div class="project-cover">
+              <div class="project-tags">
+                <n-tag v-if="project.sceneSource === 'EXTERNAL'" type="warning" :bordered="false" size="small">
+                  EXTERNAL
+                </n-tag>
+                <n-tag type="success" :bordered="false" size="small">
+                  {{ project.projectType === 0 ? "Web3D" : "WebGIS" }}
+                </n-tag>
+                <n-tag type="success" :bordered="false" size="small">
+                  {{ project.sceneType }}
+                </n-tag>
+              </div>
+
+              <n-image lazy preview-disabled object-fit="cover"
+                  :src="getServiceStaticFile(project.coverPicture) || '/static/images/carousel/H3DEditor.svg'"
+                  class="project-cover-image" @click="editScene(project.id)"
+              />
+            </div>
+          </template>
+        </template>
+
+        <template #action>
+          <n-skeleton v-if="loadingProjectId === Number(project.id)" text :repeat="1" />
+          <CardAction v-show="loadingProjectId !== Number(project.id)" :data="project" @refresh="refresh" @setLoadingProjectId="setLoadingProjectId" />
+        </template>
+      </n-card>
+
+      <div v-if="!loading && !failedRequest && data.length === 0" class="project-empty">
+        <n-empty />
+      </div>
+    </div>
+    <div v-if="loading || failedRequest || hasMore" class="project-list-footer">
+      <span v-if="loading" role="status"><n-spin :size="16" /> {{ t('home.Loading') }}</span>
+      <n-button v-else-if="failedRequest" @click="fetchProjectList(failedRequest.offset, failedRequest.limit)">
+        {{ t('home.Retry loading projects') }}
+      </n-button>
+      <div v-else ref="loadMoreTrigger">
+        <n-button @click="loadMore">{{ t('home.Load more projects') }}</n-button>
+      </div>
     </div>
   </div>
 
-  <CreateProject v-model:visible="showCreateModal" @refresh="refresh({ resetPage: true })" />
+  <CreateProject v-model:visible="showCreateModal" @refresh="fetchProjectList(0)" />
 </template>
 
 <style scoped lang="less">
-.project-page {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.project-cards-scroll {
-  flex: 1;
-  min-height: 0;
-}
-
-.project-list-spin {
-  height: 100%;
-  display: block;
-
-  :deep(.n-spin-content) {
-    height: 100%;
-  }
-}
-
 .project-cards-list {
-  height: 100%;
-  overflow-y: auto;
   box-sizing: border-box;
-  padding: 4px 8px 10px 2px;
+  padding: 6px 2px 10px;
   display: grid;
-  grid-gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  grid-auto-flow: row;
-  align-content: start;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 
   .project-empty {
     grid-column: 1 / -1;
     padding: 48px 0;
-  }
-
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(var(--home-primary-rgb), 0.24);
   }
 }
 
@@ -374,22 +323,16 @@ onMounted(() => {
   }
 }
 
-.project-pagination {
-  margin-top: 12px;
-  padding: 12px 0 0;
+.project-list-footer {
+  padding: 10px;
   display: flex;
   justify-content: center;
+  color: rgba(255, 255, 255, 0.76);
 
-  :deep(.n-pagination-item),
-  :deep(.n-pagination-quick-jumper input) {
-    color: rgba(255, 255, 255, 0.76);
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  :deep(.n-pagination-item--active) {
-    color: var(--home-on-primary);
-    background: var(--home-primary);
+  [role="status"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 

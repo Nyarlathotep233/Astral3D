@@ -72,7 +72,7 @@ function handleProjectTotalChange(payload: { sceneSource: "INTERNAL" | "EXTERNAL
 <style scoped lang="less">
 .project-workspace {
   height: 100%;
-  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -164,8 +164,7 @@ function handleProjectTotalChange(payload: { sceneSource: "INTERNAL" | "EXTERNAL
 }
 
 .project-board {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   overflow: hidden;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -176,11 +175,6 @@ function handleProjectTotalChange(payload: { sceneSource: "INTERNAL" | "EXTERNAL
 }
 
 .project-tabs {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-
   :deep(.n-tabs-nav) {
     width: min(780px, 100%);
     padding: 0 2px 12px;
@@ -204,18 +198,7 @@ function handleProjectTotalChange(payload: { sceneSource: "INTERNAL" | "EXTERNAL
     color: var(--home-on-primary);
   }
 
-  :deep(.n-tabs-content) {
-    flex: 1;
-    min-height: 0;
-  }
-
-  :deep(.n-tabs-pane-wrapper) {
-    height: 100%;
-    min-height: 0;
-  }
-
   :deep(.project-tab-pane) {
-    height: 100%;
     padding-top: 0 !important;
   }
 }

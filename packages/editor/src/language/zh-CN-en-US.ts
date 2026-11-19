@@ -13,6 +13,8 @@ export default {
         "Preview": '预览',
         "Loading": "加载中",
         'Scroll to load more': "滚动加载更多",
+        'Load more projects': "加载更多项目",
+        'Retry loading projects': "重新加载项目",
         'No more': "没有更多了",
         /* 项目 */
         'My Project': "我的项目",

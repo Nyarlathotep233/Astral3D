@@ -149,6 +149,8 @@ function handleSelectMenu(key: string, item: HomeMenuOption){
 <style scoped lang="less">
 .home-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 100vh;
@@ -197,6 +199,7 @@ function handleSelectMenu(key: string, item: HomeMenuOption){
 
 .home-topbar {
   position: relative;
+  flex: none;
   z-index: 2;
   height: 76px;
   margin: 18px 22px 0;
@@ -313,14 +316,15 @@ function handleSelectMenu(key: string, item: HomeMenuOption){
 .home-main {
   position: relative;
   z-index: 1;
-  height: calc(100vh - 112px);
+  flex: 1;
+  min-height: 0;
   margin: 18px 22px 22px;
   overflow: hidden;
 }
 
 @media (max-width: 1200px) {
   .home-topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     height: auto;
     gap: 14px;
     padding: 16px;
